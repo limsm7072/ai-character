@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:convert';
 import 'package:flutter/material.dart';
 import 'package:flutter_overlay_window/flutter_overlay_window.dart';
@@ -8,7 +9,8 @@ import '../models/character_registry.dart';
 import 'spine_character_widget.dart';
 
 /// The overlay entry point widget.
-/// This is displayed as a system overlay when the user is distracted.
+/// Displayed as a system overlay when the user is distracted.
+/// Reads nag state from SharedPreferences (written by native NagOverlay).
 class OverlayCharacter extends StatefulWidget {
   final String initialCharacterId;
 
@@ -28,18 +30,12 @@ class _OverlayCharacterState extends State<OverlayCharacter>
   late AnimationController _entranceController;
   late Animation<Offset> _slideAnimation;
   late Animation<double> _fadeAnimation;
-  String _debugCharId = '';
-  String _debugSource = '';
+  Timer? _pollTimer;
 
   @override
   void initState() {
     super.initState();
     _config = CharacterRegistry.getById(widget.initialCharacterId);
-    _debugCharId = widget.initialCharacterId;
-    _debugSource = 'init';
-
-    // Also try reading SharedPreferences directly with reload
-    _loadCharacterFromPrefs();
 
     _entranceController = AnimationController(
       duration: const Duration(milliseconds: 600),
@@ -61,54 +57,76 @@ class _OverlayCharacterState extends State<OverlayCharacter>
       ),
     );
 
-    // Listen for data from the main app
+    // Read initial state from SharedPreferences
+    _loadStateFromPrefs();
+
+    // Poll SharedPreferences for updates from native NagOverlay
+    _pollTimer = Timer.periodic(const Duration(milliseconds: 400), (_) {
+      _loadStateFromPrefs();
+    });
+
+    // Also listen for data from Flutter's shareData (backup channel)
     FlutterOverlayWindow.overlayListener.listen((data) {
-      print('[OVERLAY] Received data: $data');
       if (data is String && data.isNotEmpty) {
         try {
           final json = jsonDecode(data) as Map<String, dynamic>;
-          final state = CharacterState.fromJson(json);
-          final charId = state.characterId ?? 'chibi-stickers';
-          print('[OVERLAY] Parsed characterId=$charId');
-          setState(() {
-            _state = state;
-            _config = CharacterRegistry.getById(charId);
-            _debugCharId = charId;
-            _debugSource = 'stream';
-          });
-          _entranceController.forward(from: 0);
-        } catch (e) {
-          print('[OVERLAY] Parse error: $e');
-          setState(() {
-            _debugSource = 'error: $e';
-          });
-        }
+          _applyState(json);
+        } catch (_) {}
       }
     });
 
     _entranceController.forward();
   }
 
-  Future<void> _loadCharacterFromPrefs() async {
+  String _lastNagState = '';
+
+  Future<void> _loadStateFromPrefs() async {
     try {
       final prefs = await SharedPreferences.getInstance();
-      await prefs.reload(); // Force fresh read from disk
-      final id = prefs.getString('selected_character') ?? 'chibi-stickers';
-      print('[OVERLAY] SharedPrefs characterId=$id');
-      if (mounted) {
-        setState(() {
-          _config = CharacterRegistry.getById(id);
-          _debugCharId = id;
-          _debugSource = 'prefs';
-        });
+      await prefs.reload();
+
+      // Read nag state written by native NagOverlay
+      final nagState = prefs.getString('nag_state') ?? '';
+      if (nagState.isNotEmpty && nagState != _lastNagState) {
+        _lastNagState = nagState;
+        final json = jsonDecode(nagState) as Map<String, dynamic>;
+        _applyState(json);
       }
-    } catch (e) {
-      print('[OVERLAY] SharedPrefs error: $e');
+
+      // Also check character selection (in case nag_state doesn't have it yet)
+      final charId = prefs.getString('selected_character') ?? 'chibi-stickers';
+      if (charId != _config.id && _lastNagState.isEmpty) {
+        if (mounted) {
+          setState(() {
+            _config = CharacterRegistry.getById(charId);
+          });
+        }
+      }
+    } catch (_) {}
+  }
+
+  void _applyState(Map<String, dynamic> json) {
+    if (!mounted) return;
+    final state = CharacterState.fromJson(json);
+    final charId = state.characterId ?? _config.id;
+    final newConfig = CharacterRegistry.getById(charId);
+
+    setState(() {
+      _state = state;
+      if (newConfig.id != _config.id) {
+        _config = newConfig;
+      }
+    });
+
+    // Re-trigger entrance animation on new text
+    if (state.text.isNotEmpty) {
+      _entranceController.forward(from: 0);
     }
   }
 
   @override
   void dispose() {
+    _pollTimer?.cancel();
     _entranceController.dispose();
     super.dispose();
   }
@@ -131,36 +149,10 @@ class _OverlayCharacterState extends State<OverlayCharacter>
                 borderRadius: BorderRadius.circular(20),
               ),
               padding: const EdgeInsets.all(12),
-              child: Stack(
-                children: [
-                  SpineCharacterWidget(
-                    key: ValueKey(_config.id),
-                    config: _config,
-                    state: _state,
-                  ),
-                  // Debug indicator - shows which character is loaded
-                  Positioned(
-                    bottom: 8,
-                    left: 8,
-                    right: 8,
-                    child: Container(
-                      padding: const EdgeInsets.all(6),
-                      decoration: BoxDecoration(
-                        color: Colors.red,
-                        borderRadius: BorderRadius.circular(8),
-                      ),
-                      child: Text(
-                        'CHAR: $_debugCharId\nSRC: $_debugSource',
-                        style: const TextStyle(
-                          color: Colors.white,
-                          fontSize: 12,
-                          fontWeight: FontWeight.bold,
-                        ),
-                        textAlign: TextAlign.center,
-                      ),
-                    ),
-                  ),
-                ],
+              child: SpineCharacterWidget(
+                key: ValueKey(_config.id),
+                config: _config,
+                state: _state,
               ),
             ),
           ),

@@ -4,9 +4,6 @@ import android.Manifest
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
-import android.graphics.Color
-import android.graphics.PixelFormat
-import android.graphics.drawable.GradientDrawable
 import android.media.AudioAttributes
 import android.media.AudioFocusRequest
 import android.media.AudioManager
@@ -15,11 +12,6 @@ import android.speech.tts.TextToSpeech
 import android.speech.tts.UtteranceProgressListener
 import android.util.Log
 import android.view.Gravity
-import android.view.MotionEvent
-import android.view.View
-import android.view.WindowManager
-import android.view.animation.OvershootInterpolator
-import android.widget.FrameLayout
 import androidx.core.content.ContextCompat
 import org.json.JSONArray
 import org.json.JSONObject
@@ -31,10 +23,9 @@ class NagOverlay(private val context: Context) {
 
     companion object {
         private const val TAG = "NagOverlay"
+        private const val PREFS_NAME = "FlutterSharedPreferences"
     }
 
-    private var windowManager: WindowManager? = null
-    private var overlayView: View? = null
     private val handler = Handler(Looper.getMainLooper())
     var isShowing = false; private set
 
@@ -46,9 +37,7 @@ class NagOverlay(private val context: Context) {
 
     private var apiKey = ""
     private val history = mutableListOf<Pair<String, String>>()
-    private var charView: CharacterCanvasView? = null
     private var noSpeechCount = 0
-    private var layoutParams: WindowManager.LayoutParams? = null
 
     private val nagMessages = listOf(
         "야! 지금 뭐하는 거야!",
@@ -86,17 +75,17 @@ class NagOverlay(private val context: Context) {
                 ttsReady = true
                 tts?.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
                     override fun onStart(id: String?) {
-                        handler.post { charView?.isSpeaking = true }
+                        handler.post { updateOverlayState(isSpeaking = true) }
                     }
                     override fun onDone(id: String?) {
                         handler.post {
-                            charView?.isSpeaking = false
+                            updateOverlayState(isSpeaking = false)
                             if (isShowing) handler.postDelayed({ if (isShowing) startListening() }, 500)
                         }
                     }
                     override fun onError(id: String?) {
                         handler.post {
-                            charView?.isSpeaking = false
+                            updateOverlayState(isSpeaking = false)
                             if (isShowing) handler.postDelayed({ if (isShowing) startListening() }, 1000)
                         }
                     }
@@ -132,6 +121,98 @@ class NagOverlay(private val context: Context) {
         } catch (_: Exception) {}
     }
 
+    // ── Read selected character from SharedPreferences ──
+    private fun getSelectedCharacter(): String {
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        return prefs.getString("flutter.selected_character", "chibi-stickers") ?: "chibi-stickers"
+    }
+
+    // ── Write nag state to SharedPreferences (Flutter overlay reads this) ──
+    private var currentEmotion = "angry"
+    private var currentText = ""
+
+    private fun writeNagState(emotion: String, text: String, gesture: String = "idle") {
+        currentEmotion = emotion
+        currentText = text
+        try {
+            val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+            val json = JSONObject().apply {
+                put("emotion", emotion)
+                put("gesture", gesture)
+                put("text", text)
+                put("characterId", getSelectedCharacter())
+            }
+            prefs.edit().putString("flutter.nag_state", json.toString()).apply()
+        } catch (e: Exception) { Log.e(TAG, "writeNagState fail", e) }
+    }
+
+    // ── Send data to Flutter overlay via BasicMessageChannel (reflection) ──
+    private fun sendToFlutterOverlay(emotion: String, text: String, gesture: String = "idle") {
+        try {
+            val data = JSONObject().apply {
+                put("emotion", emotion)
+                put("gesture", gesture)
+                put("text", text)
+                put("characterId", getSelectedCharacter())
+            }
+            val wsClass = Class.forName("flutter.overlay.window.flutter_overlay_window.WindowSetup")
+            val messengerField = wsClass.getDeclaredField("messenger")
+            messengerField.isAccessible = true
+            val messenger = messengerField.get(null)
+            if (messenger != null) {
+                // BasicMessageChannel<Object>.send(Object)
+                val sendMethod = messenger.javaClass.getMethod("send", Any::class.java)
+                sendMethod.invoke(messenger, data.toString())
+            }
+        } catch (e: Exception) { Log.d(TAG, "sendToFlutterOverlay: ${e.message}") }
+    }
+
+    private fun updateOverlayState(isSpeaking: Boolean? = null) {
+        // Just re-send current state (emotion unchanged)
+        sendToFlutterOverlay(currentEmotion, currentText)
+    }
+
+    // ── Start/stop Flutter overlay via flutter_overlay_window ──
+    private fun startFlutterOverlay() {
+        try {
+            val wsClass = Class.forName("flutter.overlay.window.flutter_overlay_window.WindowSetup")
+
+            fun setField(name: String, value: Any) {
+                val f = wsClass.getDeclaredField(name)
+                f.isAccessible = true
+                f.set(null, value)
+            }
+
+            setField("width", 300)
+            setField("height", 450)
+            setField("enableDrag", true)
+            setField("overlayTitle", "AI Character")
+            setField("overlayContent", "")
+            setField("positionGravity", "auto")
+            setField("gravity", Gravity.CENTER)
+
+            val overlayServiceClass = Class.forName("flutter.overlay.window.flutter_overlay_window.OverlayService")
+            val intent = Intent(context, overlayServiceClass)
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
+                context.startForegroundService(intent)
+            } else {
+                context.startService(intent)
+            }
+            Log.d(TAG, "Flutter overlay started")
+        } catch (e: Exception) { Log.e(TAG, "startFlutterOverlay fail", e) }
+    }
+
+    private fun stopFlutterOverlay() {
+        try {
+            val overlayServiceClass = Class.forName("flutter.overlay.window.flutter_overlay_window.OverlayService")
+            val intent = Intent(context, overlayServiceClass)
+            context.stopService(intent)
+            Log.d(TAG, "Flutter overlay stopped")
+        } catch (e: Exception) { Log.e(TAG, "stopFlutterOverlay fail", e) }
+    }
+
+    // ── Show / Dismiss ──
     fun show(appLabel: String, routineName: String, key: String) {
         if (isShowing) return
         apiKey = key; noSpeechCount = 0; history.clear()
@@ -141,38 +222,17 @@ class NagOverlay(private val context: Context) {
         handler.post {
             try {
                 requestAudioFocus()
-                windowManager = context.getSystemService(Context.WINDOW_SERVICE) as WindowManager
-                overlayView = createOverlayView()
 
-                val dm = context.resources.displayMetrics
-                val screenW = dm.widthPixels
-                val params = WindowManager.LayoutParams(
-                    WindowManager.LayoutParams.WRAP_CONTENT,
-                    WindowManager.LayoutParams.WRAP_CONTENT,
-                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O)
-                        WindowManager.LayoutParams.TYPE_APPLICATION_OVERLAY
-                    else @Suppress("DEPRECATION") WindowManager.LayoutParams.TYPE_PHONE,
-                    WindowManager.LayoutParams.FLAG_NOT_FOCUSABLE or
-                            WindowManager.LayoutParams.FLAG_NOT_TOUCH_MODAL,
-                    PixelFormat.TRANSLUCENT
-                )
-                params.gravity = Gravity.TOP or Gravity.LEFT
-                params.x = (screenW - 240) / 2
-                params.y = 160
-                layoutParams = params
-
-                windowManager?.addView(overlayView, params)
+                val initialText = nagMessages.random()
+                writeNagState("angry", initialText)
+                startFlutterOverlay()
                 isShowing = true
 
-                overlayView?.translationY = -800f
-                overlayView?.animate()
-                    ?.translationY(0f)
-                    ?.setDuration(600)
-                    ?.setInterpolator(OvershootInterpolator(1.2f))
-                    ?.withEndAction {
-                        charView?.startHeadShake()
-                        speak(nagMessages.random(), "angry")
-                    }?.start()
+                // Wait for Flutter engine to initialize, then send data + speak
+                handler.postDelayed({
+                    sendToFlutterOverlay("angry", initialText)
+                    speak(initialText, "angry")
+                }, 1500)
             } catch (e: Exception) { Log.e(TAG, "show fail", e) }
         }
     }
@@ -181,44 +241,31 @@ class NagOverlay(private val context: Context) {
         if (!isShowing) return
         handler.post {
             try {
-                tts?.stop(); charView?.cleanup(); abandonAudioFocus()
-                overlayView?.animate()
-                    ?.alpha(0f)?.scaleX(0.3f)?.scaleY(0.3f)
-                    ?.setDuration(250)
-                    ?.withEndAction {
-                        try { windowManager?.removeView(overlayView) } catch (_: Exception) {}
-                        overlayView = null; charView = null; isShowing = false
-                    }?.start()
+                tts?.stop()
+                abandonAudioFocus()
+                stopFlutterOverlay()
+                isShowing = false
             } catch (_: Exception) { isShowing = false }
         }
     }
 
+    // ── Speak + update overlay ──
     private fun speak(text: String, emotion: String) {
         handler.post {
-            charView?.emotion = emotion
-            when (emotion) {
-                "angry", "scolding" -> {
-                    charView?.gesture = listOf("arms_crossed", "pointing").random()
-                    charView?.startHeadShake()
-                }
-                "annoyed", "disappointed" -> charView?.gesture = "arms_crossed"
-                "happy", "proud" -> charView?.gesture = "waving"
-                else -> charView?.gesture = "idle"
-            }
+            writeNagState(emotion, text)
+            sendToFlutterOverlay(emotion, text)
 
             if (ttsReady) {
-                charView?.isSpeaking = true
                 tts?.speak(text, TextToSpeech.QUEUE_FLUSH, null, "nag_${System.currentTimeMillis()}")
             } else {
-                charView?.isSpeaking = true
                 handler.postDelayed({
-                    charView?.isSpeaking = false
                     if (isShowing) startListening()
                 }, 2500)
             }
         }
     }
 
+    // ── Speech recognition ──
     private fun startListening() {
         if (!isShowing) return
         if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO)
@@ -226,30 +273,24 @@ class NagOverlay(private val context: Context) {
         if (apiKey.isEmpty()) return
 
         handler.post {
-            charView?.isListeningAnim = true
-            charView?.emotion = "neutral"
+            writeNagState("neutral", "...")
+            sendToFlutterOverlay("neutral", "...")
 
-            SpeechListenerActivity.onListening = {
-                handler.post { charView?.isListeningAnim = true }
-            }
-            SpeechListenerActivity.onPartial = { /* character stays in listening mode */ }
+            SpeechListenerActivity.onListening = {}
+            SpeechListenerActivity.onPartial = {}
             SpeechListenerActivity.onResult = { text ->
                 handler.post {
-                    charView?.isListeningAnim = false
                     noSpeechCount = 0
-                    charView?.emotion = "annoyed"
+                    writeNagState("annoyed", "...")
+                    sendToFlutterOverlay("annoyed", "...")
                     processUserSpeech(text)
                 }
             }
             SpeechListenerActivity.onError = { _ ->
                 handler.post {
-                    charView?.isListeningAnim = false
                     noSpeechCount++
                     if (noSpeechCount < 5 && isShowing) {
                         handler.postDelayed({ if (isShowing) startListening() }, 1000)
-                    } else {
-                        charView?.emotion = "annoyed"
-                        charView?.gesture = "idle"
                     }
                 }
             }
@@ -260,14 +301,12 @@ class NagOverlay(private val context: Context) {
                 context.startActivity(intent)
             } catch (e: Exception) {
                 Log.e(TAG, "SpeechActivity launch fail", e)
-                charView?.isListeningAnim = false
             }
         }
     }
 
     private fun processUserSpeech(userText: String) {
         history.add("user" to userText)
-        handler.post { charView?.emotion = "annoyed"; charView?.gesture = "idle" }
 
         Thread {
             try {
@@ -321,48 +360,5 @@ class NagOverlay(private val context: Context) {
             .getJSONArray("candidates").getJSONObject(0)
             .getJSONObject("content").getJSONArray("parts")
             .getJSONObject(0).getString("text")
-    }
-
-    private fun createOverlayView(): View {
-        val container = FrameLayout(context)
-
-        charView = CharacterCanvasView(context).apply {
-            emotion = "angry"; gesture = "arms_crossed"
-        }
-
-        var downX = 0f; var downY = 0f
-        var downParamX = 0; var downParamY = 0
-        var dragged = false
-
-        charView?.setOnTouchListener { _, event ->
-            when (event.actionMasked) {
-                MotionEvent.ACTION_DOWN -> {
-                    downX = event.rawX; downY = event.rawY
-                    downParamX = layoutParams?.x ?: 0
-                    downParamY = layoutParams?.y ?: 0
-                    dragged = false
-                }
-                MotionEvent.ACTION_MOVE -> {
-                    val dx = event.rawX - downX
-                    val dy = event.rawY - downY
-                    if (Math.abs(dx) > 10 || Math.abs(dy) > 10) dragged = true
-                    if (dragged) {
-                        layoutParams?.x = downParamX + dx.toInt()
-                        layoutParams?.y = downParamY + dy.toInt()
-                        try { windowManager?.updateViewLayout(overlayView, layoutParams) } catch (_: Exception) {}
-                    }
-                }
-                MotionEvent.ACTION_UP -> {
-                    if (!dragged) dismiss()
-                }
-            }
-            true
-        }
-
-        container.addView(charView, FrameLayout.LayoutParams(240, 300).apply {
-            gravity = Gravity.CENTER
-        })
-
-        return container
     }
 }
