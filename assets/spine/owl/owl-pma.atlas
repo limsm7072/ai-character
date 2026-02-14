@@ -1,0 +1,66 @@
+owl-pma.png
+	size: 1024, 512
+	filter: Linear, Linear
+	pma: true
+	scale: 0.5
+L_eye-closed
+	bounds: 927, 317, 90, 86
+	rotate: 90
+L_eye-iris
+	bounds: 835, 321, 90, 86
+L_eye-light
+	bounds: 254, 479, 21, 20
+L_eye-pupil
+	bounds: 611, 224, 63, 60
+L_foot
+	bounds: 456, 225, 64, 48
+L_wing
+	bounds: 752, 389, 81, 110
+R_eye-closed
+	bounds: 923, 409, 90, 86
+	rotate: 90
+R_eye-iris
+	bounds: 835, 409, 90, 86
+	rotate: 90
+R_eye-light
+	bounds: 41, 479, 21, 20
+R_eye-pupil
+	bounds: 747, 230, 63, 60
+R_foot
+	bounds: 676, 236, 64, 48
+R_wing
+	bounds: 669, 389, 81, 110
+beak
+	bounds: 2, 458, 39, 41
+beak-down
+	bounds: 280, 459, 37, 40
+body
+	bounds: 302, 251, 248, 196
+	rotate: 90
+feather-1
+	bounds: 128, 227, 59, 60
+feather-2
+	bounds: 258, 226, 62, 65
+feather-3
+	bounds: 905, 239, 56, 76
+head-base
+	bounds: 2, 262, 299, 237
+leaf-1
+	bounds: 669, 286, 76, 101
+leaf-2
+	bounds: 747, 292, 65, 95
+leaf-3
+	bounds: 590, 367, 132, 77
+	rotate: 90
+leaf-4
+	bounds: 814, 270, 89, 49
+leaf-5
+	bounds: 500, 275, 53, 106
+leaf-6
+	bounds: 500, 383, 88, 116
+leaf-7
+	bounds: 555, 279, 54, 86
+wood
+	bounds: 34, 2, 617, 295
+	offsets: 0, 0, 617, 305
+	rotate: 180
