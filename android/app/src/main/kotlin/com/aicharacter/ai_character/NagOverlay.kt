@@ -15,6 +15,7 @@ import android.view.Gravity
 import androidx.core.content.ContextCompat
 import org.json.JSONArray
 import org.json.JSONObject
+import java.io.File
 import java.net.HttpURLConnection
 import java.net.URL
 import java.util.Locale
@@ -27,6 +28,8 @@ class NagOverlay(private val context: Context) {
     }
 
     private val handler = Handler(Looper.getMainLooper())
+    private val edgeTts = EdgeTtsNative()
+    private var mediaPlayer: android.media.MediaPlayer? = null
     var isShowing = false; private set
 
     // Periodically check if Flutter overlay was dismissed by user tap
@@ -35,6 +38,7 @@ class NagOverlay(private val context: Context) {
             if (isShowing && !isFlutterOverlayRunning()) {
                 Log.d(TAG, "Overlay dismissed by user")
                 tts?.stop()
+                stopMediaPlayer()
                 abandonAudioFocus()
                 isShowing = false
             }
@@ -157,20 +161,15 @@ class NagOverlay(private val context: Context) {
         initTts()
     }
 
-    private fun applyVoicePreset() {
+    private fun getVoicePresetId(): String {
         val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        val preset = prefs.getString("flutter.voice_preset", "cute") ?: "cute"
-        val (pitch, rate) = when (preset) {
-            "cute" -> 1.4f to 0.45f
-            "calm" -> 1.0f to 0.4f
-            "bright" -> 1.2f to 0.5f
-            "deep" -> 0.8f to 0.45f
-            "fast" -> 1.1f to 0.65f
-            else -> 1.4f to 0.45f
-        }
-        tts?.setPitch(pitch)
-        tts?.setSpeechRate(rate)
-        Log.d(TAG, "Voice preset: $preset (pitch=$pitch, rate=$rate)")
+        return prefs.getString("flutter.voice_preset", "sunhi") ?: "sunhi"
+    }
+
+    private fun applyVoicePreset() {
+        // Android TTS fallback settings (used when Edge TTS fails)
+        tts?.setPitch(1.2f)
+        tts?.setSpeechRate(0.5f)
     }
 
     private fun initTts() {
@@ -356,6 +355,7 @@ class NagOverlay(private val context: Context) {
             try {
                 handler.removeCallbacks(overlayWatchdog)
                 tts?.stop()
+                stopMediaPlayer()
                 abandonAudioFocus()
                 stopFlutterOverlay()
                 isShowing = false
@@ -364,21 +364,80 @@ class NagOverlay(private val context: Context) {
         }
     }
 
+    private fun stopMediaPlayer() {
+        try {
+            mediaPlayer?.stop()
+            mediaPlayer?.release()
+            mediaPlayer = null
+        } catch (_: Exception) {}
+    }
+
     // ── Speak + update overlay ──
     private fun speak(text: String, emotion: String) {
         handler.post {
             writeNagState(emotion, text)
             sendToFlutterOverlay(emotion, text)
+            updateOverlayState(isSpeaking = true)
 
-            if (ttsReady) {
-                // Re-apply voice preset right before speaking
-                applyVoicePreset()
-                tts?.speak(text, TextToSpeech.QUEUE_FLUSH, null, "nag_${System.currentTimeMillis()}")
-            } else {
-                handler.postDelayed({
-                    if (isShowing) startListening()
-                }, 2500)
+            // Try Edge TTS first (on background thread)
+            val presetId = getVoicePresetId()
+            Thread {
+                val outputFile = File(context.cacheDir, "edge_tts_nag.mp3")
+                val success = edgeTts.synthesize(text, presetId, outputFile)
+
+                handler.post {
+                    if (success && outputFile.exists() && outputFile.length() > 0) {
+                        Log.d(TAG, "Edge TTS OK: ${outputFile.length()} bytes, preset=$presetId")
+                        playMp3(outputFile)
+                    } else {
+                        Log.w(TAG, "Edge TTS failed: ${edgeTts.lastError}, falling back to Android TTS")
+                        speakWithAndroidTts(text)
+                    }
+                }
+            }.start()
+        }
+    }
+
+    private fun playMp3(file: File) {
+        stopMediaPlayer()
+        try {
+            mediaPlayer = android.media.MediaPlayer().apply {
+                setDataSource(file.absolutePath)
+                setOnCompletionListener {
+                    it.release()
+                    mediaPlayer = null
+                    handler.post {
+                        updateOverlayState(isSpeaking = false)
+                        if (isShowing) handler.postDelayed({ dismiss() }, 2000)
+                    }
+                }
+                setOnErrorListener { mp, _, _ ->
+                    mp.release()
+                    mediaPlayer = null
+                    handler.post {
+                        updateOverlayState(isSpeaking = false)
+                        if (isShowing) handler.postDelayed({ dismiss() }, 1500)
+                    }
+                    true
+                }
+                prepare()
+                start()
             }
+        } catch (e: Exception) {
+            Log.e(TAG, "MediaPlayer error: ${e.message}")
+            updateOverlayState(isSpeaking = false)
+            if (isShowing) handler.postDelayed({ dismiss() }, 1500)
+        }
+    }
+
+    private fun speakWithAndroidTts(text: String) {
+        if (ttsReady) {
+            applyVoicePreset()
+            tts?.speak(text, TextToSpeech.QUEUE_FLUSH, null, "nag_${System.currentTimeMillis()}")
+        } else {
+            handler.postDelayed({
+                if (isShowing) startListening()
+            }, 2500)
         }
     }
 
