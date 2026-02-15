@@ -29,6 +29,30 @@ class NagOverlay(private val context: Context) {
     private val handler = Handler(Looper.getMainLooper())
     var isShowing = false; private set
 
+    // Periodically check if Flutter overlay was dismissed by user tap
+    private val overlayWatchdog = object : Runnable {
+        override fun run() {
+            if (isShowing && !isFlutterOverlayRunning()) {
+                Log.d(TAG, "Overlay dismissed by user")
+                tts?.stop()
+                abandonAudioFocus()
+                isShowing = false
+            }
+            if (isShowing) {
+                handler.postDelayed(this, 500)
+            }
+        }
+    }
+
+    private fun isFlutterOverlayRunning(): Boolean {
+        return try {
+            val serviceClass = Class.forName("flutter.overlay.window.flutter_overlay_window.OverlayService")
+            val field = serviceClass.getDeclaredField("isRunning")
+            field.isAccessible = true
+            field.getBoolean(null)
+        } catch (_: Exception) { false }
+    }
+
     private var tts: TextToSpeech? = null
     private var ttsReady = false
 
@@ -80,13 +104,14 @@ class NagOverlay(private val context: Context) {
                     override fun onDone(id: String?) {
                         handler.post {
                             updateOverlayState(isSpeaking = false)
-                            if (isShowing) handler.postDelayed({ if (isShowing) startListening() }, 500)
+                            // Auto-dismiss after speaking
+                            if (isShowing) handler.postDelayed({ dismiss() }, 2000)
                         }
                     }
                     override fun onError(id: String?) {
                         handler.post {
                             updateOverlayState(isSpeaking = false)
-                            if (isShowing) handler.postDelayed({ if (isShowing) startListening() }, 1000)
+                            if (isShowing) handler.postDelayed({ dismiss() }, 1500)
                         }
                     }
                 })
@@ -228,11 +253,14 @@ class NagOverlay(private val context: Context) {
                 startFlutterOverlay()
                 isShowing = true
 
+                // Start watchdog to detect user dismissal
+                handler.postDelayed(overlayWatchdog, 1000)
+
                 // Wait for Flutter engine to initialize, then send data + speak
                 handler.postDelayed({
                     sendToFlutterOverlay("angry", initialText)
                     speak(initialText, "angry")
-                }, 1500)
+                }, 800)
             } catch (e: Exception) { Log.e(TAG, "show fail", e) }
         }
     }
@@ -241,10 +269,12 @@ class NagOverlay(private val context: Context) {
         if (!isShowing) return
         handler.post {
             try {
+                handler.removeCallbacks(overlayWatchdog)
                 tts?.stop()
                 abandonAudioFocus()
                 stopFlutterOverlay()
                 isShowing = false
+                Log.d(TAG, "Overlay dismissed")
             } catch (_: Exception) { isShowing = false }
         }
     }
