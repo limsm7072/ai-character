@@ -1,5 +1,6 @@
 import 'dart:async';
 import 'dart:io';
+import 'package:flutter/foundation.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_tts/flutter_tts.dart';
 import 'edge_tts_service.dart';
@@ -107,6 +108,12 @@ class TtsService {
   String _currentRate = '+0%';
   String _currentPitch = '+0Hz';
 
+  /// Whether last speak used Edge TTS (true) or fallback (false).
+  bool lastUsedEdgeTts = false;
+
+  /// Last error from Edge TTS (for debugging).
+  String? lastEdgeError;
+
   bool get isSpeaking => _isSpeaking;
 
   /// Initialize (kept for backward compatibility).
@@ -133,6 +140,7 @@ class TtsService {
     _isSpeaking = true;
 
     try {
+      debugPrint('[TTS] Edge TTS: voice=$_currentVoice');
       final mp3Bytes = await _edgeTts.synthesize(
         cleaned,
         voice: _currentVoice,
@@ -141,6 +149,8 @@ class TtsService {
       );
 
       if (mp3Bytes.isEmpty) throw Exception('Empty audio');
+
+      debugPrint('[TTS] Edge TTS OK: ${mp3Bytes.length} bytes');
 
       // Write to app cache dir
       final cacheDir = Directory.systemTemp;
@@ -151,12 +161,19 @@ class TtsService {
         'path': tempFile.path,
       });
 
+      lastUsedEdgeTts = true;
+      lastEdgeError = null;
+
       // Estimate playback duration from file size
       // MP3 at 48kbps: ~6000 bytes/sec
       final estimatedMs = (mp3Bytes.length / 6.0).round();
       await Future.delayed(Duration(milliseconds: estimatedMs));
       _isSpeaking = false;
-    } catch (_) {
+    } catch (e) {
+      debugPrint('[TTS] Edge TTS FAILED: $e');
+      debugPrint('[TTS] Edge detail: ${_edgeTts.lastError}');
+      lastUsedEdgeTts = false;
+      lastEdgeError = '$e';
       // Fallback to flutter_tts
       await _speakWithFlutterTts(cleaned);
     }

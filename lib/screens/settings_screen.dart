@@ -352,6 +352,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
         onPressed: () async {
           await widget.ttsService.applyPreset(preset.id);
           await widget.ttsService.speak('안녕! 나는 루나야. 오늘도 파이팅!');
+          if (mounted) {
+            final used = widget.ttsService.lastUsedEdgeTts;
+            final err = widget.ttsService.lastEdgeError;
+            ScaffoldMessenger.of(context).showSnackBar(
+              SnackBar(
+                content: Text(used
+                    ? 'Edge TTS (${preset.voiceName})'
+                    : 'Edge TTS 실패 → 기본 TTS 사용\n$err'),
+                duration: const Duration(seconds: 3),
+              ),
+            );
+          }
         },
       ),
       onChanged: (v) async {

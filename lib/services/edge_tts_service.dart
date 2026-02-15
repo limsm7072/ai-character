@@ -1,9 +1,9 @@
 import 'dart:async';
 import 'dart:convert';
+import 'dart:io';
 import 'dart:typed_data';
 import 'package:crypto/crypto.dart';
 import 'package:uuid/uuid.dart';
-import 'package:web_socket_channel/web_socket_channel.dart';
 
 /// Pure Dart Edge TTS client using WebSocket.
 /// Connects to Microsoft Edge's Read Aloud backend (free, no API key).
@@ -16,11 +16,10 @@ class EdgeTtsService {
 
   static const _uuid = Uuid();
 
+  /// Last error for debugging.
+  String? lastError;
+
   /// Synthesize [text] to MP3 bytes using the given [voice].
-  ///
-  /// [rate] e.g. '+0%', '+20%', '-10%'
-  /// [pitch] e.g. '+0Hz', '+10Hz', '-5Hz'
-  /// [volume] e.g. '+0%'
   Future<Uint8List> synthesize(
     String text, {
     String voice = 'ko-KR-SunHiNeural',
@@ -29,27 +28,44 @@ class EdgeTtsService {
     String volume = '+0%',
   }) async {
     if (text.trim().isEmpty) return Uint8List(0);
+    lastError = null;
 
     final connId = _uuid.v4().replaceAll('-', '');
     final secMsGec = _generateSecMsGec();
 
-    final uri = Uri.parse(
-      '$_wsBase'
-      '?TrustedClientToken=$_trustedClientToken'
-      '&Sec-MS-GEC=$secMsGec'
-      '&Sec-MS-GEC-Version=1-$_chromiumVersion'
-      '&ConnectionId=$connId',
-    );
+    final wsUrl =
+        '$_wsBase'
+        '?TrustedClientToken=$_trustedClientToken'
+        '&Sec-MS-GEC=$secMsGec'
+        '&Sec-MS-GEC-Version=1-$_chromiumVersion'
+        '&ConnectionId=$connId';
 
-    final channel = WebSocketChannel.connect(uri);
-    await channel.ready;
+    WebSocket? ws;
+    try {
+      // Connect with required headers
+      ws = await WebSocket.connect(
+        wsUrl,
+        headers: {
+          'User-Agent':
+              'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 '
+              '(KHTML, like Gecko) Chrome/$_chromiumVersion Safari/537.36 '
+              'Edg/$_chromiumVersion',
+          'Origin': 'chrome-extension://jdiccldimpdaibmpdkjnbmckianbfold',
+          'Pragma': 'no-cache',
+          'Cache-Control': 'no-cache',
+        },
+      );
+    } catch (e) {
+      lastError = 'WebSocket connect failed: $e';
+      rethrow;
+    }
 
     final audioChunks = <Uint8List>[];
     final completer = Completer<Uint8List>();
 
     // 1. Send speech.config
     final timestamp = _rfc1123Timestamp();
-    channel.sink.add(
+    ws.add(
       'X-Timestamp:$timestamp\r\n'
       'Content-Type:application/json; charset=utf-8\r\n'
       'Path:speech.config\r\n\r\n'
@@ -61,7 +77,7 @@ class EdgeTtsService {
     // 2. Send SSML
     final requestId = _uuid.v4().replaceAll('-', '');
     final escapedText = _escapeXml(text);
-    channel.sink.add(
+    ws.add(
       'X-RequestId:$requestId\r\n'
       'Content-Type:application/ssml+xml\r\n'
       'X-Timestamp:${timestamp}Z\r\n'
@@ -76,10 +92,9 @@ class EdgeTtsService {
     );
 
     // 3. Listen for audio data
-    channel.stream.listen(
+    ws.listen(
       (data) {
         if (data is List<int>) {
-          // Binary message: [2-byte header length][header text][audio bytes]
           final bytes = Uint8List.fromList(data);
           if (bytes.length > 2) {
             final headerLen = (bytes[0] << 8) | bytes[1];
@@ -98,6 +113,7 @@ class EdgeTtsService {
         }
       },
       onError: (e) {
+        lastError = 'WebSocket stream error: $e';
         if (!completer.isCompleted) completer.completeError(e);
       },
       onDone: () {
@@ -109,10 +125,11 @@ class EdgeTtsService {
       final result = await completer.future.timeout(
         const Duration(seconds: 15),
       );
-      await channel.sink.close();
+      await ws.close();
       return result;
     } catch (e) {
-      await channel.sink.close();
+      lastError = 'Synthesis failed: $e';
+      try { await ws.close(); } catch (_) {}
       rethrow;
     }
   }
@@ -135,10 +152,10 @@ class EdgeTtsService {
 
   /// Generate Sec-MS-GEC authentication token.
   String _generateSecMsGec() {
-    const winEpoch = 11644473600; // seconds between 1601-01-01 and 1970-01-01
+    const winEpoch = 11644473600;
     final nowSec = DateTime.now().millisecondsSinceEpoch / 1000;
     var ticks = ((nowSec + winEpoch) * 10000000).toInt();
-    ticks -= ticks % 3000000000; // Round to nearest 5 minutes
+    ticks -= ticks % 3000000000;
     final strToHash = '$ticks$_trustedClientToken';
     return sha256.convert(utf8.encode(strToHash)).toString().toUpperCase();
   }
