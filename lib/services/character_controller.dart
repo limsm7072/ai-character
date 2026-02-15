@@ -1,6 +1,6 @@
 import 'dart:async';
 import 'dart:convert';
-import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter/services.dart';
 import '../models/ai_response.dart';
 import '../models/character_state.dart';
 import 'gemini_service.dart';
@@ -17,6 +17,9 @@ class CharacterController {
   final OverlayService _overlay;
   final SettingsService _settings;
   final RoutineCompletionService _completionService;
+
+  static const _speechChannel =
+      MethodChannel('com.aicharacter.ai_character/speech');
 
   final _stateController = StreamController<CharacterState>.broadcast();
   Stream<CharacterState> get onStateChanged => _stateController.stream;
@@ -149,7 +152,7 @@ class CharacterController {
   }
 
   /// Handle routine complete event.
-  /// If the routine is not yet checked as completed, prompt the user.
+  /// If the routine is not yet checked as completed, prompt the user via voice.
   /// Returns true if the prompt was actually shown, false if busy.
   Future<bool> onRoutineComplete(String routineId, String routineName) async {
     if (_isBusy) return false;
@@ -177,11 +180,7 @@ class CharacterController {
         await Future.delayed(const Duration(seconds: 3));
         await _overlay.hide();
       } else {
-        // Not checked — ask if the user wants to mark it done
-        // Clear any previous completion_action
-        final prefs = await SharedPreferences.getInstance();
-        await prefs.remove('completion_action');
-
+        // Not checked — ask via voice
         final askText = '$routineName 시간 끝났는데, 완료 체크 해줄까?';
 
         _updateState(CharacterState(
@@ -189,18 +188,17 @@ class CharacterController {
           gesture: 'beckoning',
           text: askText,
           characterId: _characterId,
-          action: 'completion_check',
-          actionRoutineId: routineId,
         ));
         await _overlay.show(
-          height: 600,
           initialData: jsonEncode(_currentState.toJson()),
         );
 
+        // Speak the question
         await _speak(askText);
 
-        // Wait for user response (poll SharedPreferences)
-        final accepted = await _waitForCompletionResponse(prefs);
+        // Listen for voice response (races with overlay dismissal)
+        final voiceText = await _listenForCompletionVoice();
+        final accepted = voiceText != null && _isAffirmative(voiceText);
 
         if (accepted) {
           await _completionService.toggleCompletion(routineId, today);
@@ -211,7 +209,6 @@ class CharacterController {
             text: '완료 체크했어! 수고했어~',
             characterId: _characterId,
           ));
-          // Overlay is already showing — send updated state via data channel
           await _overlay.sendToOverlay(jsonEncode(_currentState.toJson()));
           await _speak('완료 체크했어! 수고했어~');
           await Future.delayed(const Duration(seconds: 2));
@@ -228,30 +225,57 @@ class CharacterController {
     }
   }
 
-  /// Poll SharedPreferences for the user's completion response from overlay.
-  /// Returns true if accepted, false if declined or timeout.
-  Future<bool> _waitForCompletionResponse(SharedPreferences prefs) async {
-    for (int i = 0; i < 75; i++) {
-      // up to 30 seconds
-      await Future.delayed(const Duration(milliseconds: 400));
+  /// Listen for voice response, racing with overlay dismissal.
+  /// Returns recognized text or null (dismissed/timeout/error).
+  Future<String?> _listenForCompletionVoice() async {
+    final completer = Completer<String?>();
 
-      await prefs.reload();
-      final response = prefs.getString('completion_action');
-      if (response != null && response.isNotEmpty) {
-        await prefs.remove('completion_action');
-        return true;
-      }
+    // Start voice recognition
+    _startVoiceRecognition().then((text) {
+      if (!completer.isCompleted) completer.complete(text);
+    });
 
-      // Check if overlay was closed (user tapped "아니야" or dismissed)
-      final isActive = await _overlay.isOverlayActive();
-      if (!isActive) {
-        return false;
+    // Monitor overlay dismissal (user tap)
+    final timer = Timer.periodic(const Duration(milliseconds: 500), (_) async {
+      if (completer.isCompleted) return;
+      final active = await _overlay.isOverlayActive();
+      if (!active && !completer.isCompleted) {
+        completer.complete(null);
       }
+    });
+
+    // Timeout safety net (20 seconds)
+    final timeout = Timer(const Duration(seconds: 20), () {
+      if (!completer.isCompleted) completer.complete(null);
+    });
+
+    final result = await completer.future;
+    timer.cancel();
+    timeout.cancel();
+    return result;
+  }
+
+  /// Start native speech recognition via method channel.
+  Future<String?> _startVoiceRecognition() async {
+    try {
+      final result = await _speechChannel
+          .invokeMethod<String>('startListening')
+          .timeout(const Duration(seconds: 15));
+      return result;
+    } catch (e) {
+      print('Voice recognition error: $e');
+      return null;
     }
+  }
 
-    // Timeout — close overlay
-    await _overlay.hide();
-    return false;
+  /// Check if user's voice response is affirmative.
+  bool _isAffirmative(String text) {
+    final t = text.trim();
+    const affirmatives = [
+      '응', '네', '해줘', '해', '좋아', '체크', '완료', '그래',
+      '웅', '어', '맞아', '부탁', '당연', '했어', '끝났어', '다했어',
+    ];
+    return affirmatives.any((a) => t.contains(a));
   }
 
   /// User returned to allowed app during routine.

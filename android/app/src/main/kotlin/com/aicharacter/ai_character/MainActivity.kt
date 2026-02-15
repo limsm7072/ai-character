@@ -20,9 +20,11 @@ import io.flutter.plugin.common.MethodChannel
 class MainActivity : FlutterActivity() {
     private val CHANNEL = "com.aicharacter.ai_character/usage_stats"
     private val AUDIO_CHANNEL = "com.aicharacter.ai_character/audio"
+    private val SPEECH_CHANNEL = "com.aicharacter.ai_character/speech"
     private val EVENT_CHANNEL = "com.aicharacter.ai_character/distraction_events"
     private var eventSink: EventChannel.EventSink? = null
     private var mediaPlayer: MediaPlayer? = null
+    private var speechResult: MethodChannel.Result? = null
 
     private val distractionReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
@@ -94,6 +96,13 @@ class MainActivity : FlutterActivity() {
                     stopAudio()
                     result.success(null)
                 }
+                else -> result.notImplemented()
+            }
+        }
+
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, SPEECH_CHANNEL).setMethodCallHandler { call, result ->
+            when (call.method) {
+                "startListening" -> startSpeechRecognition(result)
                 else -> result.notImplemented()
             }
         }
@@ -210,6 +219,32 @@ class MainActivity : FlutterActivity() {
             }
         }
         return apps
+    }
+
+    private fun startSpeechRecognition(result: MethodChannel.Result) {
+        // Cancel any previous pending result
+        speechResult?.success(null)
+        speechResult = result
+
+        SpeechListenerActivity.onResult = { text ->
+            speechResult?.success(text)
+            speechResult = null
+        }
+        SpeechListenerActivity.onError = { _ ->
+            speechResult?.success(null)
+            speechResult = null
+        }
+        SpeechListenerActivity.onListening = {}
+        SpeechListenerActivity.onPartial = {}
+
+        try {
+            val intent = Intent(this, SpeechListenerActivity::class.java)
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            startActivity(intent)
+        } catch (e: Exception) {
+            speechResult?.error("SPEECH_ERROR", e.message, null)
+            speechResult = null
+        }
     }
 
     private fun playAudioFile(path: String, result: MethodChannel.Result) {
