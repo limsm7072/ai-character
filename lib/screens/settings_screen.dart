@@ -200,31 +200,24 @@ class _SettingsScreenState extends State<SettingsScreen> {
               setState(() {});
             },
           ),
-          ...voicePresets.map((preset) {
-            final isSelected =
-                widget.settingsService.voicePreset == preset.id;
-            return RadioListTile<String>(
-              title: Text(preset.label),
-              subtitle: Text(preset.description),
-              value: preset.id,
-              groupValue: widget.settingsService.voicePreset,
-              secondary: IconButton(
-                icon: const Icon(Icons.play_circle_outline),
-                tooltip: '미리 듣기',
-                onPressed: () async {
-                  await widget.ttsService.applyPreset(preset.id);
-                  await widget.ttsService.speak('안녕! 나는 루나야. 오늘도 파이팅!');
-                },
-              ),
-              onChanged: (v) async {
-                if (v != null) {
-                  await widget.settingsService.setVoicePreset(v);
-                  await widget.ttsService.applyPreset(v);
-                  setState(() {});
-                }
-              },
-            );
-          }),
+          // Female voices
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+            child: Text('여자 목소리',
+                style: TextStyle(fontSize: 12, color: Colors.grey[600])),
+          ),
+          ...voicePresets
+              .where((p) => p.gender == 'female')
+              .map((preset) => _buildVoiceTile(preset)),
+          // Male voices
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
+            child: Text('남자 목소리',
+                style: TextStyle(fontSize: 12, color: Colors.grey[600])),
+          ),
+          ...voicePresets
+              .where((p) => p.gender == 'male')
+              .map((preset) => _buildVoiceTile(preset)),
           const Divider(),
 
           // Character Selection
@@ -344,6 +337,30 @@ class _SettingsScreenState extends State<SettingsScreen> {
               onPressed: onTap,
               child: const Text('허용'),
             ),
+    );
+  }
+
+  Widget _buildVoiceTile(VoicePreset preset) {
+    return RadioListTile<String>(
+      title: Text(preset.label),
+      subtitle: Text(preset.description),
+      value: preset.id,
+      groupValue: widget.settingsService.voicePreset,
+      secondary: IconButton(
+        icon: const Icon(Icons.play_circle_outline),
+        tooltip: '미리 듣기',
+        onPressed: () async {
+          await widget.ttsService.applyPreset(preset.id);
+          await widget.ttsService.speak('안녕! 나는 루나야. 오늘도 파이팅!');
+        },
+      ),
+      onChanged: (v) async {
+        if (v != null) {
+          await widget.settingsService.setVoicePreset(v);
+          await widget.ttsService.applyPreset(v);
+          setState(() {});
+        }
+      },
     );
   }
 

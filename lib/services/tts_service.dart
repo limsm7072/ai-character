@@ -1,103 +1,116 @@
 import 'dart:async';
+import 'dart:io';
+import 'package:flutter/services.dart';
 import 'package:flutter_tts/flutter_tts.dart';
+import 'edge_tts_service.dart';
 
-/// Voice preset definition.
+/// Edge TTS voice definition.
 class VoicePreset {
   final String id;
   final String label;
   final String description;
-  final double pitch;
-  final double rate;
+  final String voiceName;
+  final String gender;
+  final String rate;
+  final String pitch;
 
   const VoicePreset({
     required this.id,
     required this.label,
     required this.description,
-    required this.pitch,
-    required this.rate,
+    required this.voiceName,
+    required this.gender,
+    this.rate = '+0%',
+    this.pitch = '+0Hz',
   });
 }
 
-/// Available voice presets.
+/// Available Korean Edge TTS voices.
 const voicePresets = [
   VoicePreset(
-    id: 'cute',
-    label: '귀여운',
-    description: '높고 느린 목소리',
-    pitch: 1.4,
-    rate: 0.45,
+    id: 'sunhi',
+    label: '선희',
+    description: '여자 - 밝고 친근한',
+    voiceName: 'ko-KR-SunHiNeural',
+    gender: 'female',
   ),
   VoicePreset(
-    id: 'calm',
-    label: '차분한',
-    description: '낮고 천천히',
-    pitch: 1.0,
-    rate: 0.4,
+    id: 'injoon',
+    label: '인준',
+    description: '남자 - 차분한',
+    voiceName: 'ko-KR-InJoonNeural',
+    gender: 'male',
   ),
   VoicePreset(
-    id: 'bright',
-    label: '밝은',
-    description: '밝고 또렷한 목소리',
-    pitch: 1.2,
-    rate: 0.5,
+    id: 'hyunsu',
+    label: '현수',
+    description: '남자 - 중후한',
+    voiceName: 'ko-KR-HyunsuNeural',
+    gender: 'male',
   ),
   VoicePreset(
-    id: 'deep',
-    label: '낮은',
-    description: '낮고 차분한 목소리',
-    pitch: 0.8,
-    rate: 0.45,
+    id: 'bongjin',
+    label: '봉진',
+    description: '남자 - 나이든',
+    voiceName: 'ko-KR-BongJinNeural',
+    gender: 'male',
   ),
   VoicePreset(
-    id: 'fast',
-    label: '빠른',
-    description: '빠르고 경쾌한 목소리',
-    pitch: 1.1,
-    rate: 0.65,
+    id: 'gookmin',
+    label: '국민',
+    description: '남자 - 힘있는',
+    voiceName: 'ko-KR-GookMinNeural',
+    gender: 'male',
+  ),
+  VoicePreset(
+    id: 'jimin',
+    label: '지민',
+    description: '여자 - 상냥한',
+    voiceName: 'ko-KR-JiMinNeural',
+    gender: 'female',
+  ),
+  VoicePreset(
+    id: 'seohyeon',
+    label: '서현',
+    description: '여자 - 차분한',
+    voiceName: 'ko-KR-SeoHyeonNeural',
+    gender: 'female',
+  ),
+  VoicePreset(
+    id: 'soonbok',
+    label: '순복',
+    description: '여자 - 따뜻한',
+    voiceName: 'ko-KR-SoonBokNeural',
+    gender: 'female',
+  ),
+  VoicePreset(
+    id: 'yujin',
+    label: '유진',
+    description: '여자 - 활발한',
+    voiceName: 'ko-KR-YuJinNeural',
+    gender: 'female',
   ),
 ];
 
-/// Text-to-Speech service for Korean voice output.
+/// TTS service using Edge TTS (primary) with flutter_tts fallback.
 class TtsService {
-  final FlutterTts _tts = FlutterTts();
-  bool _isInitialized = false;
-  bool _isSpeaking = false;
-  final _speakCompleter = <Completer<void>>[];
+  static const _audioChannel =
+      MethodChannel('com.aicharacter.ai_character/audio');
 
-  /// Currently active pitch and rate, re-applied before every speak.
-  double _currentPitch = 1.4;
-  double _currentRate = 0.45;
+  final EdgeTtsService _edgeTts = EdgeTtsService();
+  final FlutterTts _flutterTts = FlutterTts();
+
+  bool _isSpeaking = false;
+  bool _flutterTtsInitialized = false;
+
+  String _currentVoice = 'ko-KR-SunHiNeural';
+  String _currentRate = '+0%';
+  String _currentPitch = '+0Hz';
 
   bool get isSpeaking => _isSpeaking;
 
-  Future<void> initialize() async {
-    if (_isInitialized) return;
-
-    await _tts.setLanguage('ko-KR');
-    await _tts.setVolume(1.0);
-
-    _tts.setStartHandler(() {
-      _isSpeaking = true;
-    });
-
-    _tts.setCompletionHandler(() {
-      _isSpeaking = false;
-      for (final c in _speakCompleter) {
-        if (!c.isCompleted) c.complete();
-      }
-      _speakCompleter.clear();
-    });
-
-    _tts.setErrorHandler((msg) {
-      _isSpeaking = false;
-      for (final c in _speakCompleter) {
-        if (!c.isCompleted) c.complete();
-      }
-      _speakCompleter.clear();
-    });
-
-    _isInitialized = true;
-  }
+  /// Initialize (kept for backward compatibility).
+  Future<void> initialize() async {}
 
   /// Apply a voice preset by ID.
   Future<void> applyPreset(String presetId) async {
@@ -105,33 +118,75 @@ class TtsService {
       (p) => p.id == presetId,
       orElse: () => voicePresets.first,
     );
-    _currentPitch = preset.pitch;
+    _currentVoice = preset.voiceName;
     _currentRate = preset.rate;
-    await _tts.setPitch(_currentPitch);
-    await _tts.setSpeechRate(_currentRate);
+    _currentPitch = preset.pitch;
   }
 
-  /// Speak the given text and wait for completion.
+  /// Speak text using Edge TTS, falling back to flutter_tts on failure.
   Future<void> speak(String text) async {
-    if (!_isInitialized) await initialize();
+    if (text.trim().isEmpty) return;
 
-    // Stop any current speech
-    if (_isSpeaking) {
-      await _tts.stop();
+    await stop();
+
+    final cleaned = _cleanForTts(text);
+    _isSpeaking = true;
+
+    try {
+      final mp3Bytes = await _edgeTts.synthesize(
+        cleaned,
+        voice: _currentVoice,
+        rate: _currentRate,
+        pitch: _currentPitch,
+      );
+
+      if (mp3Bytes.isEmpty) throw Exception('Empty audio');
+
+      // Write to app cache dir
+      final cacheDir = Directory.systemTemp;
+      final tempFile = File('${cacheDir.path}/edge_tts_output.mp3');
+      await tempFile.writeAsBytes(mp3Bytes);
+
+      await _audioChannel.invokeMethod('playFile', {
+        'path': tempFile.path,
+      });
+
+      // Estimate playback duration from file size
+      // MP3 at 48kbps: ~6000 bytes/sec
+      final estimatedMs = (mp3Bytes.length / 6.0).round();
+      await Future.delayed(Duration(milliseconds: estimatedMs));
+      _isSpeaking = false;
+    } catch (_) {
+      // Fallback to flutter_tts
+      await _speakWithFlutterTts(cleaned);
+    }
+  }
+
+  Future<void> _speakWithFlutterTts(String text) async {
+    if (!_flutterTtsInitialized) {
+      await _flutterTts.setLanguage('ko-KR');
+      await _flutterTts.setVolume(1.0);
+      await _flutterTts.setPitch(1.2);
+      await _flutterTts.setSpeechRate(0.5);
+      _flutterTtsInitialized = true;
     }
 
-    // Re-apply pitch/rate every time (Android TTS can reset in background)
-    await _tts.setPitch(_currentPitch);
-    await _tts.setSpeechRate(_currentRate);
-
     final completer = Completer<void>();
-    _speakCompleter.add(completer);
 
-    await _tts.speak(_cleanForTts(text));
-    return completer.future;
+    _flutterTts.setCompletionHandler(() {
+      _isSpeaking = false;
+      if (!completer.isCompleted) completer.complete();
+    });
+
+    _flutterTts.setErrorHandler((msg) {
+      _isSpeaking = false;
+      if (!completer.isCompleted) completer.complete();
+    });
+
+    await _flutterTts.speak(text);
+    await completer.future;
   }
 
-  /// Remove special characters that TTS reads literally (e.g. ~ → "물결표").
   String _cleanForTts(String text) {
     return text
         .replaceAll(RegExp(r'[~～♥♡★☆♪♬◆◇●○■□▶▷△▲▽▼←→↑↓]'), '')
@@ -145,11 +200,14 @@ class TtsService {
   }
 
   Future<void> stop() async {
-    await _tts.stop();
     _isSpeaking = false;
+    try {
+      await _audioChannel.invokeMethod('stop');
+    } catch (_) {}
+    await _flutterTts.stop();
   }
 
   Future<void> dispose() async {
-    await _tts.stop();
+    await stop();
   }
 }

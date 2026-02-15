@@ -40,7 +40,7 @@ class SettingsService {
   Future<void> setSelectedCharacter(String characterId) =>
       _prefs.setString(_selectedCharacterKey, characterId);
 
-  String get voicePreset => _prefs.getString(_voicePresetKey) ?? 'cute';
+  String get voicePreset => _prefs.getString(_voicePresetKey) ?? 'sunhi';
   Future<void> setVoicePreset(String preset) =>
       _prefs.setString(_voicePresetKey, preset);
 }

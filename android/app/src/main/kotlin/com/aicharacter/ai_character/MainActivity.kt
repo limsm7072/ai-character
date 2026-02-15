@@ -11,6 +11,7 @@ import android.os.Process
 import android.provider.Settings
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
+import android.media.MediaPlayer
 import io.flutter.embedding.android.FlutterActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.EventChannel
@@ -18,8 +19,10 @@ import io.flutter.plugin.common.MethodChannel
 
 class MainActivity : FlutterActivity() {
     private val CHANNEL = "com.aicharacter.ai_character/usage_stats"
+    private val AUDIO_CHANNEL = "com.aicharacter.ai_character/audio"
     private val EVENT_CHANNEL = "com.aicharacter.ai_character/distraction_events"
     private var eventSink: EventChannel.EventSink? = null
+    private var mediaPlayer: MediaPlayer? = null
 
     private val distractionReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
@@ -76,6 +79,20 @@ class MainActivity : FlutterActivity() {
                         "has_usage_permission" to hasUsageStatsPermission(),
                         "has_overlay_permission" to hasOverlayPermission()
                     ))
+                }
+                else -> result.notImplemented()
+            }
+        }
+
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, AUDIO_CHANNEL).setMethodCallHandler { call, result ->
+            when (call.method) {
+                "playFile" -> {
+                    val path = call.argument<String>("path") ?: ""
+                    playAudioFile(path, result)
+                }
+                "stop" -> {
+                    stopAudio()
+                    result.success(null)
                 }
                 else -> result.notImplemented()
             }
@@ -193,5 +210,38 @@ class MainActivity : FlutterActivity() {
             }
         }
         return apps
+    }
+
+    private fun playAudioFile(path: String, result: MethodChannel.Result) {
+        try {
+            stopAudio()
+            mediaPlayer = MediaPlayer().apply {
+                setDataSource(path)
+                setOnCompletionListener {
+                    it.release()
+                    mediaPlayer = null
+                }
+                setOnErrorListener { mp, _, _ ->
+                    mp.release()
+                    mediaPlayer = null
+                    true
+                }
+                prepare()
+                start()
+            }
+            result.success(true)
+        } catch (e: Exception) {
+            result.error("PLAY_ERROR", e.message, null)
+        }
+    }
+
+    private fun stopAudio() {
+        try {
+            mediaPlayer?.let {
+                if (it.isPlaying) it.stop()
+                it.release()
+            }
+        } catch (_: Exception) {}
+        mediaPlayer = null
     }
 }
