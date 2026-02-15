@@ -1,8 +1,10 @@
 import 'dart:async';
 import 'dart:convert';
 import 'dart:io';
+import 'dart:math';
 import 'dart:typed_data';
 import 'package:crypto/crypto.dart';
+import 'package:flutter/foundation.dart';
 import 'package:uuid/uuid.dart';
 
 /// Pure Dart Edge TTS client using WebSocket.
@@ -12,12 +14,21 @@ class EdgeTtsService {
   static const _wsBase =
       'wss://speech.platform.bing.com/consumer/speech/synthesize/readaloud/edge/v1';
   static const _outputFormat = 'audio-24khz-48kbitrate-mono-mp3';
-  static const _chromiumVersion = '130.0.2849.68';
+  static const _chromiumFullVersion = '143.0.3650.75';
+  static const _chromiumMajorVersion = '143';
 
   static const _uuid = Uuid();
+  static final _rng = Random.secure();
 
   /// Last error for debugging.
   String? lastError;
+
+  static String _generateMuid() {
+    return List.generate(16, (_) => _rng.nextInt(256))
+        .map((b) => b.toRadixString(16).padLeft(2, '0'))
+        .join()
+        .toUpperCase();
+  }
 
   /// Synthesize [text] to MP3 bytes using the given [voice].
   Future<Uint8List> synthesize(
@@ -32,31 +43,40 @@ class EdgeTtsService {
 
     final connId = _uuid.v4().replaceAll('-', '');
     final secMsGec = _generateSecMsGec();
+    final muid = _generateMuid();
 
     final wsUrl =
         '$_wsBase'
         '?TrustedClientToken=$_trustedClientToken'
+        '&ConnectionId=$connId'
         '&Sec-MS-GEC=$secMsGec'
-        '&Sec-MS-GEC-Version=1-$_chromiumVersion'
-        '&ConnectionId=$connId';
+        '&Sec-MS-GEC-Version=1-$_chromiumFullVersion';
 
     WebSocket? ws;
+    final client = HttpClient();
+    client.userAgent = null; // Prevent Dart default User-Agent conflict
+
     try {
-      // Connect with required headers
       ws = await WebSocket.connect(
         wsUrl,
         headers: {
           'User-Agent':
-              'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 '
-              '(KHTML, like Gecko) Chrome/$_chromiumVersion Safari/537.36 '
-              'Edg/$_chromiumVersion',
-          'Origin': 'chrome-extension://jdiccldimpdaibmpdkjnbmckianbfold',
+              'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36'
+              ' (KHTML, like Gecko) Chrome/$_chromiumMajorVersion.0.0.0 Safari/537.36'
+              ' Edg/$_chromiumMajorVersion.0.0.0',
+          'Accept-Encoding': 'gzip, deflate, br, zstd',
+          'Accept-Language': 'en-US,en;q=0.9',
           'Pragma': 'no-cache',
           'Cache-Control': 'no-cache',
+          'Origin': 'chrome-extension://jdiccldimpdaibmpdkjnbmckianbfold',
+          'Cookie': 'muid=$muid;',
         },
+        customClient: client,
+        compression: CompressionOptions.compressionOff,
       );
     } catch (e) {
       lastError = 'WebSocket connect failed: $e';
+      client.close();
       rethrow;
     }
 
@@ -150,13 +170,14 @@ class EdgeTtsService {
     completer.complete(result);
   }
 
-  /// Generate Sec-MS-GEC authentication token.
+  /// Generate Sec-MS-GEC authentication token (matches Python edge-tts).
   String _generateSecMsGec() {
     const winEpoch = 11644473600;
-    final nowSec = DateTime.now().millisecondsSinceEpoch / 1000;
-    var ticks = ((nowSec + winEpoch) * 10000000).toInt();
-    ticks -= ticks % 3000000000;
-    final strToHash = '$ticks$_trustedClientToken';
+    double ticks = DateTime.now().toUtc().millisecondsSinceEpoch / 1000.0;
+    ticks += winEpoch;
+    ticks -= ticks % 300;
+    ticks *= 1e7;
+    final strToHash = '${ticks.toStringAsFixed(0)}$_trustedClientToken';
     return sha256.convert(utf8.encode(strToHash)).toString().toUpperCase();
   }
 
