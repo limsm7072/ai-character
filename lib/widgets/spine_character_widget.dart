@@ -1,4 +1,5 @@
 import 'dart:async';
+import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:spine_flutter/spine_flutter.dart';
 import '../models/character_config.dart';
@@ -10,6 +11,9 @@ class SpineCharacterWidget extends StatefulWidget {
   final CharacterState state;
   final VoidCallback? onTap;
   final bool showBubble;
+  final List<String>? customSkins;
+  final bool interactive;
+  final String? previewAnimation;
 
   const SpineCharacterWidget({
     super.key,
@@ -17,6 +21,9 @@ class SpineCharacterWidget extends StatefulWidget {
     required this.state,
     this.onTap,
     this.showBubble = true,
+    this.customSkins,
+    this.interactive = false,
+    this.previewAnimation,
   });
 
   @override
@@ -33,9 +40,28 @@ class _SpineCharacterWidgetState extends State<SpineCharacterWidget> {
   String? _error;
   String _debugInfo = '';
 
+  // Blink state
+  final _random = Random();
+  double _nextBlinkTime = 0;
+  double _blinkTimer = 0;
+  bool _isBlinking = false;
+  double _blinkElapsed = 0;
+  static const _blinkDuration = 0.15; // seconds
+
+  // Random idle variation
+  Timer? _idleVariationTimer;
+  bool _isPlayingVariation = false;
+
+  // Touch cooldown
+  DateTime _lastTapTime = DateTime(2000);
+
+  // Available animations (cached)
+  List<String> _availableAnimations = [];
+
   @override
   void initState() {
     super.initState();
+    _nextBlinkTime = 3.0 + _random.nextDouble() * 3.0;
     _loadSkeleton();
   }
 
@@ -89,10 +115,13 @@ class _SpineCharacterWidgetState extends State<SpineCharacterWidget> {
 
   void _onSpineInitialized(SpineWidgetController controller) {
     try {
-      // Apply combined skins if specified
-      if (widget.config.combineSkins.isNotEmpty) {
+      // Apply custom skins (from dress-up) or default combined skins
+      final skinsToApply = widget.customSkins ??
+          (widget.config.combineSkins.isNotEmpty ? widget.config.combineSkins : null);
+
+      if (skinsToApply != null && skinsToApply.isNotEmpty) {
         final combined = Skin('combined');
-        for (final skinName in widget.config.combineSkins) {
+        for (final skinName in skinsToApply) {
           final skin = controller.skeletonData.findSkin(skinName);
           if (skin != null) {
             combined.addSkin(skin);
@@ -107,31 +136,41 @@ class _SpineCharacterWidgetState extends State<SpineCharacterWidget> {
 
       controller.animationState.data.defaultMix = 0.2;
 
-      // Find a valid idle animation
+      // Cache available animations
       final animations = controller.skeletonData.animations;
-      final animNames = <String>[];
+      _availableAnimations = [];
       for (int i = 0; i < animations.length; i++) {
         final name = animations[i]?.name;
-        if (name != null) animNames.add(name);
+        if (name != null) _availableAnimations.add(name);
       }
 
       String idleAnim = widget.config.idleAnimation;
-      if (!animNames.contains(idleAnim) && animNames.isNotEmpty) {
-        idleAnim = animNames.first;
+      if (!_availableAnimations.contains(idleAnim) && _availableAnimations.isNotEmpty) {
+        idleAnim = _availableAnimations.first;
       }
 
       controller.animationState.setAnimation(0, idleAnim, true);
       _currentAnimation = idleAnim;
       setState(() => _initialized = true);
-      _applyState();
+
+      // Apply preview animation if set, otherwise apply state
+      if (widget.previewAnimation != null) {
+        _applyPreviewAnimation();
+      } else {
+        _applyState();
+      }
+
+      // Start idle variation timer if interactive
+      _startIdleVariationTimer();
     } catch (e) {
       setState(() => _error = 'Init: $e\n$_debugInfo');
     }
   }
 
   void _onBeforeUpdate(SpineWidgetController controller) {
-    if (!widget.config.supportsLipSync) return;
-    if (_lipSyncTimer != null && _lipSyncTimer!.isActive) {
+    // Lip sync
+    if (widget.config.supportsLipSync &&
+        _lipSyncTimer != null && _lipSyncTimer!.isActive) {
       final jaw = controller.skeleton.findBone('jaw');
       if (jaw != null) {
         final now = DateTime.now().millisecondsSinceEpoch;
@@ -139,13 +178,140 @@ class _SpineCharacterWidgetState extends State<SpineCharacterWidget> {
         jaw.pose.scaleY = open ? 1.3 : 1.0;
       }
     }
+
+    // Auto-blink (approximate delta from system time)
+    _updateBlink(controller);
+  }
+
+  void _updateBlink(SpineWidgetController controller) {
+    // Use a rough 16ms delta (60fps)
+    const dt = 0.016;
+    _blinkTimer += dt;
+
+    if (_isBlinking) {
+      _blinkElapsed += dt;
+      // Try to find eyelid-related bones for blinking
+      final eyelidLeft = controller.skeleton.findBone('eyelid-left');
+      final eyelidRight = controller.skeleton.findBone('eyelid-right');
+
+      if (_blinkElapsed < _blinkDuration) {
+        // Close eyes
+        eyelidLeft?.pose.scaleY = 0.1;
+        eyelidRight?.pose.scaleY = 0.1;
+      } else {
+        // Open eyes
+        eyelidLeft?.pose.scaleY = 1.0;
+        eyelidRight?.pose.scaleY = 1.0;
+        _isBlinking = false;
+        _blinkElapsed = 0;
+        _blinkTimer = 0;
+        _nextBlinkTime = 3.0 + _random.nextDouble() * 3.0;
+      }
+    } else if (_blinkTimer >= _nextBlinkTime) {
+      _isBlinking = true;
+      _blinkElapsed = 0;
+    }
+  }
+
+  void _startIdleVariationTimer() {
+    _idleVariationTimer?.cancel();
+    if (!widget.interactive) return;
+
+    _scheduleNextIdleVariation();
+  }
+
+  void _scheduleNextIdleVariation() {
+    final delay = 10 + _random.nextInt(11); // 10~20 seconds
+    _idleVariationTimer = Timer(Duration(seconds: delay), () {
+      if (!mounted || !_initialized || _controller == null) return;
+      if (_isPlayingVariation) return;
+
+      // Only do variation if currently in idle state
+      final idleAnim = widget.config.idleAnimation;
+      if (_currentAnimation != idleAnim) {
+        _scheduleNextIdleVariation();
+        return;
+      }
+
+      // Pick a random variation: aware or dance (one-shot)
+      final variations = <String>[];
+      if (_availableAnimations.contains('aware')) variations.add('aware');
+      if (_availableAnimations.contains('dance')) variations.add('dance');
+
+      if (variations.isEmpty) {
+        _scheduleNextIdleVariation();
+        return;
+      }
+
+      final picked = variations[_random.nextInt(variations.length)];
+      _isPlayingVariation = true;
+
+      _controller!.animationState.setAnimation(0, picked, false);
+      _controller!.animationState.addAnimation(0, idleAnim, true, 0);
+      _currentAnimation = idleAnim; // Will return to idle
+
+      // Reset variation flag after a reasonable time
+      Timer(const Duration(seconds: 3), () {
+        _isPlayingVariation = false;
+        if (mounted) _scheduleNextIdleVariation();
+      });
+    });
+  }
+
+  void _handleTap() {
+    if (!widget.interactive) return;
+    if (!_initialized || _controller == null) return;
+
+    // Cooldown check (1 second)
+    final now = DateTime.now();
+    if (now.difference(_lastTapTime).inMilliseconds < 1000) return;
+    _lastTapTime = now;
+
+    // Pick random reaction from available non-idle animations
+    final reactions = <String>[];
+    for (final anim in ['dance', 'dress-up', 'aware']) {
+      if (_availableAnimations.contains(anim)) reactions.add(anim);
+    }
+    if (reactions.isEmpty) return;
+
+    final picked = reactions[_random.nextInt(reactions.length)];
+    final idleAnim = widget.config.idleAnimation;
+
+    _controller!.animationState.setAnimation(0, picked, false);
+    _controller!.animationState.addAnimation(0, idleAnim, true, 0);
+    _currentAnimation = idleAnim;
   }
 
   @override
   void didUpdateWidget(SpineCharacterWidget oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.state != widget.state) {
+
+    if (oldWidget.previewAnimation != widget.previewAnimation &&
+        widget.previewAnimation != null) {
+      _applyPreviewAnimation();
+    } else if (oldWidget.state != widget.state) {
       _applyState();
+    }
+
+    // Restart idle variation if interactive changed
+    if (oldWidget.interactive != widget.interactive) {
+      _startIdleVariationTimer();
+    }
+  }
+
+  void _applyPreviewAnimation() {
+    if (!_initialized || _controller == null) return;
+    final anim = widget.previewAnimation;
+    if (anim == null || !_availableAnimations.contains(anim)) return;
+
+    final isOneShot = widget.config.oneShotAnimations.contains(anim);
+    _controller!.animationState.setAnimation(0, anim, !isOneShot);
+    _currentAnimation = anim;
+
+    if (isOneShot) {
+      final idleAnim = widget.config.idleAnimation;
+      _controller!.animationState.addAnimation(0, idleAnim, true, 0);
+      _currentAnimation = idleAnim;
     }
   }
 
@@ -155,24 +321,22 @@ class _SpineCharacterWidgetState extends State<SpineCharacterWidget> {
     try {
       final config = widget.config;
       String targetAnimation;
+      double timeScale = 1.0;
+
       if (widget.state.gesture != 'idle') {
         targetAnimation =
             config.gestureAnimations[widget.state.gesture] ??
                 config.idleAnimation;
+        timeScale = config.gestureAnimationSpeeds[widget.state.gesture] ?? 1.0;
       } else {
         targetAnimation =
             config.emotionAnimations[widget.state.emotion] ??
                 config.idleAnimation;
+        timeScale = config.emotionAnimationSpeeds[widget.state.emotion] ?? 1.0;
       }
 
       // Verify animation exists, fallback to current if not
-      final animations = _controller!.skeletonData.animations;
-      final animNames = <String>[];
-      for (int i = 0; i < animations.length; i++) {
-        final name = animations[i]?.name;
-        if (name != null) animNames.add(name);
-      }
-      if (!animNames.contains(targetAnimation)) {
+      if (!_availableAnimations.contains(targetAnimation)) {
         targetAnimation = _currentAnimation;
       }
 
@@ -182,17 +346,25 @@ class _SpineCharacterWidgetState extends State<SpineCharacterWidget> {
       if (targetAnimation != _currentAnimation) {
         _currentAnimation = targetAnimation;
         if (shouldLoop) {
-          _controller!.animationState
+          final entry = _controller!.animationState
               .setAnimation(0, targetAnimation, true);
+          entry.timeScale = timeScale;
         } else {
-          _controller!.animationState
+          final entry = _controller!.animationState
               .setAnimation(0, targetAnimation, false);
+          entry.timeScale = timeScale;
           final fallbackIdle =
-              animNames.contains(config.idleAnimation)
+              _availableAnimations.contains(config.idleAnimation)
                   ? config.idleAnimation
                   : _currentAnimation;
           _controller!.animationState
               .addAnimation(0, fallbackIdle, true, 0);
+        }
+      } else if (timeScale != 1.0) {
+        // Same animation but different speed — update timeScale
+        final current = _controller!.animationState.getCurrent(0);
+        if (current != null) {
+          current.timeScale = timeScale;
         }
       }
     } catch (e) {
@@ -220,6 +392,7 @@ class _SpineCharacterWidgetState extends State<SpineCharacterWidget> {
   @override
   void dispose() {
     _stopLipSync();
+    _idleVariationTimer?.cancel();
     super.dispose();
   }
 
@@ -253,8 +426,9 @@ class _SpineCharacterWidgetState extends State<SpineCharacterWidget> {
 
     // Determine BoundsProvider based on skin config
     final BoundsProvider boundsProvider;
-    if (widget.config.combineSkins.isNotEmpty) {
-      boundsProvider = SkinAndAnimationBounds(skins: widget.config.combineSkins);
+    final activeSkins = widget.customSkins ?? widget.config.combineSkins;
+    if (activeSkins.isNotEmpty) {
+      boundsProvider = SkinAndAnimationBounds(skins: activeSkins);
     } else if (widget.config.defaultSkin != null) {
       boundsProvider = SkinAndAnimationBounds(skins: [widget.config.defaultSkin!]);
     } else {
@@ -309,10 +483,11 @@ class _SpineCharacterWidgetState extends State<SpineCharacterWidget> {
             ),
           ),
 
-        if (widget.onTap != null)
+        // Tap handler: interactive touch or custom onTap
+        if (widget.interactive || widget.onTap != null)
           Positioned.fill(
             child: GestureDetector(
-              onTap: widget.onTap,
+              onTap: widget.interactive ? _handleTap : widget.onTap,
               behavior: HitTestBehavior.translucent,
             ),
           ),

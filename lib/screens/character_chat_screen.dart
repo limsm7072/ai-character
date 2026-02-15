@@ -5,12 +5,19 @@ import '../models/character_registry.dart';
 import '../services/gemini_service.dart';
 import '../services/settings_service.dart';
 import '../services/tts_service.dart';
+import '../services/accessory_service.dart';
 import '../widgets/spine_character_widget.dart';
+import 'dress_up_screen.dart';
 
 class CharacterChatScreen extends StatefulWidget {
   final SettingsService settingsService;
+  final AccessoryService accessoryService;
 
-  const CharacterChatScreen({super.key, required this.settingsService});
+  const CharacterChatScreen({
+    super.key,
+    required this.settingsService,
+    required this.accessoryService,
+  });
 
   @override
   State<CharacterChatScreen> createState() => _CharacterChatScreenState();
@@ -82,6 +89,16 @@ class _CharacterChatScreenState extends State<CharacterChatScreen> {
       appBar: AppBar(
         title: const Text('루나와 대화'),
         centerTitle: true,
+        actions: [
+          if (CharacterRegistry.getById(
+                  widget.settingsService.selectedCharacter)
+              .supportsDressUp)
+            IconButton(
+              icon: const Icon(Icons.checkroom),
+              tooltip: '꾸미기',
+              onPressed: _openDressUp,
+            ),
+        ],
       ),
       body: Column(
         children: [
@@ -91,10 +108,14 @@ class _CharacterChatScreenState extends State<CharacterChatScreen> {
             child: Builder(builder: (_) {
               final config = CharacterRegistry.getById(
                   widget.settingsService.selectedCharacter);
+              final customSkins = widget.accessoryService
+                  .getSelectedSkins(config.id);
               return SpineCharacterWidget(
-                key: ValueKey(config.id),
+                key: ValueKey('${config.id}_${customSkins.join("_")}'),
                 config: config,
                 state: _characterState,
+                customSkins: customSkins.isNotEmpty ? customSkins : null,
+                interactive: true,
               );
             }),
           ),
@@ -365,6 +386,23 @@ class _CharacterChatScreenState extends State<CharacterChatScreen> {
         return 'disappointed';
       default:
         return 'neutral';
+    }
+  }
+
+  Future<void> _openDressUp() async {
+    final config = CharacterRegistry.getById(
+        widget.settingsService.selectedCharacter);
+    final result = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => DressUpScreen(
+          config: config,
+          accessoryService: widget.accessoryService,
+        ),
+      ),
+    );
+    if (result == true && mounted) {
+      setState(() {}); // Refresh to show new skins
     }
   }
 
