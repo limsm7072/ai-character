@@ -228,13 +228,44 @@ class MainActivity : FlutterActivity() {
             set(year, month - 1, day, 0, 0, 0)
             set(java.util.Calendar.MILLISECOND, 0)
         }
-        val startTime = cal.timeInMillis
+        val rangeStart = cal.timeInMillis
         cal.add(java.util.Calendar.DAY_OF_MONTH, 1)
-        val endTime = cal.timeInMillis
+        val rangeEnd = Math.min(cal.timeInMillis, System.currentTimeMillis())
+
+        if (rangeEnd <= rangeStart) return emptyList()
 
         val usm = getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
-        val stats = usm.queryUsageStats(UsageStatsManager.INTERVAL_DAILY, startTime, endTime)
-        if (stats.isNullOrEmpty()) return emptyList()
+        val events = usm.queryEvents(rangeStart, rangeEnd)
+
+        val foregroundStarts = mutableMapOf<String, Long>()
+        val totalTimes = mutableMapOf<String, Long>()
+
+        val event = android.app.usage.UsageEvents.Event()
+        while (events.hasNextEvent()) {
+            events.getNextEvent(event)
+            val pkg = event.packageName ?: continue
+
+            when (event.eventType) {
+                1, 7 -> { // MOVE_TO_FOREGROUND, ACTIVITY_RESUMED
+                    foregroundStarts[pkg] = event.timeStamp
+                }
+                2, 8 -> { // MOVE_TO_BACKGROUND, ACTIVITY_PAUSED
+                    val start = foregroundStarts.remove(pkg) ?: continue
+                    val duration = event.timeStamp - start
+                    if (duration > 0) {
+                        totalTimes[pkg] = (totalTimes[pkg] ?: 0L) + duration
+                    }
+                }
+            }
+        }
+
+        // Apps still in foreground: count time up to rangeEnd
+        for ((pkg, start) in foregroundStarts) {
+            val duration = rangeEnd - start
+            if (duration > 0) {
+                totalTimes[pkg] = (totalTimes[pkg] ?: 0L) + duration
+            }
+        }
 
         val myPackage = packageName
         val excludePrefixes = listOf(
@@ -246,17 +277,17 @@ class MainActivity : FlutterActivity() {
             "com.sec.android.inputmethod"
         )
 
-        return stats
-            .filter { s ->
-                s.totalTimeInForeground > 0 &&
-                s.packageName != myPackage &&
-                excludePrefixes.none { prefix -> s.packageName.startsWith(prefix) }
+        return totalTimes.entries
+            .filter { (pkg, time) ->
+                time > 0 &&
+                pkg != myPackage &&
+                excludePrefixes.none { prefix -> pkg.startsWith(prefix) }
             }
-            .map { s ->
+            .map { (pkg, time) ->
                 mapOf<String, Any>(
-                    "appPackage" to s.packageName,
-                    "appLabel" to getAppLabel(s.packageName),
-                    "totalTime" to s.totalTimeInForeground
+                    "appPackage" to pkg,
+                    "appLabel" to getAppLabel(pkg),
+                    "totalTime" to time
                 )
             }
     }

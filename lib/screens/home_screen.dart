@@ -101,23 +101,35 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     }
   }
 
-  void _startWakeWordListening() {
-    if (!_wakeSpeechReady || _assistantShowing || !mounted) return;
+  void _startWakeWordListening() async {
+    if (_assistantShowing || !mounted) return;
+    // Re-initialize to reclaim the method channel handler
+    // (CharacterChatScreen's voice mode may have taken it over)
+    if (!_wakeSpeechReady) {
+      await _initWakeWord();
+      return; // _initWakeWord already calls _startWakeWordListening
+    }
     _wakeListening = true;
-    _wakeSpeech.listen(
-      onResult: (result) {
-        final words = result.recognizedWords.toLowerCase();
-        if (_containsWakeWord(words)) {
-          _wakeSpeech.stop();
-          _wakeListening = false;
-          final command = _extractCommand(result.recognizedWords);
-          _showAssistantOverlay(initialCommand: command);
-        }
-      },
-      localeId: 'ko_KR',
-      listenFor: const Duration(seconds: 5),
-      cancelOnError: false,
-    );
+    try {
+      await _wakeSpeech.listen(
+        onResult: (result) {
+          final words = result.recognizedWords.toLowerCase();
+          if (_containsWakeWord(words)) {
+            _wakeSpeech.stop();
+            _wakeListening = false;
+            final command = _extractCommand(result.recognizedWords);
+            _showAssistantOverlay(initialCommand: command);
+          }
+        },
+        localeId: 'ko_KR',
+        listenFor: const Duration(seconds: 5),
+        cancelOnError: false,
+      );
+    } catch (e) {
+      _wakeListening = false;
+      // Re-init on next attempt
+      _wakeSpeechReady = false;
+    }
   }
 
   void _stopWakeWordListening() {
@@ -228,6 +240,8 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
           if (i == 2) {
             _stopWakeWordListening();
           } else if (!_assistantShowing) {
+            // Re-init needed if coming back from 루나 tab (voice mode may have taken over)
+            _wakeSpeechReady = false;
             _startWakeWordListening();
           }
         },

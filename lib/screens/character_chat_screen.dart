@@ -12,11 +12,12 @@ import '../services/routine_completion_service.dart';
 import '../widgets/spine_character_widget.dart';
 import 'dress_up_screen.dart';
 
-enum _RoutineStep { idle, askName, askStartTime, askEndTime, askDays, askBlockedApps }
+enum _RoutineStep { idle, askName, askStartDate, askStartTime, askEndTime, askDays, askBlockedApps }
 
 class _RoutineCreationFlow {
   _RoutineStep step = _RoutineStep.idle;
   String name = '';
+  String? startDate;
   model.TimeOfDay? startTime;
   model.TimeOfDay? endTime;
   List<bool> activeDays = List.filled(7, true);
@@ -27,6 +28,7 @@ class _RoutineCreationFlow {
   void reset() {
     step = _RoutineStep.idle;
     name = '';
+    startDate = null;
     startTime = null;
     endTime = null;
     activeDays = List.filled(7, true);
@@ -72,6 +74,55 @@ model.TimeOfDay? _parseTime(String input) {
     if (isAm && hour == 12) hour = 0;
     if (hour >= 0 && hour <= 23) {
       return model.TimeOfDay(hour: hour, minute: 0);
+    }
+  }
+
+  return null;
+}
+
+String? _parseDate(String input) {
+  final t = input.trim();
+  final now = DateTime.now();
+  String _fmt(DateTime d) =>
+      '${d.year}-${d.month.toString().padLeft(2, '0')}-${d.day.toString().padLeft(2, '0')}';
+
+  if (t.contains('오늘') || t.contains('지금') || t.contains('바로')) {
+    return _fmt(now);
+  }
+  if (t.contains('내일')) {
+    return _fmt(now.add(const Duration(days: 1)));
+  }
+  if (t.contains('모레') || t.contains('글피')) {
+    return _fmt(now.add(Duration(days: t.contains('글피') ? 3 : 2)));
+  }
+
+  // "2월 20일", "2/20", "02-20"
+  final mdMatch = RegExp(r'(\d{1,2})\s*[월/\-]\s*(\d{1,2})').firstMatch(t);
+  if (mdMatch != null) {
+    final month = int.parse(mdMatch.group(1)!);
+    final day = int.parse(mdMatch.group(2)!);
+    if (month >= 1 && month <= 12 && day >= 1 && day <= 31) {
+      var year = now.year;
+      final candidate = DateTime(year, month, day);
+      if (candidate.isBefore(now.subtract(const Duration(days: 1)))) {
+        year++;
+      }
+      return _fmt(DateTime(year, month, day));
+    }
+  }
+
+  // "20일" (current month)
+  final dayOnly = RegExp(r'(\d{1,2})\s*일').firstMatch(t);
+  if (dayOnly != null) {
+    final day = int.parse(dayOnly.group(1)!);
+    if (day >= 1 && day <= 31) {
+      var month = now.month;
+      var year = now.year;
+      if (day < now.day) {
+        month++;
+        if (month > 12) { month = 1; year++; }
+      }
+      return _fmt(DateTime(year, month, day));
     }
   }
 
@@ -139,7 +190,8 @@ class _CharacterChatScreenState extends State<CharacterChatScreen> {
   void initState() {
     super.initState();
     _initGemini();
-    _initSpeech();
+    // _initSpeech is called lazily in _ensureSpeechReady()
+    // to avoid conflicting with HomeScreen's wake word SpeechToText
   }
 
   void _initGemini() {
@@ -176,20 +228,21 @@ class _CharacterChatScreenState extends State<CharacterChatScreen> {
     return buf.toString();
   }
 
-  Future<void> _initSpeech() async {
+  Future<void> _ensureSpeechReady() async {
+    if (_speechAvailable) return;
     _speechAvailable = await _speech.initialize(
       onError: (error) {
-        setState(() => _isListening = false);
+        if (mounted) setState(() => _isListening = false);
       },
       onStatus: (status) {
         if (status == 'done' || status == 'notListening') {
-          if (_isListening) {
+          if (_isListening && mounted) {
             setState(() => _isListening = false);
           }
         }
       },
     );
-    setState(() {});
+    if (mounted) setState(() {});
   }
 
   @override
@@ -210,6 +263,12 @@ class _CharacterChatScreenState extends State<CharacterChatScreen> {
         title: const Text('루나와 대화'),
         centerTitle: true,
         actions: [
+          if (_messages.isNotEmpty)
+            IconButton(
+              icon: const Icon(Icons.refresh),
+              tooltip: '새 대화',
+              onPressed: _clearChat,
+            ),
           if (CharacterRegistry.getById(
                   widget.settingsService.selectedCharacter)
               .supportsDressUp)
@@ -391,13 +450,14 @@ class _CharacterChatScreenState extends State<CharacterChatScreen> {
     );
   }
 
-  void _toggleVoiceMode() {
+  void _toggleVoiceMode() async {
     if (_voiceMode) {
       // Turn off voice mode
       _stopListening();
       setState(() => _voiceMode = false);
     } else {
       // Turn on voice mode and start listening
+      await _ensureSpeechReady();
       setState(() => _voiceMode = true);
       _startListening();
     }
@@ -524,6 +584,17 @@ class _CharacterChatScreenState extends State<CharacterChatScreen> {
     }
   }
 
+  void _clearChat() {
+    _stopListening();
+    setState(() {
+      _voiceMode = false;
+      _messages.clear();
+      _characterState = const CharacterState();
+      _routineFlow.reset();
+    });
+    _gemini.resetChat();
+  }
+
   Future<void> _openDressUp() async {
     final config = CharacterRegistry.getById(
         widget.settingsService.selectedCharacter);
@@ -578,8 +649,19 @@ class _CharacterChatScreenState extends State<CharacterChatScreen> {
     switch (_routineFlow.step) {
       case _RoutineStep.askName:
         _routineFlow.name = text;
+        _routineFlow.step = _RoutineStep.askStartDate;
+        _addLunaMessage('좋아! "${_routineFlow.name}" 루틴이구나. 언제부터 시작할 거야? (예: 오늘, 내일, 2월 20일)', emotion: 'happy', gesture: 'idle');
+        break;
+
+      case _RoutineStep.askStartDate:
+        final date = _parseDate(text);
+        if (date == null) {
+          _addLunaMessage('날짜를 못 알아들었어. "오늘", "내일", "2월 20일" 이런 식으로 말해줘!', emotion: 'worried', gesture: 'shaking_head');
+          return;
+        }
+        _routineFlow.startDate = date;
         _routineFlow.step = _RoutineStep.askStartTime;
-        _addLunaMessage('좋아! "${_routineFlow.name}" 루틴이구나. 시작 시간은 몇 시야?', emotion: 'happy', gesture: 'idle');
+        _addLunaMessage('$date부터 시작이구나! 매일 시작 시간은 몇 시야?', emotion: 'happy', gesture: 'idle');
         break;
 
       case _RoutineStep.askStartTime:
@@ -646,6 +728,7 @@ class _CharacterChatScreenState extends State<CharacterChatScreen> {
     final routine = model.Routine(
       id: DateTime.now().millisecondsSinceEpoch.toString(),
       name: flow.name,
+      startDate: flow.startDate,
       startTime: flow.startTime!,
       endTime: flow.endTime!,
       activeDays: flow.activeDays,
@@ -657,8 +740,9 @@ class _CharacterChatScreenState extends State<CharacterChatScreen> {
       final appsLabel = flow.blockedApps.isNotEmpty
           ? '\n차단 앱: ${flow.blockedApps.join(", ")}'
           : '';
+      final dateLabel = flow.startDate != null ? '${flow.startDate}부터, ' : '';
       _addLunaMessage(
-        '${flow.name} 루틴 만들었어! ${flow.startTime!.format()}~${flow.endTime!.format()}, $daysLabel.$appsLabel\n화이팅!',
+        '${flow.name} 루틴 만들었어! $dateLabel${flow.startTime!.format()}~${flow.endTime!.format()}, $daysLabel.$appsLabel\n화이팅!',
         emotion: 'proud',
         gesture: 'clapping',
       );

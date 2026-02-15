@@ -2,6 +2,7 @@ class Routine {
   final String id;
   String name;
   String description;
+  String? startDate; // yyyy-MM-dd, null = immediately active
   TimeOfDay startTime;
   TimeOfDay endTime;
   List<String> blockedApps; // package names to block
@@ -12,6 +13,7 @@ class Routine {
     required this.id,
     required this.name,
     this.description = '',
+    this.startDate,
     required this.startTime,
     required this.endTime,
     this.blockedApps = const [],
@@ -41,6 +43,7 @@ class Routine {
         'id': id,
         'name': name,
         'description': description,
+        'startDate': startDate,
         'startHour': startTime.hour,
         'startMinute': startTime.minute,
         'endHour': endTime.hour,
@@ -54,6 +57,7 @@ class Routine {
         id: json['id'],
         name: json['name'],
         description: json['description'] ?? '',
+        startDate: json['startDate'],
         startTime: TimeOfDay(
           hour: json['startHour'],
           minute: json['startMinute'],

@@ -17,7 +17,7 @@ class GeminiService {
     _customSystemPrompt = systemPrompt;
     _customModelResponse = initialModelResponse;
     _model = GenerativeModel(
-      model: 'gemini-2.0-flash',
+      model: 'gemma-3-4b-it',
       apiKey: apiKey,
       generationConfig: GenerationConfig(
         temperature: 0.9,
