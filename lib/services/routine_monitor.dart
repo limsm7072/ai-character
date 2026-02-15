@@ -90,10 +90,21 @@ class RoutineMonitor {
 
       // Routine just ended
       if (routine == null && _wasInRoutine) {
-        final id = _activeRoutine?.id ?? '';
-        final name = _activeRoutine?.name ?? '루틴';
+        final prev = _activeRoutine;
         _activeRoutine = null;
         _wasInRoutine = false;
+
+        // Check if the routine was disabled (not actually ended by time)
+        if (prev != null) {
+          final fresh = _routineService.getAll().where((r) => r.id == prev.id).firstOrNull;
+          if (fresh != null && !fresh.isEnabled) {
+            // Routine was disabled, not ended — skip completion prompt
+            return;
+          }
+        }
+
+        final id = prev?.id ?? '';
+        final name = prev?.name ?? '루틴';
         final shown = await _characterController.onRoutineComplete(id, name);
         if (shown) _promptedToday.add(id);
         return;
