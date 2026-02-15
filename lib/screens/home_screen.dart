@@ -4,8 +4,11 @@ import '../services/routine_service.dart';
 import '../services/settings_service.dart';
 import '../services/app_detection_service.dart';
 import '../services/distraction_log_service.dart';
+import '../services/routine_completion_service.dart';
+import '../services/tts_service.dart';
+import '../services/accessory_service.dart';
 import 'routine_edit_screen.dart';
-import 'routine_stats_screen.dart';
+import 'stats_screen.dart';
 import 'settings_screen.dart';
 import 'character_chat_screen.dart';
 
@@ -14,6 +17,9 @@ class HomeScreen extends StatefulWidget {
   final SettingsService settingsService;
   final AppDetectionService? appDetection;
   final DistractionLogService distractionLogService;
+  final RoutineCompletionService completionService;
+  final TtsService ttsService;
+  final AccessoryService accessoryService;
 
   const HomeScreen({
     super.key,
@@ -21,6 +27,9 @@ class HomeScreen extends StatefulWidget {
     required this.settingsService,
     this.appDetection,
     required this.distractionLogService,
+    required this.completionService,
+    required this.ttsService,
+    required this.accessoryService,
   });
 
   @override
@@ -43,6 +52,8 @@ class _HomeScreenState extends State<HomeScreen> {
     });
   }
 
+  String get _todayStr => widget.completionService.todayStr();
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -50,12 +61,19 @@ class _HomeScreenState extends State<HomeScreen> {
         index: _currentIndex,
         children: [
           _buildRoutineList(),
+          StatsScreen(
+            routineService: widget.routineService,
+            completionService: widget.completionService,
+            distractionLogService: widget.distractionLogService,
+          ),
           CharacterChatScreen(
             settingsService: widget.settingsService,
+            accessoryService: widget.accessoryService,
           ),
           SettingsScreen(
             settingsService: widget.settingsService,
             appDetection: widget.appDetection,
+            ttsService: widget.ttsService,
           ),
         ],
       ),
@@ -68,6 +86,10 @@ class _HomeScreenState extends State<HomeScreen> {
           NavigationDestination(
             icon: Icon(Icons.checklist),
             label: '루틴',
+          ),
+          NavigationDestination(
+            icon: Icon(Icons.bar_chart),
+            label: '통계',
           ),
           NavigationDestination(
             icon: Icon(Icons.chat_bubble_outline),
@@ -144,57 +166,82 @@ class _HomeScreenState extends State<HomeScreen> {
       if (routine.activeDays[i]) activeDays.add(dayNames[i]);
     }
 
-    // Get distraction stats for this routine
-    final stats =
-        widget.distractionLogService.getRoutineStats(routine.id);
-    final hasStats = stats.totalDistractions > 0;
+    final isCompletedToday =
+        widget.completionService.isCompleted(routine.id, _todayStr);
 
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-      child: Column(
-        children: [
-          ListTile(
-            leading: CircleAvatar(
-              backgroundColor: isActive
-                  ? Colors.green.withValues(alpha: 0.2)
-                  : routine.isEnabled
-                      ? Theme.of(context).colorScheme.primaryContainer
-                      : Colors.grey.withValues(alpha: 0.2),
-              child: Icon(
-                isActive
-                    ? Icons.play_arrow
-                    : routine.isEnabled
-                        ? Icons.schedule
-                        : Icons.pause,
-                color: isActive
-                    ? Colors.green
-                    : routine.isEnabled
-                        ? Theme.of(context).colorScheme.primary
-                        : Colors.grey,
+      child: ListTile(
+        leading: CircleAvatar(
+          backgroundColor: isActive
+              ? Colors.green.withValues(alpha: 0.2)
+              : routine.isEnabled
+                  ? Theme.of(context).colorScheme.primaryContainer
+                  : Colors.grey.withValues(alpha: 0.2),
+          child: Icon(
+            isActive
+                ? Icons.play_arrow
+                : routine.isEnabled
+                    ? Icons.schedule
+                    : Icons.pause,
+            color: isActive
+                ? Colors.green
+                : routine.isEnabled
+                    ? Theme.of(context).colorScheme.primary
+                    : Colors.grey,
+          ),
+        ),
+        title: Text(
+          routine.name,
+          style: TextStyle(
+            fontWeight: FontWeight.bold,
+            decoration:
+                routine.isEnabled ? null : TextDecoration.lineThrough,
+          ),
+        ),
+        subtitle: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              '${routine.startTime.format()} - ${routine.endTime.format()}',
+              style: const TextStyle(fontSize: 13),
+            ),
+            Text(
+              activeDays.length == 7 ? '매일' : activeDays.join(' '),
+              style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+            ),
+          ],
+        ),
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            // Today completion checkbox
+            GestureDetector(
+              onTap: () async {
+                await widget.completionService
+                    .toggleCompletion(routine.id, _todayStr);
+                setState(() {});
+              },
+              child: Container(
+                width: 32,
+                height: 32,
+                decoration: BoxDecoration(
+                  shape: BoxShape.circle,
+                  color: isCompletedToday
+                      ? Colors.green
+                      : Colors.transparent,
+                  border: Border.all(
+                    color: isCompletedToday ? Colors.green : Colors.grey[400]!,
+                    width: 2,
+                  ),
+                ),
+                child: isCompletedToday
+                    ? const Icon(Icons.check, color: Colors.white, size: 18)
+                    : null,
               ),
             ),
-            title: Text(
-              routine.name,
-              style: TextStyle(
-                fontWeight: FontWeight.bold,
-                decoration:
-                    routine.isEnabled ? null : TextDecoration.lineThrough,
-              ),
-            ),
-            subtitle: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Text(
-                  '${routine.startTime.format()} - ${routine.endTime.format()}',
-                  style: const TextStyle(fontSize: 13),
-                ),
-                Text(
-                  activeDays.length == 7 ? '매일' : activeDays.join(' '),
-                  style: TextStyle(fontSize: 12, color: Colors.grey[600]),
-                ),
-              ],
-            ),
-            trailing: Switch(
+            const SizedBox(width: 8),
+            Switch(
               value: routine.isEnabled,
               onChanged: (val) async {
                 routine.isEnabled = val;
@@ -202,103 +249,10 @@ class _HomeScreenState extends State<HomeScreen> {
                 _loadRoutines();
               },
             ),
-            onTap: () => _editRoutine(routine),
-            isThreeLine: true,
-          ),
-          // Stats row
-          if (hasStats)
-            InkWell(
-              onTap: () => _viewStats(routine),
-              child: Padding(
-                padding:
-                    const EdgeInsets.only(left: 16, right: 16, bottom: 12),
-                child: Row(
-                  children: [
-                    Icon(Icons.warning_amber,
-                        size: 14, color: Colors.orange[400]),
-                    const SizedBox(width: 4),
-                    Text(
-                      '딴짓 ${stats.totalDistractions}회',
-                      style: TextStyle(
-                          fontSize: 12, color: Colors.orange[600]),
-                    ),
-                    const SizedBox(width: 12),
-                    Icon(Icons.timer, size: 14, color: Colors.red[400]),
-                    const SizedBox(width: 4),
-                    Text(
-                      _formatDuration(stats.totalTime),
-                      style:
-                          TextStyle(fontSize: 12, color: Colors.red[600]),
-                    ),
-                    const Spacer(),
-                    Text(
-                      '자세히 보기',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Theme.of(context).colorScheme.primary,
-                      ),
-                    ),
-                    Icon(Icons.chevron_right,
-                        size: 16,
-                        color: Theme.of(context).colorScheme.primary),
-                  ],
-                ),
-              ),
-            )
-          else
-            InkWell(
-              onTap: () => _viewStats(routine),
-              child: Padding(
-                padding:
-                    const EdgeInsets.only(left: 16, right: 16, bottom: 12),
-                child: Row(
-                  children: [
-                    Icon(Icons.emoji_events,
-                        size: 14, color: Colors.green[400]),
-                    const SizedBox(width: 4),
-                    Text(
-                      '딴짓 기록 없음',
-                      style: TextStyle(
-                          fontSize: 12, color: Colors.green[600]),
-                    ),
-                    const Spacer(),
-                    Text(
-                      '통계',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: Colors.grey[500],
-                      ),
-                    ),
-                    Icon(Icons.chevron_right,
-                        size: 16, color: Colors.grey[400]),
-                  ],
-                ),
-              ),
-            ),
-        ],
-      ),
-    );
-  }
-
-  String _formatDuration(Duration d) {
-    if (d.inHours > 0) {
-      return '${d.inHours}시간 ${d.inMinutes.remainder(60)}분';
-    } else if (d.inMinutes > 0) {
-      return '${d.inMinutes}분 ${d.inSeconds.remainder(60)}초';
-    } else {
-      return '${d.inSeconds}초';
-    }
-  }
-
-  void _viewStats(model.Routine routine) {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => RoutineStatsScreen(
-          routineId: routine.id,
-          routineName: routine.name,
-          logService: widget.distractionLogService,
+          ],
         ),
+        onTap: () => _editRoutine(routine),
+        isThreeLine: true,
       ),
     );
   }
@@ -339,8 +293,8 @@ class _HomeScreenState extends State<HomeScreen> {
           '1. 루틴을 추가하세요\n'
           '2. 차단할 앱을 선택하세요\n'
           '3. 루틴 시간에 딴짓하면 루나가 나타나요!\n\n'
-          '딴짓 기록은 자동으로 저장되며\n'
-          '루틴 카드 하단에서 통계를 확인할 수 있습니다.\n\n'
+          '루틴 완료 시 체크 표시를 눌러\n'
+          '통계 탭에서 완료율을 확인하세요.\n\n'
           '설정에서 Gemini API 키를 입력해야\n'
           'AI 대화가 작동합니다.',
         ),

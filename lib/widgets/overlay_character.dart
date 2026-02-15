@@ -6,6 +6,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../models/character_state.dart';
 import '../models/character_config.dart';
 import '../models/character_registry.dart';
+import '../services/accessory_service.dart';
 import 'spine_character_widget.dart';
 
 /// The overlay entry point widget.
@@ -27,6 +28,7 @@ class _OverlayCharacterState extends State<OverlayCharacter>
     with SingleTickerProviderStateMixin {
   CharacterState _state = const CharacterState();
   late CharacterConfig _config;
+  List<String>? _customSkins;
   late AnimationController _entranceController;
   late Animation<Offset> _slideAnimation;
   late Animation<double> _fadeAnimation;
@@ -102,6 +104,18 @@ class _OverlayCharacterState extends State<OverlayCharacter>
           });
         }
       }
+
+      // Load custom skins
+      final accessory = AccessoryService(prefs);
+      final skins = accessory.getSelectedSkins(_config.id);
+      if (mounted && skins.isNotEmpty) {
+        final changed = _customSkins == null ||
+            _customSkins!.length != skins.length ||
+            _customSkins!.join(',') != skins.join(',');
+        if (changed) {
+          setState(() => _customSkins = skins);
+        }
+      }
     } catch (_) {}
   }
 
@@ -124,6 +138,28 @@ class _OverlayCharacterState extends State<OverlayCharacter>
     }
   }
 
+  Future<void> _onCompletionAccept() async {
+    final routineId = _state.actionRoutineId;
+    if (routineId == null) return;
+
+    final now = DateTime.now();
+    final dateStr =
+        '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+
+    // Write response to SharedPreferences for main app to read
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(
+      'completion_action',
+      jsonEncode({'routineId': routineId, 'date': dateStr}),
+    );
+
+    await FlutterOverlayWindow.closeOverlay();
+  }
+
+  Future<void> _onCompletionDecline() async {
+    await FlutterOverlayWindow.closeOverlay();
+  }
+
   @override
   void dispose() {
     _pollTimer?.cancel();
@@ -133,16 +169,49 @@ class _OverlayCharacterState extends State<OverlayCharacter>
 
   @override
   Widget build(BuildContext context) {
+    final hasCompletionPrompt = _state.action == 'completion_check';
+
     return Material(
       color: Colors.transparent,
       child: SlideTransition(
         position: _slideAnimation,
         child: FadeTransition(
           opacity: _fadeAnimation,
-          child: GestureDetector(
-            onTap: () async {
-              await FlutterOverlayWindow.closeOverlay();
-            },
+          child: hasCompletionPrompt
+              ? _buildCompletionPrompt()
+              : _buildCharacterOnly(),
+        ),
+      ),
+    );
+  }
+
+  /// Normal mode: character only, tap to dismiss.
+  Widget _buildCharacterOnly() {
+    return GestureDetector(
+      onTap: () async {
+        await FlutterOverlayWindow.closeOverlay();
+      },
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: SpineCharacterWidget(
+          key: ValueKey('${_config.id}_${_customSkins?.join("_") ?? ""}'),
+          config: _config,
+          state: _state,
+          showBubble: false,
+          customSkins: _customSkins,
+        ),
+      ),
+    );
+  }
+
+  /// Completion check mode: character + buttons at bottom.
+  Widget _buildCompletionPrompt() {
+    return Padding(
+      padding: const EdgeInsets.all(12),
+      child: Column(
+        children: [
+          // Character fills available space
+          Expanded(
             child: SpineCharacterWidget(
               key: ValueKey(_config.id),
               config: _config,
@@ -150,7 +219,62 @@ class _OverlayCharacterState extends State<OverlayCharacter>
               showBubble: false,
             ),
           ),
-        ),
+          // Compact prompt + buttons
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+            decoration: BoxDecoration(
+              color: Colors.white.withValues(alpha: 0.95),
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Text(
+                  _state.text,
+                  textAlign: TextAlign.center,
+                  style: const TextStyle(
+                    fontSize: 13,
+                    color: Colors.black87,
+                  ),
+                ),
+                const SizedBox(height: 8),
+                Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    ElevatedButton(
+                      onPressed: _onCompletionAccept,
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.green,
+                        foregroundColor: Colors.white,
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 16, vertical: 8),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                      ),
+                      child: const Text('응! 체크해',
+                          style: TextStyle(
+                              fontWeight: FontWeight.bold, fontSize: 13)),
+                    ),
+                    const SizedBox(width: 8),
+                    OutlinedButton(
+                      onPressed: _onCompletionDecline,
+                      style: OutlinedButton.styleFrom(
+                        foregroundColor: Colors.grey[700],
+                        padding: const EdgeInsets.symmetric(
+                            horizontal: 16, vertical: 8),
+                        shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(20),
+                        ),
+                      ),
+                      child: const Text('아니야', style: TextStyle(fontSize: 13)),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
       ),
     );
   }

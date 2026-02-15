@@ -1,11 +1,13 @@
 import 'dart:async';
 import 'dart:convert';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../models/ai_response.dart';
 import '../models/character_state.dart';
 import 'gemini_service.dart';
 import 'tts_service.dart';
 import 'overlay_service.dart';
 import 'settings_service.dart';
+import 'routine_completion_service.dart';
 
 /// Orchestrates the character's behavior:
 /// receives events, generates AI responses, controls animations and speech.
@@ -14,6 +16,7 @@ class CharacterController {
   final TtsService _tts;
   final OverlayService _overlay;
   final SettingsService _settings;
+  final RoutineCompletionService _completionService;
 
   final _stateController = StreamController<CharacterState>.broadcast();
   Stream<CharacterState> get onStateChanged => _stateController.stream;
@@ -32,10 +35,19 @@ class CharacterController {
     required TtsService tts,
     required OverlayService overlay,
     required SettingsService settings,
+    required RoutineCompletionService completionService,
   })  : _gemini = gemini,
         _tts = tts,
         _overlay = overlay,
-        _settings = settings;
+        _settings = settings,
+        _completionService = completionService;
+
+  /// Speak text with the saved voice preset and ttsEnabled check.
+  Future<void> _speak(String text) async {
+    if (!_settings.ttsEnabled) return;
+    await _tts.applyPreset(_settings.voicePreset);
+    await _tts.speak(text);
+  }
 
   /// Handle distraction detected event.
   Future<void> onDistraction({
@@ -55,11 +67,12 @@ class CharacterController {
         _lastDistractedApp = appPackageName;
       }
 
-      // Generate AI response
+      // Generate AI response with intensity setting
       final response = await _gemini.generateNagging(
         currentApp: appLabel,
         routineName: routineName,
         distractionCount: _distractionCount,
+        intensity: _settings.nagIntensity,
       );
 
       // Prepare initial state
@@ -90,14 +103,17 @@ class CharacterController {
       await _overlay.sendToOverlay(jsonEncode(_currentState.toJson()));
 
       // Speak the text
-      await _tts.speak(response.text);
+      await _speak(response.text);
 
       // Stay visible for a moment after speaking
       await Future.delayed(const Duration(seconds: 2));
 
-      // Exit if user returned to routine (check will be done by monitor)
+      // Hide overlay after distraction nag completes
+      await _overlay.hide();
     } catch (e) {
       print('Character controller error: $e');
+      // Ensure overlay is hidden on error
+      await _overlay.hide();
     } finally {
       _isBusy = false;
     }
@@ -122,7 +138,7 @@ class CharacterController {
         initialData: jsonEncode(_currentState.toJson()),
       );
 
-      await _tts.speak(response.text);
+      await _speak(response.text);
       await Future.delayed(const Duration(seconds: 2));
       await _overlay.hide();
     } catch (e) {
@@ -133,32 +149,109 @@ class CharacterController {
   }
 
   /// Handle routine complete event.
-  Future<void> onRoutineComplete(String routineName) async {
-    if (_isBusy) return;
+  /// If the routine is not yet checked as completed, prompt the user.
+  /// Returns true if the prompt was actually shown, false if busy.
+  Future<bool> onRoutineComplete(String routineId, String routineName) async {
+    if (_isBusy) return false;
     _isBusy = true;
     _distractionCount = 0;
 
     try {
-      final response = await _gemini.generatePraise(routineName);
+      final today = _completionService.todayStr();
+      final alreadyCompleted =
+          _completionService.isCompleted(routineId, today);
 
-      _updateState(CharacterState(
-        emotion: response.emotion,
-        gesture: 'clapping',
-        text: response.text,
-        characterId: _characterId,
-      ));
-      await _overlay.show(
-        initialData: jsonEncode(_currentState.toJson()),
-      );
+      if (alreadyCompleted) {
+        // Already checked — just praise
+        final response = await _gemini.generatePraise(routineName);
+        _updateState(CharacterState(
+          emotion: response.emotion,
+          gesture: 'clapping',
+          text: response.text,
+          characterId: _characterId,
+        ));
+        await _overlay.show(
+          initialData: jsonEncode(_currentState.toJson()),
+        );
+        await _speak(response.text);
+        await Future.delayed(const Duration(seconds: 3));
+        await _overlay.hide();
+      } else {
+        // Not checked — ask if the user wants to mark it done
+        // Clear any previous completion_action
+        final prefs = await SharedPreferences.getInstance();
+        await prefs.remove('completion_action');
 
-      await _tts.speak(response.text);
-      await Future.delayed(const Duration(seconds: 3));
-      await _overlay.hide();
+        final askText = '$routineName 시간 끝났는데, 완료 체크 해줄까?';
+
+        _updateState(CharacterState(
+          emotion: 'happy',
+          gesture: 'beckoning',
+          text: askText,
+          characterId: _characterId,
+          action: 'completion_check',
+          actionRoutineId: routineId,
+        ));
+        await _overlay.show(
+          height: 600,
+          initialData: jsonEncode(_currentState.toJson()),
+        );
+
+        await _speak(askText);
+
+        // Wait for user response (poll SharedPreferences)
+        final accepted = await _waitForCompletionResponse(prefs);
+
+        if (accepted) {
+          await _completionService.toggleCompletion(routineId, today);
+
+          _updateState(CharacterState(
+            emotion: 'happy',
+            gesture: 'thumbs_up',
+            text: '완료 체크했어! 수고했어~',
+            characterId: _characterId,
+          ));
+          // Overlay is already showing — send updated state via data channel
+          await _overlay.sendToOverlay(jsonEncode(_currentState.toJson()));
+          await _speak('완료 체크했어! 수고했어~');
+          await Future.delayed(const Duration(seconds: 2));
+        }
+
+        await _overlay.hide();
+      }
+      return true;
     } catch (e) {
       print('Routine complete error: $e');
+      return false;
     } finally {
       _isBusy = false;
     }
+  }
+
+  /// Poll SharedPreferences for the user's completion response from overlay.
+  /// Returns true if accepted, false if declined or timeout.
+  Future<bool> _waitForCompletionResponse(SharedPreferences prefs) async {
+    for (int i = 0; i < 75; i++) {
+      // up to 30 seconds
+      await Future.delayed(const Duration(milliseconds: 400));
+
+      await prefs.reload();
+      final response = prefs.getString('completion_action');
+      if (response != null && response.isNotEmpty) {
+        await prefs.remove('completion_action');
+        return true;
+      }
+
+      // Check if overlay was closed (user tapped "아니야" or dismissed)
+      final isActive = await _overlay.isOverlayActive();
+      if (!isActive) {
+        return false;
+      }
+    }
+
+    // Timeout — close overlay
+    await _overlay.hide();
+    return false;
   }
 
   /// User returned to allowed app during routine.
@@ -185,7 +278,7 @@ class CharacterController {
       text: response.text,
       characterId: _characterId,
     ));
-    await _tts.speak(response.text);
+    await _speak(response.text);
     return response;
   }
 

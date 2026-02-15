@@ -12,6 +12,8 @@ import 'services/app_detection_service.dart';
 import 'services/character_controller.dart';
 import 'services/routine_monitor.dart';
 import 'services/distraction_log_service.dart';
+import 'services/routine_completion_service.dart';
+import 'services/accessory_service.dart';
 import 'widgets/overlay_character.dart';
 
 /// Entry point for the overlay window (displayed on top of other apps).
@@ -40,6 +42,8 @@ void main() async {
   final routineService = RoutineService(prefs);
   final settingsService = SettingsService(prefs);
   final distractionLogService = DistractionLogService(prefs);
+  final completionService = RoutineCompletionService(prefs);
+  final accessoryService = AccessoryService(prefs);
 
   final geminiService = GeminiService();
   final ttsService = TtsService();
@@ -52,18 +56,21 @@ void main() async {
   }
 
   await ttsService.initialize();
+  await ttsService.applyPreset(settingsService.voicePreset);
 
   final characterController = CharacterController(
     gemini: geminiService,
     tts: ttsService,
     overlay: overlayService,
     settings: settingsService,
+    completionService: completionService,
   );
 
   final routineMonitor = RoutineMonitor(
     routineService: routineService,
     appDetection: appDetectionService,
     characterController: characterController,
+    completionService: completionService,
   );
 
   runApp(AiCharacterApp(
@@ -72,6 +79,9 @@ void main() async {
     routineMonitor: routineMonitor,
     appDetection: appDetectionService,
     distractionLogService: distractionLogService,
+    completionService: completionService,
+    ttsService: ttsService,
+    accessoryService: accessoryService,
   ));
 }
 
@@ -81,6 +91,9 @@ class AiCharacterApp extends StatefulWidget {
   final RoutineMonitor routineMonitor;
   final AppDetectionService appDetection;
   final DistractionLogService distractionLogService;
+  final RoutineCompletionService completionService;
+  final TtsService ttsService;
+  final AccessoryService accessoryService;
 
   const AiCharacterApp({
     super.key,
@@ -89,6 +102,9 @@ class AiCharacterApp extends StatefulWidget {
     required this.routineMonitor,
     required this.appDetection,
     required this.distractionLogService,
+    required this.completionService,
+    required this.ttsService,
+    required this.accessoryService,
   });
 
   @override
@@ -146,6 +162,9 @@ class _AiCharacterAppState extends State<AiCharacterApp>
         settingsService: widget.settingsService,
         appDetection: widget.appDetection,
         distractionLogService: widget.distractionLogService,
+        completionService: widget.completionService,
+        ttsService: widget.ttsService,
+        accessoryService: widget.accessoryService,
       ),
     );
   }

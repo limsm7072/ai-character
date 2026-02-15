@@ -4,12 +4,18 @@ class CharacterState {
   final String gesture;
   final String text;
   final String? characterId;
+  /// Optional action prompt (e.g., 'completion_check')
+  final String? action;
+  /// Routine ID associated with the action
+  final String? actionRoutineId;
 
   const CharacterState({
     this.emotion = 'neutral',
     this.gesture = 'idle',
     this.text = '',
     this.characterId,
+    this.action,
+    this.actionRoutineId,
   });
 
   factory CharacterState.fromJson(Map<String, dynamic> json) => CharacterState(
@@ -17,6 +23,8 @@ class CharacterState {
         gesture: json['gesture'] ?? 'idle',
         text: json['text'] ?? '',
         characterId: json['characterId'],
+        action: json['action'],
+        actionRoutineId: json['actionRoutineId'],
       );
 
   Map<String, dynamic> toJson() => {
@@ -24,6 +32,8 @@ class CharacterState {
         'gesture': gesture,
         'text': text,
         if (characterId != null) 'characterId': characterId,
+        if (action != null) 'action': action,
+        if (actionRoutineId != null) 'actionRoutineId': actionRoutineId,
       };
 
   /// Available emotions for the character

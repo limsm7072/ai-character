@@ -57,16 +57,34 @@ class GeminiService {
 ''';
 
   /// Generate a nagging response when the user is distracted.
+  /// [intensity] 0=gentle, 1=normal, 2=strict
   Future<AiResponse> generateNagging({
     required String currentApp,
     required String routineName,
     int distractionCount = 1,
+    int intensity = 1,
   }) async {
     if (_chat == null) throw Exception('Gemini not initialized');
 
-    final prompt = distractionCount > 1
-        ? '사용자가 "$routineName" 루틴 시간에 또 "$currentApp" 앱을 사용하고 있어. 벌써 ${distractionCount}번째야. 더 강하게 잔소리해줘.'
-        : '사용자가 "$routineName" 루틴 시간에 "$currentApp" 앱을 사용하고 있어. 잔소리해줘.';
+    String intensityGuide;
+    switch (intensity) {
+      case 0:
+        intensityGuide = '부드럽고 다정하게 격려하듯이 말해줘. 화내지 말고, 걱정하는 친구처럼 따뜻하게. emotion은 worried나 happy 위주로.';
+        break;
+      case 2:
+        intensityGuide = '엄격하고 단호하게 혼내줘. 진지하게 화내면서 잔소리해. emotion은 angry나 scolding 위주로.';
+        break;
+      default:
+        intensityGuide = '적당히 잔소리해줘. 살짝 짜증내면서도 귀엽게.';
+        break;
+    }
+
+    String prompt;
+    if (distractionCount > 1) {
+      prompt = '사용자가 "$routineName" 루틴 시간에 또 "$currentApp" 앱을 사용하고 있어. 벌써 ${distractionCount}번째야. $intensityGuide';
+    } else {
+      prompt = '사용자가 "$routineName" 루틴 시간에 "$currentApp" 앱을 사용하고 있어. $intensityGuide';
+    }
 
     final response = await _chat!.sendMessage(Content.text(prompt));
     return AiResponse.parse(response.text ?? '');
