@@ -4,15 +4,18 @@ import '../models/character_registry.dart';
 import '../services/settings_service.dart';
 import '../services/app_detection_service.dart';
 import '../services/overlay_service.dart';
+import '../services/tts_service.dart';
 
 class SettingsScreen extends StatefulWidget {
   final SettingsService settingsService;
   final AppDetectionService? appDetection;
+  final TtsService ttsService;
 
   const SettingsScreen({
     super.key,
     required this.settingsService,
     this.appDetection,
+    required this.ttsService,
   });
 
   @override
@@ -197,6 +200,31 @@ class _SettingsScreenState extends State<SettingsScreen> {
               setState(() {});
             },
           ),
+          ...voicePresets.map((preset) {
+            final isSelected =
+                widget.settingsService.voicePreset == preset.id;
+            return RadioListTile<String>(
+              title: Text(preset.label),
+              subtitle: Text(preset.description),
+              value: preset.id,
+              groupValue: widget.settingsService.voicePreset,
+              secondary: IconButton(
+                icon: const Icon(Icons.play_circle_outline),
+                tooltip: '미리 듣기',
+                onPressed: () async {
+                  await widget.ttsService.applyPreset(preset.id);
+                  await widget.ttsService.speak('안녕! 나는 루나야. 오늘도 파이팅!');
+                },
+              ),
+              onChanged: (v) async {
+                if (v != null) {
+                  await widget.settingsService.setVoicePreset(v);
+                  await widget.ttsService.applyPreset(v);
+                  setState(() {});
+                }
+              },
+            );
+          }),
           const Divider(),
 
           // Character Selection

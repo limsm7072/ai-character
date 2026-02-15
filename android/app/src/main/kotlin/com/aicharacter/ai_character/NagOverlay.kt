@@ -60,23 +60,80 @@ class NagOverlay(private val context: Context) {
     private var audioFocusRequest: AudioFocusRequest? = null
 
     private var apiKey = ""
+    private var nagIntensity = 1 // 0=gentle, 1=normal, 2=strict
     private val history = mutableListOf<Pair<String, String>>()
     private var noSpeechCount = 0
 
-    private val nagMessages = listOf(
+    private fun getMessagesForIntensity(): List<String> = when (nagIntensity) {
+        0 -> gentleMessages
+        2 -> strictMessages
+        else -> normalMessages
+    }
+
+    private fun getSystemPromptForIntensity(): String = when (nagIntensity) {
+        0 -> gentleSystemPrompt
+        2 -> strictSystemPrompt
+        else -> normalSystemPrompt
+    }
+
+    private fun getInitialEmotionForIntensity(): String = when (nagIntensity) {
+        0 -> "worried"
+        2 -> "angry"
+        else -> "angry"
+    }
+
+    private fun getInitialModelReply(): String = when (nagIntensity) {
+        0 -> """{"text":"혹시 딴짓 중이야...?","emotion":"worried"}"""
+        2 -> """{"text":"야! 딴짓하지 마!","emotion":"angry"}"""
+        else -> """{"text":"야! 딴짓하지 마!","emotion":"angry"}"""
+    }
+
+    // Intensity 0: 부드럽게 (gentle)
+    private val gentleMessages = listOf(
+        "혹시 지금 잠깐 쉬는 거야?",
+        "루틴 시간인데... 괜찮아?",
+        "살짝 딴짓 중인 것 같은데~ 괜찮아, 다시 해보자!",
+        "조금만 더 집중해볼까?",
+        "나 걱정돼서 왔어... 루틴 하고 있어?",
+        "천천히 해도 돼, 근데 루틴 먼저 하자~",
+        "루틴 끝나면 마음껏 하자, 응?",
+        "잠깐이면 괜찮아~ 근데 루틴도 신경 써줘!",
+    )
+
+    // Intensity 1: 보통 (normal)
+    private val normalMessages = listOf(
         "야! 지금 뭐하는 거야!",
         "루틴 시간이잖아! 집중해!",
         "또 딴짓이야? 진짜 화난다...",
         "폰 내려놓고 루틴 해!",
         "내가 보고 있다... 딴짓 그만!",
-        "이러면 안 되는 거 알지?!",
         "에이~ 다시 집중하자!",
         "지금 이게 중요해? 루틴이 중요하지!",
-        "한 번만 더 딴짓하면 진짜 화낸다!",
         "루틴 끝나면 하자, 응?",
     )
 
-    private val systemPrompt = """너는 "루나"라는 잔소리 캐릭터야. 사용자가 루틴 시간에 딴짓(다른 앱)을 해서 네가 나타났어.
+    // Intensity 2: 엄격하게 (strict)
+    private val strictMessages = listOf(
+        "야!!! 지금 당장 그만둬!",
+        "또?! 몇 번을 말해야 알아듣니!",
+        "진짜 화난다! 당장 루틴 해!",
+        "이러면 안 되는 거 알지?! 반성해!",
+        "한 번만 더 딴짓하면 진짜 혼난다!",
+        "도대체 왜 루틴을 안 하는 거야!",
+        "폰 내려놔! 지금 당장!",
+        "이게 몇 번째야! 정신 차려!",
+    )
+
+    private val gentleSystemPrompt = """너는 "루나"라는 다정한 캐릭터야. 사용자가 루틴 시간에 딴짓(다른 앱)을 해서 네가 나타났어.
+규칙:
+- 반말, 짧게 1-2문장
+- 부드럽고 다정하게 격려하듯이 말해줘
+- 화내지 말고, 걱정하는 친구처럼 따뜻하게
+- 미안하다/돌아가겠다 하면 크게 칭찬
+- JSON으로 대답: {"text":"대사","emotion":"worried"}
+- emotion: worried, happy, proud, surprised (부드러운 감정 위주)"""
+
+    private val normalSystemPrompt = """너는 "루나"라는 잔소리 캐릭터야. 사용자가 루틴 시간에 딴짓(다른 앱)을 해서 네가 나타났어.
 규칙:
 - 반말, 짧게 1-2문장
 - 변명하면 더 잔소리
@@ -85,17 +142,42 @@ class NagOverlay(private val context: Context) {
 - JSON으로 대답: {"text":"대사","emotion":"angry"}
 - emotion: angry, annoyed, sad, happy, disappointed, scolding, proud, surprised"""
 
+    private val strictSystemPrompt = """너는 "루나"라는 엄격한 잔소리 캐릭터야. 사용자가 루틴 시간에 딴짓(다른 앱)을 해서 네가 나타났어.
+규칙:
+- 반말, 짧게 1-2문장
+- 엄격하고 단호하게 혼내줘
+- 진지하게 화내면서 잔소리해
+- 변명하면 더 강하게 혼내
+- 미안하다/돌아가겠다 해도 쉽게 용서하지 마
+- JSON으로 대답: {"text":"대사","emotion":"angry"}
+- emotion: angry, scolding, disappointed (강한 감정 위주)"""
+
     init {
         audioManager = context.getSystemService(Context.AUDIO_SERVICE) as? AudioManager
         initTts()
+    }
+
+    private fun applyVoicePreset() {
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        val preset = prefs.getString("flutter.voice_preset", "cute") ?: "cute"
+        val (pitch, rate) = when (preset) {
+            "cute" -> 1.4f to 0.45f
+            "calm" -> 1.0f to 0.4f
+            "bright" -> 1.2f to 0.5f
+            "deep" -> 0.8f to 0.45f
+            "fast" -> 1.1f to 0.65f
+            else -> 1.4f to 0.45f
+        }
+        tts?.setPitch(pitch)
+        tts?.setSpeechRate(rate)
+        Log.d(TAG, "Voice preset: $preset (pitch=$pitch, rate=$rate)")
     }
 
     private fun initTts() {
         tts = TextToSpeech(context) { status ->
             if (status == TextToSpeech.SUCCESS) {
                 tts?.setLanguage(Locale.KOREAN)
-                tts?.setSpeechRate(1.1f)
-                tts?.setPitch(1.3f)
+                applyVoicePreset()
                 ttsReady = true
                 tts?.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
                     override fun onStart(id: String?) {
@@ -238,18 +320,21 @@ class NagOverlay(private val context: Context) {
     }
 
     // ── Show / Dismiss ──
-    fun show(appLabel: String, routineName: String, key: String) {
+    fun show(appLabel: String, routineName: String, key: String, intensity: Int = 1) {
         if (isShowing) return
-        apiKey = key; noSpeechCount = 0; history.clear()
-        history.add("user" to systemPrompt)
-        history.add("model" to """{"text":"야! 딴짓하지 마!","emotion":"angry"}""")
+        Log.d(TAG, "show() called: intensity=$intensity, appLabel=$appLabel")
+        apiKey = key; nagIntensity = intensity; noSpeechCount = 0; history.clear()
+        history.add("user" to getSystemPromptForIntensity())
+        history.add("model" to getInitialModelReply())
 
         handler.post {
             try {
                 requestAudioFocus()
+                applyVoicePreset()
 
-                val initialText = nagMessages.random()
-                writeNagState("angry", initialText)
+                val initialEmotion = getInitialEmotionForIntensity()
+                val initialText = getMessagesForIntensity().random()
+                writeNagState(initialEmotion, initialText)
                 startFlutterOverlay()
                 isShowing = true
 
@@ -258,8 +343,8 @@ class NagOverlay(private val context: Context) {
 
                 // Wait for Flutter engine to initialize, then send data + speak
                 handler.postDelayed({
-                    sendToFlutterOverlay("angry", initialText)
-                    speak(initialText, "angry")
+                    sendToFlutterOverlay(initialEmotion, initialText)
+                    speak(initialText, initialEmotion)
                 }, 800)
             } catch (e: Exception) { Log.e(TAG, "show fail", e) }
         }
@@ -286,6 +371,8 @@ class NagOverlay(private val context: Context) {
             sendToFlutterOverlay(emotion, text)
 
             if (ttsReady) {
+                // Re-apply voice preset right before speaking
+                applyVoicePreset()
                 tts?.speak(text, TextToSpeech.QUEUE_FLUSH, null, "nag_${System.currentTimeMillis()}")
             } else {
                 handler.postDelayed({
@@ -358,7 +445,8 @@ class NagOverlay(private val context: Context) {
                 }
             } catch (_: Exception) {
                 handler.post {
-                    speak(listOf("야! 변명하지 마!", "에이~ 그래도 안 돼!", "다시 집중해!", "루틴부터 끝내!").random(), "angry")
+                    val fallbackEmotion = getInitialEmotionForIntensity()
+                    speak(getMessagesForIntensity().random(), fallbackEmotion)
                 }
             }
         }.start()

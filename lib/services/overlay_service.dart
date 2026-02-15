@@ -20,11 +20,17 @@ class OverlayService {
 
   /// Show the overlay window with the character.
   Future<void> show({
-    int width = 300,
-    int height = 400,
+    int width = 350,
+    int height = 500,
     String? initialData,
   }) async {
-    if (_isShowing) return;
+    // Check actual overlay state to prevent desync
+    // (overlay can be closed externally by user tap)
+    final isActive = await FlutterOverlayWindow.isActive();
+    if (isActive) {
+      _isShowing = true;
+      return;
+    }
 
     await FlutterOverlayWindow.showOverlay(
       enableDrag: true,
@@ -47,8 +53,9 @@ class OverlayService {
 
   /// Hide the overlay window.
   Future<void> hide() async {
-    if (!_isShowing) return;
-    await FlutterOverlayWindow.closeOverlay();
+    try {
+      await FlutterOverlayWindow.closeOverlay();
+    } catch (_) {}
     _isShowing = false;
   }
 

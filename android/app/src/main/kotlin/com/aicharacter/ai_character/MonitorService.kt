@@ -93,6 +93,16 @@ class MonitorService : Service() {
         return seconds * 1000L
     }
 
+    private fun getNagIntensity(): Int {
+        val prefs = getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE)
+        val intensity = try { prefs.getLong("flutter.nag_intensity", 1L).toInt() } catch (e: Exception) {
+            android.util.Log.w("MonitorService", "getNagIntensity getLong failed: $e, trying getInt")
+            try { prefs.getInt("flutter.nag_intensity", 1) } catch (_: Exception) { 1 }
+        }
+        android.util.Log.d("MonitorService", "getNagIntensity=$intensity")
+        return intensity
+    }
+
     private fun getCheckInterval(): Long {
         val cooldown = getNagCooldownMs()
         return if (cooldown < 3000) 1500L else 3000L
@@ -167,7 +177,8 @@ class MonitorService : Service() {
                     nm.notify(NOTIFICATION_ID, buildNotification("$appLabel 감지! 잔소리 중..."))
 
                     val apiKey = getApiKey()
-                    nagOverlay?.show(appLabel, routineName, apiKey)
+                    val intensity = getNagIntensity()
+                    nagOverlay?.show(appLabel, routineName, apiKey, intensity)
                 }
             }
         } else {

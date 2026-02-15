@@ -8,6 +8,7 @@ class SettingsService {
   static const _ttsEnabledKey = 'tts_enabled';
   static const _overlayEnabledKey = 'overlay_enabled';
   static const _selectedCharacterKey = 'selected_character';
+  static const _voicePresetKey = 'voice_preset';
 
   final SharedPreferences _prefs;
 
@@ -38,4 +39,8 @@ class SettingsService {
       _prefs.getString(_selectedCharacterKey) ?? 'chibi-stickers';
   Future<void> setSelectedCharacter(String characterId) =>
       _prefs.setString(_selectedCharacterKey, characterId);
+
+  String get voicePreset => _prefs.getString(_voicePresetKey) ?? 'cute';
+  Future<void> setVoicePreset(String preset) =>
+      _prefs.setString(_voicePresetKey, preset);
 }
