@@ -143,17 +143,11 @@ class _OverlayCharacterState extends State<OverlayCharacter>
             onTap: () async {
               await FlutterOverlayWindow.closeOverlay();
             },
-            child: Container(
-              decoration: BoxDecoration(
-                color: Colors.black.withValues(alpha: 0.1),
-                borderRadius: BorderRadius.circular(20),
-              ),
-              padding: const EdgeInsets.all(12),
-              child: SpineCharacterWidget(
-                key: ValueKey(_config.id),
-                config: _config,
-                state: _state,
-              ),
+            child: SpineCharacterWidget(
+              key: ValueKey(_config.id),
+              config: _config,
+              state: _state,
+              showBubble: false,
             ),
           ),
         ),

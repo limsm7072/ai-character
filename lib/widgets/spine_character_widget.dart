@@ -9,12 +9,14 @@ class SpineCharacterWidget extends StatefulWidget {
   final CharacterConfig config;
   final CharacterState state;
   final VoidCallback? onTap;
+  final bool showBubble;
 
   const SpineCharacterWidget({
     super.key,
     required this.config,
     required this.state,
     this.onTap,
+    this.showBubble = true,
   });
 
   @override
@@ -272,7 +274,7 @@ class _SpineCharacterWidgetState extends State<SpineCharacterWidget> {
         if (!_initialized)
           const Center(child: CircularProgressIndicator()),
 
-        if (widget.state.text.isNotEmpty)
+        if (widget.showBubble && widget.state.text.isNotEmpty)
           Positioned(
             top: 8,
             left: 16,
