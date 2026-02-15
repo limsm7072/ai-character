@@ -26,8 +26,10 @@ class VoicePreset {
   });
 }
 
-/// Available Korean Edge TTS voices.
+/// Available Korean Edge TTS voice presets.
+/// Base voices: SunHi(여), InJoon(남), Hyunsu(남) — 피치/속도 변형으로 다양화.
 const voicePresets = [
+  // 여자 목소리 (SunHi 기반)
   VoicePreset(
     id: 'sunhi',
     label: '선희',
@@ -36,6 +38,25 @@ const voicePresets = [
     gender: 'female',
   ),
   VoicePreset(
+    id: 'sunhi_gentle',
+    label: '선희 (차분)',
+    description: '여자 - 차분하고 부드러운',
+    voiceName: 'ko-KR-SunHiNeural',
+    gender: 'female',
+    rate: '-15%',
+    pitch: '-10Hz',
+  ),
+  VoicePreset(
+    id: 'sunhi_bright',
+    label: '선희 (활발)',
+    description: '여자 - 밝고 활발한',
+    voiceName: 'ko-KR-SunHiNeural',
+    gender: 'female',
+    rate: '+10%',
+    pitch: '+15Hz',
+  ),
+  // 남자 목소리 (InJoon 기반)
+  VoicePreset(
     id: 'injoon',
     label: '인준',
     description: '남자 - 차분한',
@@ -43,53 +64,30 @@ const voicePresets = [
     gender: 'male',
   ),
   VoicePreset(
+    id: 'injoon_energetic',
+    label: '인준 (활발)',
+    description: '남자 - 밝고 에너지넘치는',
+    voiceName: 'ko-KR-InJoonNeural',
+    gender: 'male',
+    rate: '+10%',
+    pitch: '+10Hz',
+  ),
+  // 남자 목소리 (Hyunsu 기반)
+  VoicePreset(
     id: 'hyunsu',
     label: '현수',
     description: '남자 - 중후한',
-    voiceName: 'ko-KR-HyunsuNeural',
+    voiceName: 'ko-KR-HyunsuMultilingualNeural',
     gender: 'male',
   ),
   VoicePreset(
-    id: 'bongjin',
-    label: '봉진',
-    description: '남자 - 나이든',
-    voiceName: 'ko-KR-BongJinNeural',
+    id: 'hyunsu_deep',
+    label: '현수 (중저음)',
+    description: '남자 - 깊고 낮은 목소리',
+    voiceName: 'ko-KR-HyunsuMultilingualNeural',
     gender: 'male',
-  ),
-  VoicePreset(
-    id: 'gookmin',
-    label: '국민',
-    description: '남자 - 힘있는',
-    voiceName: 'ko-KR-GookMinNeural',
-    gender: 'male',
-  ),
-  VoicePreset(
-    id: 'jimin',
-    label: '지민',
-    description: '여자 - 상냥한',
-    voiceName: 'ko-KR-JiMinNeural',
-    gender: 'female',
-  ),
-  VoicePreset(
-    id: 'seohyeon',
-    label: '서현',
-    description: '여자 - 차분한',
-    voiceName: 'ko-KR-SeoHyeonNeural',
-    gender: 'female',
-  ),
-  VoicePreset(
-    id: 'soonbok',
-    label: '순복',
-    description: '여자 - 따뜻한',
-    voiceName: 'ko-KR-SoonBokNeural',
-    gender: 'female',
-  ),
-  VoicePreset(
-    id: 'yujin',
-    label: '유진',
-    description: '여자 - 활발한',
-    voiceName: 'ko-KR-YuJinNeural',
-    gender: 'female',
+    rate: '-10%',
+    pitch: '-15Hz',
   ),
 ];
 
