@@ -42,8 +42,34 @@ class RoutineCompletionService {
     }
   }
 
-  /// Check if a routine is completed on a given date.
+  /// Mark a routine as skipped (acknowledged but not done) on a given date.
+  Future<void> markSkipped(String routineId, String date) async {
+    final all = _getAll();
+    // Remove existing entry if any
+    all.removeWhere((c) => c.routineId == routineId && c.date == date);
+    all.add(RoutineCompletion(
+      routineId: routineId,
+      date: date,
+      completedAt: DateTime.now().millisecondsSinceEpoch,
+      status: 'skipped',
+    ));
+    await _saveAll(all);
+  }
+
+  /// Check if a routine is completed on a given date (either completed or skipped).
   bool isCompleted(String routineId, String date) {
+    return _getAll()
+        .any((c) => c.routineId == routineId && c.date == date && c.status == 'completed');
+  }
+
+  /// Check if a routine is skipped on a given date.
+  bool isSkipped(String routineId, String date) {
+    return _getAll()
+        .any((c) => c.routineId == routineId && c.date == date && c.status == 'skipped');
+  }
+
+  /// Check if a routine has any record (completed or skipped) on a given date.
+  bool hasRecord(String routineId, String date) {
     return _getAll()
         .any((c) => c.routineId == routineId && c.date == date);
   }

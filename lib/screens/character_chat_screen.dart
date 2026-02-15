@@ -2,21 +2,118 @@ import 'package:flutter/material.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
 import '../models/character_state.dart';
 import '../models/character_registry.dart';
+import '../models/routine.dart' as model;
 import '../services/gemini_service.dart';
 import '../services/settings_service.dart';
 import '../services/tts_service.dart';
 import '../services/accessory_service.dart';
+import '../services/routine_service.dart';
+import '../services/routine_completion_service.dart';
 import '../widgets/spine_character_widget.dart';
 import 'dress_up_screen.dart';
+
+enum _RoutineStep { idle, askName, askStartTime, askEndTime, askDays, askBlockedApps }
+
+class _RoutineCreationFlow {
+  _RoutineStep step = _RoutineStep.idle;
+  String name = '';
+  model.TimeOfDay? startTime;
+  model.TimeOfDay? endTime;
+  List<bool> activeDays = List.filled(7, true);
+  List<String> blockedApps = [];
+
+  bool get isActive => step != _RoutineStep.idle;
+
+  void reset() {
+    step = _RoutineStep.idle;
+    name = '';
+    startTime = null;
+    endTime = null;
+    activeDays = List.filled(7, true);
+    blockedApps = [];
+  }
+}
+
+model.TimeOfDay? _parseTime(String input) {
+  final t = input.replaceAll(RegExp(r'\s+'), '');
+
+  // "HH:MM" or "HH시MM분"
+  final colonMatch = RegExp(r'(\d{1,2}):(\d{2})').firstMatch(input);
+  if (colonMatch != null) {
+    return model.TimeOfDay(
+      hour: int.parse(colonMatch.group(1)!),
+      minute: int.parse(colonMatch.group(2)!),
+    );
+  }
+
+  bool isPm = input.contains('오후') || input.contains('저녁') || input.contains('밤');
+  bool isAm = input.contains('오전') || input.contains('아침') || input.contains('새벽');
+
+  final hourMatch = RegExp(r'(\d{1,2})\s*시').firstMatch(input);
+  final minuteMatch = RegExp(r'(\d{1,2})\s*분').firstMatch(input);
+
+  if (hourMatch != null) {
+    var hour = int.parse(hourMatch.group(1)!);
+    final minute = minuteMatch != null ? int.parse(minuteMatch.group(1)!) : 0;
+
+    if (isPm && hour < 12) hour += 12;
+    if (isAm && hour == 12) hour = 0;
+
+    if (hour >= 0 && hour <= 23 && minute >= 0 && minute <= 59) {
+      return model.TimeOfDay(hour: hour, minute: minute);
+    }
+  }
+
+  // bare number like "6" or "18"
+  final bareMatch = RegExp(r'^[오후오전아침저녁밤새벽\s]*(\d{1,2})$').firstMatch(input.trim());
+  if (bareMatch != null) {
+    var hour = int.parse(bareMatch.group(1)!);
+    if (isPm && hour < 12) hour += 12;
+    if (isAm && hour == 12) hour = 0;
+    if (hour >= 0 && hour <= 23) {
+      return model.TimeOfDay(hour: hour, minute: 0);
+    }
+  }
+
+  return null;
+}
+
+List<bool>? _parseDays(String input) {
+  final t = input.trim();
+  if (t.contains('매일') || t.contains('전부') || t.contains('모두')) {
+    return List.filled(7, true);
+  }
+  if (t.contains('평일')) {
+    return [true, true, true, true, true, false, false];
+  }
+  if (t.contains('주말')) {
+    return [false, false, false, false, false, true, true];
+  }
+
+  final dayMap = {'월': 0, '화': 1, '수': 2, '목': 3, '금': 4, '토': 5, '일': 6};
+  final result = List.filled(7, false);
+  bool found = false;
+  for (final entry in dayMap.entries) {
+    if (t.contains(entry.key)) {
+      result[entry.value] = true;
+      found = true;
+    }
+  }
+  return found ? result : null;
+}
 
 class CharacterChatScreen extends StatefulWidget {
   final SettingsService settingsService;
   final AccessoryService accessoryService;
+  final RoutineService? routineService;
+  final RoutineCompletionService? completionService;
 
   const CharacterChatScreen({
     super.key,
     required this.settingsService,
     required this.accessoryService,
+    this.routineService,
+    this.completionService,
   });
 
   @override
@@ -34,7 +131,9 @@ class _CharacterChatScreenState extends State<CharacterChatScreen> {
   bool _isLoading = false;
   bool _isListening = false;
   bool _speechAvailable = false;
+  bool _voiceMode = false; // Continuous voice mode
   String _currentWords = '';
+  final _routineFlow = _RoutineCreationFlow();
 
   @override
   void initState() {
@@ -47,7 +146,34 @@ class _CharacterChatScreenState extends State<CharacterChatScreen> {
     final apiKey = widget.settingsService.apiKey;
     if (apiKey.isNotEmpty) {
       _gemini.initialize(apiKey);
+      _gemini.setAppContext(_buildAppContext());
     }
+  }
+
+  String _buildAppContext() {
+    final routineService = widget.routineService;
+    final completionService = widget.completionService;
+    if (routineService == null || completionService == null) return '';
+
+    final today = DateTime.now();
+    final todayStr = completionService.todayStr();
+    final dayNames = ['월', '화', '수', '목', '금', '토', '일'];
+    final dayIndex = today.weekday - 1;
+    final routines = routineService.getAll();
+
+    if (routines.isEmpty) return '등록된 루틴 없음';
+
+    final buf = StringBuffer();
+    buf.writeln('오늘: ${today.month}/${today.day} (${dayNames[dayIndex]})');
+    buf.writeln('루틴 목록:');
+    for (final r in routines) {
+      if (!r.activeDays[dayIndex]) continue;
+      final completed = completionService.isCompleted(r.id, todayStr);
+      final skipped = completionService.isSkipped(r.id, todayStr);
+      final status = completed ? '완료' : skipped ? '미완료' : '아직';
+      buf.writeln('- ${r.name} (${r.startTime.format()}-${r.endTime.format()}) [$status]');
+    }
+    return buf.toString();
   }
 
   Future<void> _initSpeech() async {
@@ -59,12 +185,6 @@ class _CharacterChatScreenState extends State<CharacterChatScreen> {
         if (status == 'done' || status == 'notListening') {
           if (_isListening) {
             setState(() => _isListening = false);
-            // Auto-send if we got words
-            if (_currentWords.isNotEmpty) {
-              _messageController.text = _currentWords;
-              _sendMessage(isVoice: true);
-              _currentWords = '';
-            }
           }
         }
       },
@@ -115,6 +235,7 @@ class _CharacterChatScreenState extends State<CharacterChatScreen> {
                 config: config,
                 state: _characterState,
                 customSkins: customSkins.isNotEmpty ? customSkins : null,
+                showBubble: false,
                 interactive: true,
               );
             }),
@@ -201,7 +322,10 @@ class _CharacterChatScreenState extends State<CharacterChatScreen> {
                     ),
                   ),
                   TextButton(
-                    onPressed: _stopListening,
+                    onPressed: () {
+                      _stopListening();
+                      setState(() => _voiceMode = false);
+                    },
                     child: const Text('취소'),
                   ),
                 ],
@@ -224,17 +348,15 @@ class _CharacterChatScreenState extends State<CharacterChatScreen> {
               ),
               child: Row(
                 children: [
-                  // Microphone button
+                  // Voice mode toggle button
                   if (_speechAvailable)
                     IconButton(
-                      onPressed: _isLoading
-                          ? null
-                          : (_isListening ? _stopListening : _startListening),
+                      onPressed: _isLoading ? null : _toggleVoiceMode,
                       icon: Icon(
-                        _isListening ? Icons.stop : Icons.mic,
-                        color: _isListening ? Colors.red : null,
+                        _voiceMode ? Icons.mic : Icons.mic_none,
+                        color: _voiceMode ? Colors.red : null,
                       ),
-                      tooltip: _isListening ? '음성 입력 중지' : '음성으로 말하기',
+                      tooltip: _voiceMode ? '음성 모드 끄기' : '음성 모드 켜기',
                     ),
                   Expanded(
                     child: TextField(
@@ -269,7 +391,20 @@ class _CharacterChatScreenState extends State<CharacterChatScreen> {
     );
   }
 
+  void _toggleVoiceMode() {
+    if (_voiceMode) {
+      // Turn off voice mode
+      _stopListening();
+      setState(() => _voiceMode = false);
+    } else {
+      // Turn on voice mode and start listening
+      setState(() => _voiceMode = true);
+      _startListening();
+    }
+  }
+
   void _startListening() async {
+    if (!_voiceMode) return;
     // Stop TTS if speaking
     await _tts.stop();
 
@@ -406,6 +541,134 @@ class _CharacterChatScreenState extends State<CharacterChatScreen> {
     }
   }
 
+  static const _routineKeywords = [
+    '루틴 추가', '루틴 만들', '루틴 생성', '루틴 등록',
+    '루틴 넣어', '루틴 잡아', '루틴 세워',
+    '추가해줘', '만들어줘', '등록해줘',
+  ];
+
+  bool _isRoutineCreationIntent(String text) {
+    final t = text.toLowerCase().replaceAll(' ', '');
+    return _routineKeywords.any((k) => t.contains(k.replaceAll(' ', '')));
+  }
+
+  void _addLunaMessage(String text, {String emotion = 'happy', String gesture = 'idle'}) {
+    setState(() {
+      _messages.add(_ChatMessage(text: text, isUser: false, emotion: emotion));
+      _characterState = CharacterState(
+        emotion: emotion,
+        gesture: gesture,
+      );
+    });
+    if (widget.settingsService.ttsEnabled) {
+      _tts.speak(text);
+    }
+    _scrollToBottom();
+    // Auto-restart listening if voice mode is on
+    if (_voiceMode && mounted) {
+      Future.delayed(const Duration(milliseconds: 500), () {
+        if (_voiceMode && mounted && !_isListening) {
+          _startListening();
+        }
+      });
+    }
+  }
+
+  Future<void> _handleRoutineFlow(String text) async {
+    switch (_routineFlow.step) {
+      case _RoutineStep.askName:
+        _routineFlow.name = text;
+        _routineFlow.step = _RoutineStep.askStartTime;
+        _addLunaMessage('좋아! "${_routineFlow.name}" 루틴이구나. 시작 시간은 몇 시야?', emotion: 'happy', gesture: 'idle');
+        break;
+
+      case _RoutineStep.askStartTime:
+        final time = _parseTime(text);
+        if (time == null) {
+          _addLunaMessage('음... 시간을 못 알아들었어. "오후 6시"나 "18:00" 이런 식으로 말해줘!', emotion: 'worried', gesture: 'shaking_head');
+          return;
+        }
+        _routineFlow.startTime = time;
+        _routineFlow.step = _RoutineStep.askEndTime;
+        _addLunaMessage('시작 시간 ${time.format()}! 끝나는 시간은?', emotion: 'happy', gesture: 'idle');
+        break;
+
+      case _RoutineStep.askEndTime:
+        final time = _parseTime(text);
+        if (time == null) {
+          _addLunaMessage('음... 시간을 못 알아들었어. "오후 7시"나 "19:00" 이런 식으로 말해줘!', emotion: 'worried', gesture: 'shaking_head');
+          return;
+        }
+        _routineFlow.endTime = time;
+        _routineFlow.step = _RoutineStep.askDays;
+        _addLunaMessage('${time.format()}까지! 무슨 요일에 할 거야? (매일, 평일, 주말, 또는 월수금 이런 식으로)', emotion: 'happy', gesture: 'idle');
+        break;
+
+      case _RoutineStep.askDays:
+        final days = _parseDays(text);
+        if (days == null) {
+          _addLunaMessage('요일을 못 알아들었어. "매일", "평일", "월수금" 이런 식으로 말해줘!', emotion: 'worried', gesture: 'shaking_head');
+          return;
+        }
+        _routineFlow.activeDays = days;
+        _routineFlow.step = _RoutineStep.askBlockedApps;
+        _addLunaMessage('루틴 시간에 차단할 앱이 있어? 앱 이름을 말해줘! (예: 유튜브, 인스타)\n없으면 "없어" 라고 해~', emotion: 'happy', gesture: 'idle');
+        break;
+
+      case _RoutineStep.askBlockedApps:
+        final t = text.trim();
+        if (t.contains('없') || t.contains('패스') || t.contains('스킵') || t.contains('안') || t.isEmpty) {
+          _routineFlow.blockedApps = [];
+        } else {
+          _routineFlow.blockedApps = t
+              .split(RegExp(r'[,\s、]+'))
+              .map((s) => s.trim())
+              .where((s) => s.isNotEmpty)
+              .toList();
+        }
+        await _createRoutineFromFlow();
+        break;
+
+      default:
+        break;
+    }
+  }
+
+  Future<void> _createRoutineFromFlow() async {
+    final flow = _routineFlow;
+    final dayNames = ['월', '화', '수', '목', '금', '토', '일'];
+    final activeDayStr = <String>[];
+    for (int i = 0; i < 7; i++) {
+      if (flow.activeDays[i]) activeDayStr.add(dayNames[i]);
+    }
+    final daysLabel = activeDayStr.length == 7 ? '매일' : activeDayStr.join('');
+
+    final routine = model.Routine(
+      id: DateTime.now().millisecondsSinceEpoch.toString(),
+      name: flow.name,
+      startTime: flow.startTime!,
+      endTime: flow.endTime!,
+      activeDays: flow.activeDays,
+      blockedApps: flow.blockedApps,
+    );
+
+    try {
+      await widget.routineService!.add(routine);
+      final appsLabel = flow.blockedApps.isNotEmpty
+          ? '\n차단 앱: ${flow.blockedApps.join(", ")}'
+          : '';
+      _addLunaMessage(
+        '${flow.name} 루틴 만들었어! ${flow.startTime!.format()}~${flow.endTime!.format()}, $daysLabel.$appsLabel\n화이팅!',
+        emotion: 'proud',
+        gesture: 'clapping',
+      );
+    } catch (e) {
+      _addLunaMessage('앗, 루틴 만들다가 오류가 났어... ($e)', emotion: 'sad', gesture: 'facepalm');
+    } finally {
+      flow.reset();
+    }
+  }
+
   Future<void> _sendMessage({bool isVoice = false}) async {
     final text = _messageController.text.trim();
     if (text.isEmpty || _isLoading) return;
@@ -419,6 +682,20 @@ class _CharacterChatScreenState extends State<CharacterChatScreen> {
     _scrollToBottom();
 
     try {
+      // Check if in routine creation flow
+      if (_routineFlow.isActive) {
+        await _handleRoutineFlow(text);
+        return; // finally block handles isLoading & voice restart
+      }
+
+      // Check if user wants to create a routine
+      if (_isRoutineCreationIntent(text) && widget.routineService != null) {
+        _routineFlow.step = _RoutineStep.askName;
+        _addLunaMessage('좋아! 새 루틴 만들어줄게. 루틴 이름은 뭐로 할까?', emotion: 'happy', gesture: 'waving');
+        return; // finally block handles isLoading & voice restart
+      }
+
+      // Normal chat
       if (!_gemini.isInitialized) _initGemini();
       final response = await _gemini.chat(text);
 
@@ -431,7 +708,6 @@ class _CharacterChatScreenState extends State<CharacterChatScreen> {
         _characterState = CharacterState(
           emotion: response.emotion,
           gesture: response.gesture,
-          text: response.text,
         );
       });
 
@@ -449,6 +725,15 @@ class _CharacterChatScreenState extends State<CharacterChatScreen> {
     } finally {
       setState(() => _isLoading = false);
       _scrollToBottom();
+      // Auto-restart listening if voice mode is on
+      if (_voiceMode && mounted) {
+        // Small delay to let TTS finish and avoid overlap
+        Future.delayed(const Duration(milliseconds: 500), () {
+          if (_voiceMode && mounted && !_isListening) {
+            _startListening();
+          }
+        });
+      }
     }
   }
 

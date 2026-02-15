@@ -87,6 +87,20 @@ class AppDetectionService {
     }
   }
 
+  /// Query daily app usage stats for a specific date (format: "yyyy-MM-dd").
+  Future<List<Map<String, dynamic>>> getDailyUsageStats(String date) async {
+    try {
+      final result = await _channel.invokeMethod<List<dynamic>>(
+        'queryDailyUsageStats',
+        {'date': date},
+      );
+      if (result == null) return [];
+      return result.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+    } on PlatformException {
+      return [];
+    }
+  }
+
   void dispose() {
     _distractionController.close();
   }

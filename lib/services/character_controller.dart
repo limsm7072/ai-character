@@ -153,16 +153,19 @@ class CharacterController {
 
   /// Handle routine complete event.
   /// If the routine is not yet checked as completed, prompt the user via voice.
+  /// [date] is the yyyy-MM-dd string for the target date.
+  /// [daysAgo] indicates how many days in the past (0=today, 1=yesterday, etc.)
   /// Returns true if the prompt was actually shown, false if busy.
-  Future<bool> onRoutineComplete(String routineId, String routineName) async {
+  Future<bool> onRoutineComplete(
+    String routineId, String routineName, String date, int daysAgo,
+  ) async {
     if (_isBusy) return false;
     _isBusy = true;
     _distractionCount = 0;
 
     try {
-      final today = _completionService.todayStr();
       final alreadyCompleted =
-          _completionService.isCompleted(routineId, today);
+          _completionService.isCompleted(routineId, date);
 
       if (alreadyCompleted) {
         // Already checked — just praise
@@ -180,8 +183,15 @@ class CharacterController {
         await Future.delayed(const Duration(seconds: 3));
         await _overlay.hide();
       } else {
-        // Not checked — ask via voice
-        final askText = '$routineName 시간 끝났는데, 완료 체크 해줄까?';
+        // Build question text based on daysAgo
+        String askText;
+        if (daysAgo == 0) {
+          askText = '$routineName 시간 끝났는데, 완료 체크 해줄까?';
+        } else if (daysAgo == 1) {
+          askText = '어제 $routineName 했어?';
+        } else {
+          askText = '$daysAgo일 전 $routineName 했어?';
+        }
 
         _updateState(CharacterState(
           emotion: 'happy',
@@ -198,10 +208,21 @@ class CharacterController {
 
         // Listen for voice response (races with overlay dismissal)
         final voiceText = await _listenForCompletionVoice();
-        final accepted = voiceText != null && _isAffirmative(voiceText);
 
-        if (accepted) {
-          await _completionService.toggleCompletion(routineId, today);
+        if (voiceText != null && _isNegative(voiceText)) {
+          await _completionService.markSkipped(routineId, date);
+
+          _updateState(CharacterState(
+            emotion: 'sad',
+            gesture: 'disappointed',
+            text: '알겠어, 다음엔 꼭 하자!',
+            characterId: _characterId,
+          ));
+          await _overlay.sendToOverlay(jsonEncode(_currentState.toJson()));
+          await _speak('알겠어, 다음엔 꼭 하자!');
+          await Future.delayed(const Duration(seconds: 2));
+        } else if (voiceText != null && _isAffirmative(voiceText)) {
+          await _completionService.toggleCompletion(routineId, date);
 
           _updateState(CharacterState(
             emotion: 'happy',
@@ -276,6 +297,16 @@ class CharacterController {
       '웅', '어', '맞아', '부탁', '당연', '했어', '끝났어', '다했어',
     ];
     return affirmatives.any((a) => t.contains(a));
+  }
+
+  /// Check if user's voice response is negative (didn't do it).
+  bool _isNegative(String text) {
+    final t = text.trim();
+    const negatives = [
+      '아니', '안했', '못했', '안 했', '못 했', '노', '싫',
+      '아직', '안해', '못해', '패스', '건너뛰', '스킵', '미완',
+    ];
+    return negatives.any((a) => t.contains(a));
   }
 
   /// User returned to allowed app during routine.

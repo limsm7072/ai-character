@@ -187,6 +187,26 @@ class _SettingsScreenState extends State<SettingsScreen> {
               },
             ),
           ),
+          ListTile(
+            title: const Text('완료 확인 간격'),
+            subtitle: Text(_intervalLabel(widget.settingsService.routineCheckInterval)),
+            trailing: DropdownButton<int>(
+              value: widget.settingsService.routineCheckInterval,
+              items: const [
+                DropdownMenuItem(value: 5, child: Text('5초')),
+                DropdownMenuItem(value: 60, child: Text('1분')),
+                DropdownMenuItem(value: 300, child: Text('5분')),
+                DropdownMenuItem(value: 1800, child: Text('30분')),
+                DropdownMenuItem(value: 3600, child: Text('1시간')),
+              ],
+              onChanged: (v) async {
+                if (v != null) {
+                  await widget.settingsService.setRoutineCheckInterval(v);
+                  setState(() {});
+                }
+              },
+            ),
+          ),
           const Divider(),
 
           // Voice Settings
@@ -374,6 +394,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
         }
       },
     );
+  }
+
+  String _intervalLabel(int seconds) {
+    if (seconds < 60) return '$seconds초마다 미완료 루틴 확인';
+    final minutes = seconds ~/ 60;
+    if (minutes < 60) return '$minutes분마다 미완료 루틴 확인';
+    return '${minutes ~/ 60}시간마다 미완료 루틴 확인';
   }
 
   String _intensityLabel(int level) {

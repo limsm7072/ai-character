@@ -64,6 +64,10 @@ class MainActivity : FlutterActivity() {
                     result.success(getAppLabel(pkg))
                 }
                 "getInstalledApps" -> result.success(getInstalledApps())
+                "queryDailyUsageStats" -> {
+                    val date = call.argument<String>("date") ?: ""
+                    result.success(queryDailyUsageStats(date))
+                }
                 "startMonitorService" -> {
                     startMonitorService()
                     result.success(true)
@@ -208,6 +212,53 @@ class MainActivity : FlutterActivity() {
             val pm = applicationContext.packageManager
             pm.getApplicationLabel(pm.getApplicationInfo(pkg, 0)).toString()
         } catch (_: PackageManager.NameNotFoundException) { pkg }
+    }
+
+    private fun queryDailyUsageStats(date: String): List<Map<String, Any>> {
+        if (!hasUsageStatsPermission()) return emptyList()
+
+        val parts = date.split("-")
+        if (parts.size != 3) return emptyList()
+
+        val year = parts[0].toIntOrNull() ?: return emptyList()
+        val month = parts[1].toIntOrNull() ?: return emptyList()
+        val day = parts[2].toIntOrNull() ?: return emptyList()
+
+        val cal = java.util.Calendar.getInstance().apply {
+            set(year, month - 1, day, 0, 0, 0)
+            set(java.util.Calendar.MILLISECOND, 0)
+        }
+        val startTime = cal.timeInMillis
+        cal.add(java.util.Calendar.DAY_OF_MONTH, 1)
+        val endTime = cal.timeInMillis
+
+        val usm = getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
+        val stats = usm.queryUsageStats(UsageStatsManager.INTERVAL_DAILY, startTime, endTime)
+        if (stats.isNullOrEmpty()) return emptyList()
+
+        val myPackage = packageName
+        val excludePrefixes = listOf(
+            "com.android.launcher",
+            "com.android.systemui",
+            "com.android.inputmethod",
+            "com.google.android.inputmethod",
+            "com.samsung.android.honeyboard",
+            "com.sec.android.inputmethod"
+        )
+
+        return stats
+            .filter { s ->
+                s.totalTimeInForeground > 0 &&
+                s.packageName != myPackage &&
+                excludePrefixes.none { prefix -> s.packageName.startsWith(prefix) }
+            }
+            .map { s ->
+                mapOf<String, Any>(
+                    "appPackage" to s.packageName,
+                    "appLabel" to getAppLabel(s.packageName),
+                    "totalTime" to s.totalTimeInForeground
+                )
+            }
     }
 
     private fun getInstalledApps(): Map<String, String> {

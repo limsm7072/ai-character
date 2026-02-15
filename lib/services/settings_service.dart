@@ -9,6 +9,7 @@ class SettingsService {
   static const _overlayEnabledKey = 'overlay_enabled';
   static const _selectedCharacterKey = 'selected_character';
   static const _voicePresetKey = 'voice_preset';
+  static const _routineCheckIntervalKey = 'routine_check_interval';
 
   final SharedPreferences _prefs;
 
@@ -43,4 +44,10 @@ class SettingsService {
   String get voicePreset => _prefs.getString(_voicePresetKey) ?? 'sunhi';
   Future<void> setVoicePreset(String preset) =>
       _prefs.setString(_voicePresetKey, preset);
+
+  /// Routine check interval in seconds (how often to check unchecked past routines)
+  int get routineCheckInterval =>
+      _prefs.getInt(_routineCheckIntervalKey) ?? 300;
+  Future<void> setRoutineCheckInterval(int seconds) =>
+      _prefs.setInt(_routineCheckIntervalKey, seconds);
 }
