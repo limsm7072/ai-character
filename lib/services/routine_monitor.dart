@@ -19,9 +19,6 @@ class RoutineMonitor {
   bool _wasInRoutine = false;
   Routine? _activeRoutine;
 
-  /// Last time we ran the past-routine check (for throttling).
-  DateTime? _lastPastCheckTime;
-
   RoutineMonitor({
     required RoutineService routineService,
     required AppDetectionService appDetection,
@@ -50,6 +47,11 @@ class RoutineMonitor {
   }
 
   void dispose() => stop();
+
+  /// Force an immediate unchecked-routine check (e.g. after user cancels completion).
+  void forceCheck() {
+    _checkUncheckedPastRoutines();
+  }
 
   // ─── Distraction handling ───────────────────────────────
 
@@ -80,7 +82,6 @@ class RoutineMonitor {
         _activeRoutine = routine;
         _wasInRoutine = true;
         await _characterController.onRoutineStart(routine.name);
-        _lastPastCheckTime = null;
         return;
       }
 
@@ -103,7 +104,6 @@ class RoutineMonitor {
 
         final today = _completionService.todayStr();
         await _promptCompletion(prev?.id ?? '', prev?.name ?? '루틴', today, 0);
-        _lastPastCheckTime = null;
         return;
       }
 
@@ -115,19 +115,12 @@ class RoutineMonitor {
     }
   }
 
-  // ─── Past routine completion check (throttled) ──────────
+  // ─── Past routine completion check ──────────────────────
 
   /// Scans routines from today to 6 days ago. If a routine's time has passed
   /// and no completion record exists, prompts the user. Only one prompt per tick.
-  /// Re-prompts every 5 seconds until the user responds.
   Future<void> _checkUncheckedPastRoutines() async {
     final now = DateTime.now();
-    if (_lastPastCheckTime != null &&
-        now.difference(_lastPastCheckTime!).inSeconds < 5) {
-      return;
-    }
-    _lastPastCheckTime = now;
-
     final nowMinutes = now.hour * 60 + now.minute;
     final routines = _routineService.getAll();
 
@@ -148,13 +141,11 @@ class RoutineMonitor {
 
   // ─── Helpers ────────────────────────────────────────────
 
-  /// Prompt user for routine completion if no record exists.
   Future<void> _promptCompletion(String id, String name, String dateStr, int daysAgo) async {
     if (_completionService.hasRecord(id, dateStr)) return;
     await _characterController.onRoutineComplete(id, name, dateStr, daysAgo);
   }
 
-  /// Check if a routine's end time has passed (for today only).
   bool _hasRoutineEnded(Routine r, int nowMinutes) {
     final startMin = r.startTime.hour * 60 + r.startTime.minute;
     final endMin = r.endTime.hour * 60 + r.endTime.minute;
@@ -162,12 +153,10 @@ class RoutineMonitor {
     if (startMin <= endMin) {
       return nowMinutes > endMin;
     } else {
-      // Overnight routine (e.g. 22:00-06:00)
       return nowMinutes > endMin && nowMinutes < startMin;
     }
   }
 
-  /// Check if a routine was disabled by user (not ended by time).
   bool _wasDisabledByUser(String routineId) {
     final fresh = _routineService.getAll().where((r) => r.id == routineId).firstOrNull;
     return fresh != null && !fresh.isEnabled;

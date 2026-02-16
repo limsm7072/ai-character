@@ -21,6 +21,7 @@ class HomeScreen extends StatefulWidget {
   final RoutineCompletionService completionService;
   final TtsService ttsService;
   final AccessoryService accessoryService;
+  final VoidCallback? onCompletionUnchecked;
 
   const HomeScreen({
     super.key,
@@ -31,6 +32,7 @@ class HomeScreen extends StatefulWidget {
     required this.completionService,
     required this.ttsService,
     required this.accessoryService,
+    this.onCompletionUnchecked,
   });
 
   @override
@@ -357,27 +359,23 @@ class _HomeScreenState extends State<HomeScreen> {
       child: ListTile(
         leading: GestureDetector(
           onTap: () async {
-            if (isSkipped) {
-              await widget.completionService
-                  .toggleCompletion(routine.id, _selectedDateStr);
-            } else if (isCompleted) {
-              await widget.completionService
-                  .toggleCompletion(routine.id, _selectedDateStr);
-            } else {
-              await widget.completionService
-                  .toggleCompletion(routine.id, _selectedDateStr);
-            }
+            final wasChecked = isCompleted || isSkipped;
+            await widget.completionService
+                .toggleCompletion(routine.id, _selectedDateStr);
             setState(() {});
+            if (wasChecked) widget.onCompletionUnchecked?.call();
           },
           onLongPress: () async {
             if (isSkipped) {
               await widget.completionService
                   .toggleCompletion(routine.id, _selectedDateStr);
+              setState(() {});
+              widget.onCompletionUnchecked?.call();
             } else {
               await widget.completionService
                   .markSkipped(routine.id, _selectedDateStr);
+              setState(() {});
             }
-            setState(() {});
           },
           child: Container(
             width: 36,

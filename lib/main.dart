@@ -165,6 +165,7 @@ class _AiCharacterAppState extends State<AiCharacterApp>
         completionService: widget.completionService,
         ttsService: widget.ttsService,
         accessoryService: widget.accessoryService,
+        onCompletionUnchecked: widget.routineMonitor.forceCheck,
       ),
     );
   }
