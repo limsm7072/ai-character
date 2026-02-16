@@ -357,7 +357,9 @@ class _HomeScreenState extends State<HomeScreen> {
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
       child: ListTile(
-        leading: GestureDetector(
+        leading: Column(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [GestureDetector(
           onTap: () async {
             // Cycle: none → completed → skipped → none → ...
             if (!isCompleted && !isSkipped) {
@@ -395,6 +397,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   )
                 : null,
           ),
+        )],
         ),
         title: Text(
           routine.name,
