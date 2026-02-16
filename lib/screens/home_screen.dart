@@ -359,23 +359,22 @@ class _HomeScreenState extends State<HomeScreen> {
       child: ListTile(
         leading: GestureDetector(
           onTap: () async {
-            final wasChecked = isCompleted || isSkipped;
-            await widget.completionService
-                .toggleCompletion(routine.id, _selectedDateStr);
-            setState(() {});
-            if (wasChecked) widget.onCompletionUnchecked?.call();
-          },
-          onLongPress: () async {
-            if (isSkipped) {
+            // Cycle: none → completed → skipped → none → ...
+            if (!isCompleted && !isSkipped) {
+              // none → completed
               await widget.completionService
                   .toggleCompletion(routine.id, _selectedDateStr);
-              setState(() {});
-              widget.onCompletionUnchecked?.call();
-            } else {
+            } else if (isCompleted) {
+              // completed → skipped (remove then mark skipped)
               await widget.completionService
                   .markSkipped(routine.id, _selectedDateStr);
-              setState(() {});
+            } else {
+              // skipped → none (remove record)
+              await widget.completionService
+                  .toggleCompletion(routine.id, _selectedDateStr);
+              widget.onCompletionUnchecked?.call();
             }
+            setState(() {});
           },
           child: Container(
             width: 36,
