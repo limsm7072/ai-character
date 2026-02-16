@@ -12,7 +12,6 @@ import 'stats_screen.dart';
 import 'settings_screen.dart';
 import 'character_chat_screen.dart';
 
-
 class HomeScreen extends StatefulWidget {
   final RoutineService routineService;
   final SettingsService settingsService;
@@ -46,6 +45,8 @@ class _HomeScreenState extends State<HomeScreen> {
   late String _selectedDateStr;
   int _weekOffset = 0;
 
+  // ─── Lifecycle ──────────────────────────────────────────
+
   @override
   void initState() {
     super.initState();
@@ -54,10 +55,10 @@ class _HomeScreenState extends State<HomeScreen> {
     _loadRoutines();
   }
 
+  // ─── State helpers ──────────────────────────────────────
+
   void _loadRoutines() {
-    setState(() {
-      _routines = widget.routineService.getAll();
-    });
+    setState(() => _routines = widget.routineService.getAll());
   }
 
   void _goToToday() {
@@ -73,8 +74,16 @@ class _HomeScreenState extends State<HomeScreen> {
       '${dt.year}-${dt.month.toString().padLeft(2, '0')}-${dt.day.toString().padLeft(2, '0')}';
 
   String get _todayStr => widget.completionService.todayStr();
-
   bool get _isSelectedToday => _selectedDateStr == _todayStr;
+
+  List<model.Routine> get _filteredRoutines =>
+      _routines.where((r) => r.isActiveOnDate(_selectedDate)).toList();
+
+  DateTime _mondayOf(DateTime date) =>
+      DateTime(date.year, date.month, date.day)
+          .subtract(Duration(days: date.weekday - 1));
+
+  // ─── Main build ─────────────────────────────────────────
 
   @override
   Widget build(BuildContext context) {
@@ -109,58 +118,33 @@ class _HomeScreenState extends State<HomeScreen> {
           setState(() => _currentIndex = i);
         },
         destinations: const [
-          NavigationDestination(
-            icon: Icon(Icons.checklist),
-            label: '루틴',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.bar_chart),
-            label: '통계',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.chat_bubble_outline),
-            label: '루나',
-          ),
-          NavigationDestination(
-            icon: Icon(Icons.settings),
-            label: '설정',
-          ),
+          NavigationDestination(icon: Icon(Icons.checklist), label: '루틴'),
+          NavigationDestination(icon: Icon(Icons.bar_chart), label: '통계'),
+          NavigationDestination(icon: Icon(Icons.chat_bubble_outline), label: '루나'),
+          NavigationDestination(icon: Icon(Icons.settings), label: '설정'),
         ],
       ),
       floatingActionButton: _currentIndex == 0
-          ? FloatingActionButton(
-              onPressed: _addRoutine,
-              child: const Icon(Icons.add),
-            )
+          ? FloatingActionButton(onPressed: _addRoutine, child: const Icon(Icons.add))
           : null,
     );
   }
 
-  /// Filter routines that are active on the selected day (checks startDate + activeDays).
-  List<model.Routine> get _filteredRoutines {
-    return _routines.where((r) => r.isActiveOnDate(_selectedDate)).toList();
-  }
-
-  /// Get Monday of the week for the given date.
-  DateTime _mondayOf(DateTime date) {
-    return DateTime(date.year, date.month, date.day)
-        .subtract(Duration(days: date.weekday - 1));
-  }
+  // ─── Week/day selector ──────────────────────────────────
 
   Widget _buildDaySelector() {
     final today = DateTime.now();
     final monday = _mondayOf(today).add(Duration(days: _weekOffset * 7));
+    final sunday = monday.add(const Duration(days: 6));
     final dayNames = ['월', '화', '수', '목', '금', '토', '일'];
     final todayStr = _formatDate(today);
     final theme = Theme.of(context);
 
-    // Week label: "1월 3주" style
-    final weekMonth = monday.add(const Duration(days: 3)); // Thursday determines the month
-    final weekLabel = '${weekMonth.month}월';
+    final weekMonth = monday.add(const Duration(days: 3));
 
     return Column(
       children: [
-        // Week navigation row
+        // Week navigation
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
           child: Row(
@@ -172,15 +156,9 @@ class _HomeScreenState extends State<HomeScreen> {
                 visualDensity: VisualDensity.compact,
               ),
               GestureDetector(
-                onTap: () {
-                  setState(() {
-                    _weekOffset = 0;
-                    _selectedDate = today;
-                    _selectedDateStr = _formatDate(today);
-                  });
-                },
+                onTap: _goToToday,
                 child: Text(
-                  '$weekLabel (${monday.month}/${monday.day} - ${monday.add(const Duration(days: 6)).month}/${monday.add(const Duration(days: 6)).day})',
+                  '${weekMonth.month}월 (${monday.month}/${monday.day} - ${sunday.month}/${sunday.day})',
                   style: TextStyle(
                     fontSize: 13,
                     fontWeight: FontWeight.w600,
@@ -198,7 +176,7 @@ class _HomeScreenState extends State<HomeScreen> {
             ],
           ),
         ),
-        // Day chips row
+        // Day chips
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
           child: Row(
@@ -206,18 +184,15 @@ class _HomeScreenState extends State<HomeScreen> {
             children: List.generate(7, (i) {
               final date = monday.add(Duration(days: i));
               final dateStr = _formatDate(date);
-              final dayName = dayNames[i];
               final isSelected = dateStr == _selectedDateStr;
               final isToday = dateStr == todayStr;
 
               return Expanded(
                 child: GestureDetector(
-                  onTap: () {
-                    setState(() {
-                      _selectedDate = date;
-                      _selectedDateStr = dateStr;
-                    });
-                  },
+                  onTap: () => setState(() {
+                    _selectedDate = date;
+                    _selectedDateStr = dateStr;
+                  }),
                   child: Container(
                     margin: const EdgeInsets.symmetric(horizontal: 2),
                     padding: const EdgeInsets.symmetric(vertical: 8),
@@ -233,14 +208,12 @@ class _HomeScreenState extends State<HomeScreen> {
                       mainAxisSize: MainAxisSize.min,
                       children: [
                         Text(
-                          dayName,
+                          dayNames[i],
                           style: TextStyle(
                             fontSize: 11,
                             color: isSelected
                                 ? theme.colorScheme.onPrimary
-                                : isToday
-                                    ? theme.colorScheme.primary
-                                    : Colors.grey[600],
+                                : isToday ? theme.colorScheme.primary : Colors.grey[600],
                           ),
                         ),
                         const SizedBox(height: 2),
@@ -248,13 +221,10 @@ class _HomeScreenState extends State<HomeScreen> {
                           '${date.day}',
                           style: TextStyle(
                             fontSize: 15,
-                            fontWeight:
-                                isToday ? FontWeight.bold : FontWeight.normal,
+                            fontWeight: isToday ? FontWeight.bold : FontWeight.normal,
                             color: isSelected
                                 ? theme.colorScheme.onPrimary
-                                : isToday
-                                    ? theme.colorScheme.primary
-                                    : theme.colorScheme.onSurface,
+                                : isToday ? theme.colorScheme.primary : theme.colorScheme.onSurface,
                           ),
                         ),
                       ],
@@ -268,6 +238,8 @@ class _HomeScreenState extends State<HomeScreen> {
       ],
     );
   }
+
+  // ─── Routine list ───────────────────────────────────────
 
   Widget _buildRoutineList() {
     final filtered = _filteredRoutines;
@@ -283,43 +255,13 @@ class _HomeScreenState extends State<HomeScreen> {
                 icon: const Icon(Icons.today, size: 18),
                 label: const Text('오늘'),
               ),
-            IconButton(
-              icon: const Icon(Icons.info_outline),
-              onPressed: _showInfo,
-            ),
+            IconButton(icon: const Icon(Icons.info_outline), onPressed: _showInfo),
           ],
         ),
         SliverToBoxAdapter(child: _buildDaySelector()),
         const SliverToBoxAdapter(child: Divider(height: 1)),
         if (filtered.isEmpty)
-          SliverFillRemaining(
-            child: Center(
-              child: Column(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Icon(Icons.event_note, size: 64, color: Colors.grey[400]),
-                  const SizedBox(height: 16),
-                  Text(
-                    _routines.isEmpty
-                        ? '루틴을 추가해보세요!'
-                        : '이 날에 활성화된 루틴이 없어요',
-                    style: TextStyle(
-                      fontSize: 18,
-                      color: Colors.grey[600],
-                    ),
-                  ),
-                  if (_routines.isEmpty) ...[
-                    const SizedBox(height: 8),
-                    Text(
-                      '루틴 시간에 딴짓하면\n루나가 잔소리해줄 거예요',
-                      textAlign: TextAlign.center,
-                      style: TextStyle(color: Colors.grey[500]),
-                    ),
-                  ],
-                ],
-              ),
-            ),
-          )
+          _buildEmptyState()
         else
           SliverList(
             delegate: SliverChildBuilderDelegate(
@@ -331,80 +273,56 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  Widget _buildEmptyState() {
+    return SliverFillRemaining(
+      child: Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.event_note, size: 64, color: Colors.grey[400]),
+            const SizedBox(height: 16),
+            Text(
+              _routines.isEmpty ? '루틴을 추가해보세요!' : '이 날에 활성화된 루틴이 없어요',
+              style: TextStyle(fontSize: 18, color: Colors.grey[600]),
+            ),
+            if (_routines.isEmpty) ...[
+              const SizedBox(height: 8),
+              Text(
+                '루틴 시간에 딴짓하면\n루나가 잔소리해줄 거예요',
+                textAlign: TextAlign.center,
+                style: TextStyle(color: Colors.grey[500]),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ─── Routine card ───────────────────────────────────────
+
   Widget _buildRoutineCard(model.Routine routine) {
-    final isActive = _isSelectedToday && routine.isActiveNow();
+    final isCompleted = widget.completionService.isCompleted(routine.id, _selectedDateStr);
+    final isSkipped = widget.completionService.isSkipped(routine.id, _selectedDateStr);
+
     final dayNames = ['월', '화', '수', '목', '금', '토', '일'];
-    final activeDays = <String>[];
-    for (int i = 0; i < 7; i++) {
-      if (routine.activeDays[i]) activeDays.add(dayNames[i]);
-    }
-
-    final isCompleted =
-        widget.completionService.isCompleted(routine.id, _selectedDateStr);
-    final isSkipped =
-        widget.completionService.isSkipped(routine.id, _selectedDateStr);
-
-    final Color checkColor;
-    if (isCompleted) {
-      checkColor = Colors.green;
-    } else if (isSkipped) {
-      checkColor = Colors.orange;
-    } else {
-      checkColor = Colors.transparent;
-    }
-    final bool hasCheck = isCompleted || isSkipped;
+    final activeDays = [
+      for (int i = 0; i < 7; i++)
+        if (routine.activeDays[i]) dayNames[i],
+    ];
 
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
       child: ListTile(
         leading: Column(
           mainAxisAlignment: MainAxisAlignment.center,
-          children: [GestureDetector(
-          onTap: () async {
-            // Cycle: none → completed → skipped → none → ...
-            if (!isCompleted && !isSkipped) {
-              // none → completed
-              await widget.completionService
-                  .toggleCompletion(routine.id, _selectedDateStr);
-            } else if (isCompleted) {
-              // completed → skipped (remove then mark skipped)
-              await widget.completionService
-                  .markSkipped(routine.id, _selectedDateStr);
-            } else {
-              // skipped → none (remove record)
-              await widget.completionService
-                  .toggleCompletion(routine.id, _selectedDateStr);
-              widget.onCompletionUnchecked?.call();
-            }
-            setState(() {});
-          },
-          child: Container(
-            width: 36,
-            height: 36,
-            decoration: BoxDecoration(
-              shape: BoxShape.circle,
-              color: hasCheck ? checkColor : Colors.transparent,
-              border: Border.all(
-                color: hasCheck ? checkColor : Colors.grey[400]!,
-                width: 2,
-              ),
-            ),
-            child: hasCheck
-                ? Icon(
-                    isSkipped ? Icons.close : Icons.check,
-                    color: Colors.white,
-                    size: 20,
-                  )
-                : null,
-          ),
-        )],
+          children: [_buildCheckCircle(routine.id, isCompleted, isSkipped)],
         ),
         title: Text(
           routine.name,
           style: TextStyle(
             fontWeight: FontWeight.bold,
-            decoration:
-                routine.isEnabled ? null : TextDecoration.lineThrough,
+            decoration: routine.isEnabled ? null : TextDecoration.lineThrough,
           ),
         ),
         subtitle: Column(
@@ -434,13 +352,45 @@ class _HomeScreenState extends State<HomeScreen> {
     );
   }
 
+  /// Completion check circle: tap cycles none → completed → skipped → none
+  Widget _buildCheckCircle(String routineId, bool isCompleted, bool isSkipped) {
+    final hasCheck = isCompleted || isSkipped;
+    final color = isCompleted ? Colors.green : isSkipped ? Colors.orange : Colors.transparent;
+
+    return GestureDetector(
+      onTap: () async {
+        if (!isCompleted && !isSkipped) {
+          await widget.completionService.toggleCompletion(routineId, _selectedDateStr);
+        } else if (isCompleted) {
+          await widget.completionService.markSkipped(routineId, _selectedDateStr);
+        } else {
+          await widget.completionService.toggleCompletion(routineId, _selectedDateStr);
+          widget.onCompletionUnchecked?.call();
+        }
+        setState(() {});
+      },
+      child: Container(
+        width: 36,
+        height: 36,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          color: hasCheck ? color : Colors.transparent,
+          border: Border.all(color: hasCheck ? color : Colors.grey[400]!, width: 2),
+        ),
+        child: hasCheck
+            ? Icon(isSkipped ? Icons.close : Icons.check, color: Colors.white, size: 20)
+            : null,
+      ),
+    );
+  }
+
+  // ─── Navigation ─────────────────────────────────────────
+
   Future<void> _addRoutine() async {
     final result = await Navigator.push<bool>(
       context,
       MaterialPageRoute(
-        builder: (_) => RoutineEditScreen(
-          routineService: widget.routineService,
-        ),
+        builder: (_) => RoutineEditScreen(routineService: widget.routineService),
       ),
     );
     if (result == true) _loadRoutines();
@@ -458,6 +408,8 @@ class _HomeScreenState extends State<HomeScreen> {
     );
     if (result == true) _loadRoutines();
   }
+
+  // ─── Info dialog ────────────────────────────────────────
 
   void _showInfo() {
     showDialog(
