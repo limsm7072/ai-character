@@ -6,7 +6,6 @@ import '../models/ai_response.dart';
 class GeminiService {
   GenerativeModel? _model;
   ChatSession? _chat;
-  ChatSession? _assistantChat;
 
   bool get isInitialized => _model != null;
 
@@ -25,7 +24,6 @@ class GeminiService {
       ),
     );
     _startChatWithPrompt();
-    _startAssistantChat();
   }
 
   String _appContext = '';
@@ -141,42 +139,4 @@ class GeminiService {
     }
   }
 
-  // ── Assistant mode ──
-
-  static const _assistantPrompt = '''
-너는 "루나"라는 이름의 AI 비서야. 사용자가 "헤이 루나"로 호출했어.
-
-역할:
-- 사용자의 질문에 정확하고 유용한 답변을 해줘
-- 한국어로 반말 사용 (친한 친구처럼)
-- 답변은 간결하게 (음성으로 읽어줄 거야, 1-3문장)
-- 모르는 건 모른다고 솔직하게
-- 일상 질문, 정보 검색, 계산, 번역, 추천 등 뭐든 도와줘
-
-응답 형식 (반드시 JSON):
-{"text": "답변 내용", "emotion": "감정"}
-
-사용 가능한 감정: neutral, happy, angry, sad, surprised, annoyed, disappointed, scolding, proud, worried
-''';
-
-  void _startAssistantChat() {
-    _assistantChat = _model!.startChat(history: [
-      Content.text(_assistantPrompt),
-      Content.model([TextPart('{"text": "무엇을 도와드릴까요?", "emotion": "happy"}')]),
-    ]);
-  }
-
-  /// Generate a response for assistant mode conversation.
-  Future<AiResponse> assistantChat(String message) async {
-    if (_assistantChat == null) throw Exception('Assistant not initialized');
-    final response = await _assistantChat!.sendMessage(Content.text(message));
-    return AiResponse.parse(response.text ?? '');
-  }
-
-  /// Reset the assistant conversation context.
-  void resetAssistantChat() {
-    if (_model != null) {
-      _startAssistantChat();
-    }
-  }
 }

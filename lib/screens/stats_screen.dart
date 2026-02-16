@@ -128,9 +128,9 @@ class _StatsScreenState extends State<StatsScreen> {
 
   // --- 원형 프로그레스 ---
 
-  /// Filter routines active on a specific weekday (0=Mon, 6=Sun).
-  List<model.Routine> _activeRoutinesOn(List<model.Routine> routines, int dayIndex) {
-    return routines.where((r) => r.isEnabled && r.activeDays[dayIndex]).toList();
+  /// Filter routines active on a specific date (checks startDate + activeDays).
+  List<model.Routine> _activeRoutinesOn(List<model.Routine> routines, DateTime date) {
+    return routines.where((r) => r.isActiveOnDate(date)).toList();
   }
 
   /// Calculate completion rate over N days, only counting days each routine is active.
@@ -143,8 +143,7 @@ class _StatsScreenState extends State<StatsScreen> {
     for (int i = 0; i < days; i++) {
       final date = now.subtract(Duration(days: i));
       final dateStr = _formatDate(date);
-      final dayIndex = date.weekday - 1;
-      final active = _activeRoutinesOn(routines, dayIndex);
+      final active = _activeRoutinesOn(routines, date);
       totalSlots += active.length;
       for (final r in active) {
         if (widget.completionService.isCompleted(r.id, dateStr)) {
@@ -158,8 +157,7 @@ class _StatsScreenState extends State<StatsScreen> {
   Widget _buildCircularProgressRow(
       List<model.Routine> routines, String today) {
     final now = DateTime.now();
-    final todayDayIndex = now.weekday - 1;
-    final todayActive = _activeRoutinesOn(routines, todayDayIndex);
+    final todayActive = _activeRoutinesOn(routines, now);
     final todayCompleted = todayActive
         .where((r) => widget.completionService.isCompleted(r.id, today))
         .length;
@@ -301,7 +299,7 @@ class _StatsScreenState extends State<StatsScreen> {
       final dayIndex = date.weekday - 1;
 
       final activeRoutines = trackedRoutines
-          .where((r) => r.activeDays[dayIndex])
+          .where((r) => r.isActiveOnDate(date))
           .toList();
 
       // No tracked routines active on this day — skip, don't break
@@ -391,8 +389,7 @@ class _StatsScreenState extends State<StatsScreen> {
           cells.add(Expanded(
               child: _buildHeatmapCell(null, isToday: false)));
         } else {
-          final dayIndex = date.weekday - 1;
-          final activeRoutines = _activeRoutinesOn(routines, dayIndex);
+          final activeRoutines = _activeRoutinesOn(routines, date);
 
           if (activeRoutines.isEmpty) {
             cells.add(Expanded(
@@ -501,8 +498,7 @@ class _StatsScreenState extends State<StatsScreen> {
 
     for (int i = 0; i < days; i++) {
       final date = now.subtract(Duration(days: i));
-      final dayIndex = date.weekday - 1;
-      if (!routine.activeDays[dayIndex]) continue;
+      if (!routine.isActiveOnDate(date)) continue;
       activeCount++;
       final dateStr = _formatDate(date);
       if (widget.completionService.isCompleted(routine.id, dateStr)) {
@@ -596,8 +592,7 @@ class _StatsScreenState extends State<StatsScreen> {
       children: List.generate(7, (i) {
         final date = monday.add(Duration(days: i));
         final dateStr = _formatDate(date);
-        final dayIndex = date.weekday - 1;
-        final isActive = routine.activeDays[dayIndex];
+        final isActive = routine.isActiveOnDate(date);
 
         final isFuture = date.isAfter(now);
         Color dotColor;
@@ -617,7 +612,7 @@ class _StatsScreenState extends State<StatsScreen> {
         return Column(
           children: [
             Text(
-              dayNames[dayIndex],
+              dayNames[date.weekday - 1],
               style: TextStyle(fontSize: 9, color: Colors.grey[500]),
             ),
             const SizedBox(height: 2),

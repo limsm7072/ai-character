@@ -71,7 +71,6 @@ void main() async {
     appDetection: appDetectionService,
     characterController: characterController,
     completionService: completionService,
-    settings: settingsService,
   );
 
   runApp(AiCharacterApp(

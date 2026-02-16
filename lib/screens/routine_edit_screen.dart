@@ -24,6 +24,7 @@ class _RoutineEditScreenState extends State<RoutineEditScreen> {
   late model.TimeOfDay _endTime;
   late List<bool> _activeDays;
   late List<String> _blockedApps;
+  DateTime _startDate = DateTime.now();
   bool _isEditing = false;
 
   // Common app packages for selection
@@ -53,6 +54,14 @@ class _RoutineEditScreenState extends State<RoutineEditScreen> {
     _endTime = r?.endTime ?? const model.TimeOfDay(hour: 10, minute: 0);
     _activeDays = r?.activeDays.toList() ?? List.filled(7, true);
     _blockedApps = r?.blockedApps.toList() ?? [];
+    if (r?.startDate != null) {
+      final parts = r!.startDate!.split('-');
+      if (parts.length == 3) {
+        _startDate = DateTime(int.parse(parts[0]), int.parse(parts[1]), int.parse(parts[2]));
+      }
+    } else if (r == null) {
+      _startDate = DateTime.now();
+    }
   }
 
   @override
@@ -101,6 +110,40 @@ class _RoutineEditScreenState extends State<RoutineEditScreen> {
                 border: OutlineInputBorder(),
               ),
               maxLines: 2,
+            ),
+            const SizedBox(height: 24),
+
+            // Start date
+            const Text('시작 날짜',
+                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
+            const SizedBox(height: 4),
+            Text(
+              '이 날짜부터 루틴이 활성화됩니다',
+              style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+            ),
+            const SizedBox(height: 8),
+            InkWell(
+              onTap: () async {
+                final picked = await showDatePicker(
+                  context: context,
+                  initialDate: _startDate,
+                  firstDate: DateTime(2020),
+                  lastDate: DateTime(2030),
+                );
+                if (picked != null) {
+                  setState(() => _startDate = picked);
+                }
+              },
+              child: InputDecorator(
+                decoration: const InputDecoration(
+                  border: OutlineInputBorder(),
+                  suffixIcon: Icon(Icons.calendar_today),
+                ),
+                child: Text(
+                  '${_startDate.year}-${_startDate.month.toString().padLeft(2, '0')}-${_startDate.day.toString().padLeft(2, '0')}',
+                  style: const TextStyle(fontSize: 16),
+                ),
+              ),
             ),
             const SizedBox(height: 24),
 
@@ -230,11 +273,14 @@ class _RoutineEditScreenState extends State<RoutineEditScreen> {
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
 
+    final startDateStr = '${_startDate.year}-${_startDate.month.toString().padLeft(2, '0')}-${_startDate.day.toString().padLeft(2, '0')}';
+
     final routine = model.Routine(
       id: widget.routine?.id ??
           DateTime.now().millisecondsSinceEpoch.toString(),
       name: _nameController.text.trim(),
       description: _descController.text.trim(),
+      startDate: startDateStr,
       startTime: _startTime,
       endTime: _endTime,
       blockedApps: _blockedApps,

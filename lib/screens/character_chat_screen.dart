@@ -337,16 +337,14 @@ class _CharacterChatScreenState extends State<CharacterChatScreen> {
                               '루나에게 말을 걸어보세요!',
                               style: TextStyle(color: Colors.grey[500]),
                             ),
-                            if (_speechAvailable) ...[
-                              const SizedBox(height: 8),
-                              Text(
-                                '마이크 버튼을 눌러 음성으로도 대화할 수 있어요',
-                                style: TextStyle(
-                                  color: Colors.grey[400],
-                                  fontSize: 12,
-                                ),
+                            const SizedBox(height: 8),
+                            Text(
+                              '마이크 버튼을 눌러 음성으로도 대화할 수 있어요',
+                              style: TextStyle(
+                                color: Colors.grey[400],
+                                fontSize: 12,
                               ),
-                            ],
+                            ),
                           ],
                         ),
                       )
@@ -408,15 +406,14 @@ class _CharacterChatScreenState extends State<CharacterChatScreen> {
               child: Row(
                 children: [
                   // Voice mode toggle button
-                  if (_speechAvailable)
-                    IconButton(
-                      onPressed: _isLoading ? null : _toggleVoiceMode,
-                      icon: Icon(
-                        _voiceMode ? Icons.mic : Icons.mic_none,
-                        color: _voiceMode ? Colors.red : null,
-                      ),
-                      tooltip: _voiceMode ? '음성 모드 끄기' : '음성 모드 켜기',
+                  IconButton(
+                    onPressed: _isLoading ? null : _toggleVoiceMode,
+                    icon: Icon(
+                      _voiceMode ? Icons.mic : Icons.mic_none,
+                      color: _voiceMode ? Colors.red : null,
                     ),
+                    tooltip: _voiceMode ? '음성 모드 끄기' : '음성 모드 켜기',
+                  ),
                   Expanded(
                     child: TextField(
                       controller: _messageController,

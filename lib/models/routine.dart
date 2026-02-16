@@ -21,11 +21,25 @@ class Routine {
     this.isEnabled = true,
   }) : activeDays = activeDays ?? List.filled(7, true);
 
-  bool isActiveNow() {
+  /// Check if this routine is active on a specific date (considering startDate and activeDays).
+  bool isActiveOnDate(DateTime date) {
     if (!isEnabled) return false;
+    if (startDate != null) {
+      final parts = startDate!.split('-');
+      if (parts.length == 3) {
+        final sd = DateTime(int.parse(parts[0]), int.parse(parts[1]), int.parse(parts[2]));
+        // Compare date-only (strip time components)
+        final dateOnly = DateTime(date.year, date.month, date.day);
+        if (dateOnly.isBefore(sd)) return false;
+      }
+    }
+    final dayIndex = date.weekday - 1;
+    return activeDays[dayIndex];
+  }
+
+  bool isActiveNow() {
     final now = DateTime.now();
-    final dayIndex = now.weekday - 1; // 0=Mon, 6=Sun
-    if (!activeDays[dayIndex]) return false;
+    if (!isActiveOnDate(now)) return false;
 
     final nowMinutes = now.hour * 60 + now.minute;
     final startMinutes = startTime.hour * 60 + startTime.minute;

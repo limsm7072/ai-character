@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import 'package:speech_to_text/speech_to_text.dart' as stt;
 import '../models/routine.dart' as model;
 import '../services/routine_service.dart';
 import '../services/settings_service.dart';
@@ -8,7 +7,6 @@ import '../services/distraction_log_service.dart';
 import '../services/routine_completion_service.dart';
 import '../services/tts_service.dart';
 import '../services/accessory_service.dart';
-import '../widgets/assistant_overlay.dart';
 import 'routine_edit_screen.dart';
 import 'stats_screen.dart';
 import 'settings_screen.dart';
@@ -39,148 +37,19 @@ class HomeScreen extends StatefulWidget {
   State<HomeScreen> createState() => _HomeScreenState();
 }
 
-class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
+class _HomeScreenState extends State<HomeScreen> {
   List<model.Routine> _routines = [];
   int _currentIndex = 0;
   late DateTime _selectedDate;
   late String _selectedDateStr;
   int _weekOffset = 0;
 
-  // Wake word detection
-  final _wakeSpeech = stt.SpeechToText();
-  bool _wakeSpeechReady = false;
-  bool _wakeListening = false;
-  bool _assistantShowing = false;
-
   @override
   void initState() {
     super.initState();
-    WidgetsBinding.instance.addObserver(this);
     _selectedDate = DateTime.now();
     _selectedDateStr = _formatDate(_selectedDate);
     _loadRoutines();
-    _initWakeWord();
-  }
-
-  @override
-  void dispose() {
-    WidgetsBinding.instance.removeObserver(this);
-    _wakeSpeech.stop();
-    super.dispose();
-  }
-
-  @override
-  void didChangeAppLifecycleState(AppLifecycleState state) {
-    if (state == AppLifecycleState.paused) {
-      _stopWakeWordListening();
-    } else if (state == AppLifecycleState.resumed) {
-      if (!_assistantShowing && _currentIndex != 2) {
-        _startWakeWordListening();
-      }
-    }
-  }
-
-  Future<void> _initWakeWord() async {
-    _wakeSpeechReady = await _wakeSpeech.initialize(
-      onError: (_) {},
-      onStatus: (status) {
-        if (status == 'done' || status == 'notListening') {
-          // Restart listening after timeout
-          if (_wakeListening && !_assistantShowing && mounted) {
-            Future.delayed(const Duration(milliseconds: 300), () {
-              if (mounted && !_assistantShowing && _currentIndex != 2) {
-                _startWakeWordListening();
-              }
-            });
-          }
-        }
-      },
-    );
-    if (_wakeSpeechReady && _currentIndex != 2) {
-      _startWakeWordListening();
-    }
-  }
-
-  void _startWakeWordListening() async {
-    if (_assistantShowing || !mounted) return;
-    // Re-initialize to reclaim the method channel handler
-    // (CharacterChatScreen's voice mode may have taken it over)
-    if (!_wakeSpeechReady) {
-      await _initWakeWord();
-      return; // _initWakeWord already calls _startWakeWordListening
-    }
-    _wakeListening = true;
-    try {
-      await _wakeSpeech.listen(
-        onResult: (result) {
-          final words = result.recognizedWords.toLowerCase();
-          if (_containsWakeWord(words)) {
-            _wakeSpeech.stop();
-            _wakeListening = false;
-            final command = _extractCommand(result.recognizedWords);
-            _showAssistantOverlay(initialCommand: command);
-          }
-        },
-        localeId: 'ko_KR',
-        listenFor: const Duration(seconds: 5),
-        cancelOnError: false,
-      );
-    } catch (e) {
-      _wakeListening = false;
-      // Re-init on next attempt
-      _wakeSpeechReady = false;
-    }
-  }
-
-  void _stopWakeWordListening() {
-    _wakeListening = false;
-    _wakeSpeech.stop();
-  }
-
-  bool _containsWakeWord(String text) {
-    final normalized = text.replaceAll(' ', '');
-    return normalized.contains('헤이루나') ||
-        normalized.contains('hey루나') ||
-        normalized.contains('헤이luna');
-  }
-
-  String? _extractCommand(String text) {
-    final lower = text.toLowerCase();
-    final patterns = ['헤이 루나', '헤이루나', 'hey 루나', 'hey루나'];
-    for (final p in patterns) {
-      final idx = lower.indexOf(p);
-      if (idx >= 0) {
-        final after = text.substring(idx + p.length).trim();
-        if (after.isNotEmpty) return after;
-      }
-    }
-    return null;
-  }
-
-  void _showAssistantOverlay({String? initialCommand}) {
-    if (widget.settingsService.apiKey.isEmpty) return;
-    _assistantShowing = true;
-    _stopWakeWordListening();
-
-    showGeneralDialog(
-      context: context,
-      barrierDismissible: true,
-      barrierLabel: 'Assistant',
-      barrierColor: Colors.transparent,
-      transitionDuration: const Duration(milliseconds: 200),
-      pageBuilder: (context, anim1, anim2) {
-        return AssistantOverlay(
-          settingsService: widget.settingsService,
-          accessoryService: widget.accessoryService,
-          initialCommand: initialCommand,
-        );
-      },
-    ).then((_) {
-      _assistantShowing = false;
-      if (_currentIndex != 2) {
-        _startWakeWordListening();
-      }
-    });
   }
 
   void _loadRoutines() {
@@ -236,14 +105,6 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
         onDestinationSelected: (i) {
           if (i == 0) _loadRoutines();
           setState(() => _currentIndex = i);
-          // Stop wake word on 루나 tab to avoid mic conflicts
-          if (i == 2) {
-            _stopWakeWordListening();
-          } else if (!_assistantShowing) {
-            // Re-init needed if coming back from 루나 tab (voice mode may have taken over)
-            _wakeSpeechReady = false;
-            _startWakeWordListening();
-          }
         },
         destinations: const [
           NavigationDestination(
@@ -273,10 +134,9 @@ class _HomeScreenState extends State<HomeScreen> with WidgetsBindingObserver {
     );
   }
 
-  /// Filter routines that are active on the selected day.
+  /// Filter routines that are active on the selected day (checks startDate + activeDays).
   List<model.Routine> get _filteredRoutines {
-    final dayIndex = _selectedDate.weekday - 1; // 0=Mon, 6=Sun
-    return _routines.where((r) => r.activeDays[dayIndex]).toList();
+    return _routines.where((r) => r.isActiveOnDate(_selectedDate)).toList();
   }
 
   /// Get Monday of the week for the given date.
