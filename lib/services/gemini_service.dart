@@ -1,29 +1,169 @@
 import 'package:google_generative_ai/google_generative_ai.dart';
 import '../models/ai_response.dart';
+import 'agent_tools.dart';
+
+class AgentChatResult {
+  final AiResponse response;
+  final List<ToolAction> actions;
+
+  AgentChatResult({required this.response, required this.actions});
+}
 
 /// Handles communication with Google Gemini API for generating
 /// character dialogue with emotion and gesture tags.
+/// Automatically falls back to free models when quota is exceeded.
 class GeminiService {
   GenerativeModel? _model;
   ChatSession? _chat;
 
+  // Agent (function calling)
+  GenerativeModel? _agentModel;
+  ChatSession? _agentChat;
+  AgentTools? _agentTools;
+
   bool get isInitialized => _model != null;
+  bool get isAgentInitialized => _agentModel != null;
 
   String? _customSystemPrompt;
   String? _customModelResponse;
+  String _characterName = '루나';
+  String? _apiKey;
 
-  void initialize(String apiKey, {String? systemPrompt, String? initialModelResponse}) {
+  // Model fallback chains (free tier quota: lite 15RPM/1000RPD, flash 10RPM/250RPD, pro 5RPM/100RPD)
+  static const _chatModels = [
+    'gemini-2.5-flash-lite',  // 가장 넉넉한 무료 한도
+    'gemini-2.5-flash',
+    'gemini-2.5-pro',
+  ];
+  static const _agentModels = [
+    'gemini-2.5-flash',       // function calling 최적
+    'gemini-2.5-flash-lite',
+    'gemini-2.5-pro',
+  ];
+
+  int _chatModelIndex = 0;
+  int _agentModelIndex = 0;
+
+  String get currentChatModel => _chatModels[_chatModelIndex];
+  String get currentAgentModel => _agentModels[_agentModelIndex];
+
+  void initialize(String apiKey, {String? systemPrompt, String? initialModelResponse, String characterName = '루나'}) {
+    _apiKey = apiKey;
     _customSystemPrompt = systemPrompt;
     _customModelResponse = initialModelResponse;
+    _characterName = characterName;
+    _chatModelIndex = 0;
+    _buildChatModel();
+  }
+
+  void _buildChatModel() {
     _model = GenerativeModel(
-      model: 'gemma-3-4b-it',
-      apiKey: apiKey,
+      model: _chatModels[_chatModelIndex],
+      apiKey: _apiKey!,
       generationConfig: GenerationConfig(
         temperature: 0.9,
         maxOutputTokens: 256,
       ),
     );
     _startChatWithPrompt();
+    print('[GeminiService] Chat model: ${_chatModels[_chatModelIndex]}');
+  }
+
+  void initializeAgent(String apiKey, {required AgentTools agentTools, String characterName = '루나'}) {
+    _apiKey = apiKey;
+    _agentTools = agentTools;
+    _characterName = characterName;
+    _agentModelIndex = 0;
+    _buildAgentModel();
+  }
+
+  void _buildAgentModel() {
+    _agentModel = GenerativeModel(
+      model: _agentModels[_agentModelIndex],
+      apiKey: _apiKey!,
+      tools: _agentTools!.tools,
+      systemInstruction: Content.text(_buildAgentSystemPrompt(_characterName)),
+      generationConfig: GenerationConfig(
+        temperature: 0.9,
+        maxOutputTokens: 512,
+      ),
+    );
+    _agentChat = _agentModel!.startChat();
+    print('[GeminiService] Agent model: ${_agentModels[_agentModelIndex]}');
+  }
+
+  /// Check if an error is a quota/rate limit error
+  bool _isQuotaError(Object e) {
+    final msg = e.toString().toLowerCase();
+    return msg.contains('quota') ||
+        msg.contains('rate limit') ||
+        msg.contains('resource exhausted') ||
+        msg.contains('429') ||
+        msg.contains('resource_exhausted') ||
+        msg.contains('too many requests');
+  }
+
+  /// Try to fall back to the next chat model. Returns true if successful.
+  bool _fallbackChatModel() {
+    if (_chatModelIndex < _chatModels.length - 1) {
+      _chatModelIndex++;
+      _buildChatModel();
+      return true;
+    }
+    return false;
+  }
+
+  /// Try to fall back to the next agent model. Returns true if successful.
+  bool _fallbackAgentModel() {
+    if (_agentModelIndex < _agentModels.length - 1) {
+      _agentModelIndex++;
+      _buildAgentModel();
+      return true;
+    }
+    return false;
+  }
+
+  Future<AgentChatResult> chatWithTools(String message) async {
+    if (_agentChat == null || _agentTools == null) {
+      throw Exception('Agent not initialized');
+    }
+
+    // Try with current model, fallback on quota error
+    for (int attempt = 0; attempt <= _agentModels.length; attempt++) {
+      try {
+        return await _chatWithToolsInternal(message);
+      } catch (e) {
+        if (_isQuotaError(e) && _fallbackAgentModel()) {
+          print('[GeminiService] Agent quota exceeded, switching to: ${currentAgentModel}');
+          continue;
+        }
+        rethrow;
+      }
+    }
+    throw Exception('All models quota exceeded');
+  }
+
+  Future<AgentChatResult> _chatWithToolsInternal(String message) async {
+    var response = await _agentChat!.sendMessage(Content.text(message));
+    final actions = <ToolAction>[];
+    int iterations = 0;
+
+    while (response.functionCalls.isNotEmpty && iterations < 5) {
+      iterations++;
+      final functionResponses = <FunctionResponse>[];
+      for (final call in response.functionCalls) {
+        final result = await _agentTools!.execute(call);
+        actions.add(ToolAction(name: call.name, args: call.args, result: result));
+        functionResponses.add(FunctionResponse(call.name, result));
+      }
+      response = await _agentChat!.sendMessage(
+        Content.functionResponses(functionResponses),
+      );
+    }
+
+    final text = response.text ?? '';
+    final aiResponse = AiResponse.parse(text);
+    return AgentChatResult(response: aiResponse, actions: actions);
   }
 
   String _appContext = '';
@@ -36,20 +176,20 @@ class GeminiService {
   }
 
   void _startChatWithPrompt() {
-    final prompt = _customSystemPrompt ?? _systemPrompt;
+    final prompt = _customSystemPrompt ?? _buildSystemPrompt(_characterName);
     final contextBlock = _appContext.isNotEmpty
         ? '\n\n현재 앱 상태:\n$_appContext'
         : '';
     final modelResponse = _customModelResponse ??
-        '{"text": "안녕! 나는 루나야~ 오늘도 화이팅하자!", "emotion": "happy", "gesture": "waving"}';
+        '{"text": "안녕! 나는 $_characterName야~ 오늘도 화이팅하자!", "emotion": "happy", "gesture": "waving"}';
     _chat = _model!.startChat(history: [
       Content.text('$prompt$contextBlock'),
       Content.model([TextPart(modelResponse)]),
     ]);
   }
 
-  static const _systemPrompt = '''
-너는 "루나"라는 이름의 AI 캐릭터야. 사용자의 친한 친구이자 만능 대화 상대야.
+  static String _buildSystemPrompt(String name) => '''
+너는 "$name"라는 이름의 AI 캐릭터야. 사용자의 친한 친구이자 만능 대화 상대야.
 
 성격:
 - 다정하고 밝고 유쾌한 성격
@@ -69,6 +209,45 @@ class GeminiService {
 - 인사: {"text": "안녕! 오늘 하루 어땠어?", "emotion": "happy", "gesture": "waving"}
 - 고민 상담: {"text": "그랬구나... 힘들었겠다. 내가 들어줄게!", "emotion": "worried", "gesture": "idle"}
 - 재미있는 대화: {"text": "ㅋㅋㅋ 진짜? 완전 웃기다!", "emotion": "happy", "gesture": "clapping"}
+- 칭찬: {"text": "와 대박! 진짜 잘했어!", "emotion": "proud", "gesture": "thumbs_up"}
+''';
+
+  static String _buildAgentSystemPrompt(String name) => '''
+너는 "$name"라는 이름의 AI 캐릭터야. 사용자의 친한 친구이자 루틴 관리 도우미야.
+
+성격:
+- 다정하고 밝고 유쾌한 성격
+- 한국어로 반말 사용 (친한 친구처럼)
+- 짧고 자연스러운 대화 (1-3문장)
+- 어떤 주제든 대화 가능 (일상, 고민, 재미, 지식, 추천 등)
+- 루틴 관련 질문에는 응원하고 격려해줌
+- 가끔 귀여운 표현 섞어서 말함
+
+도구 사용:
+- 루틴 추가/수정/삭제 요청 시 적절한 함수를 호출해
+- 루틴 목록/통계 질문 시 함수로 조회한 후 자연스럽게 안내해줘
+- 사용자가 루틴 이름으로 말하면 list_routines로 먼저 ID를 확인해
+- 완료 체크/미완료 처리 요청 시 적절한 함수를 호출해
+- 할 일(투두) 추가/완료/삭제 요청 시 todo 함수를 사용해
+- 메모 작성/조회/수정/삭제 요청 시 memo 함수를 사용해
+- 사용자가 할 일 이름으로 말하면 list_todos로 먼저 ID를 확인해
+- 사용자가 메모 제목으로 말하면 list_memos로 먼저 ID를 확인해
+- 알람 추가/삭제/켜기/끄기 요청 시 alarm 함수를 사용해
+- 사용자가 알람 이름으로 말하면 list_alarms로 먼저 ID를 확인해
+- 일정(캘린더) 추가/조회/삭제 요청 시 event 함수를 사용해
+- 사용자가 일정 제목으로 말하면 list_events로 먼저 ID를 확인해
+
+응답 형식 (반드시 JSON):
+{"text": "대사 내용", "emotion": "감정", "gesture": "동작"}
+
+사용 가능한 감정: neutral, happy, angry, sad, surprised, annoyed, disappointed, scolding, proud, worried
+사용 가능한 동작: idle, arms_crossed, pointing, shaking_head, waving, crawling_in, thumbs_up, clapping, facepalm, beckoning
+
+예시:
+- 인사: {"text": "안녕! 오늘 하루 어땠어?", "emotion": "happy", "gesture": "waving"}
+- 루틴 조회 후: {"text": "네 루틴 3개 있어! 운동은 아직 안 했네~", "emotion": "happy", "gesture": "pointing"}
+- 루틴 생성 후: {"text": "운동 루틴 만들었어! 매일 7시부터 8시까지~ 화이팅!", "emotion": "proud", "gesture": "clapping"}
+- 루틴 삭제 후: {"text": "운동 루틴 삭제했어! 다른 거 필요하면 말해~", "emotion": "neutral", "gesture": "idle"}
 - 칭찬: {"text": "와 대박! 진짜 잘했어!", "emotion": "proud", "gesture": "thumbs_up"}
 ''';
 
@@ -102,40 +281,53 @@ class GeminiService {
       prompt = '사용자가 "$routineName" 루틴 시간에 "$currentApp" 앱을 사용하고 있어. $intensityGuide';
     }
 
-    final response = await _chat!.sendMessage(Content.text(prompt));
-    return AiResponse.parse(response.text ?? '');
+    return await _chatWithFallback(prompt);
   }
 
   /// Generate an encouragement when routine starts.
   Future<AiResponse> generateEncouragement(String routineName) async {
     if (_chat == null) throw Exception('Gemini not initialized');
-
     final prompt = '"$routineName" 루틴이 시작됐어. 사용자를 격려해줘.';
-    final response = await _chat!.sendMessage(Content.text(prompt));
-    return AiResponse.parse(response.text ?? '');
+    return await _chatWithFallback(prompt);
   }
 
   /// Generate praise when routine is completed.
   Future<AiResponse> generatePraise(String routineName) async {
     if (_chat == null) throw Exception('Gemini not initialized');
-
     final prompt = '사용자가 "$routineName" 루틴을 성공적으로 완료했어! 칭찬해줘.';
-    final response = await _chat!.sendMessage(Content.text(prompt));
-    return AiResponse.parse(response.text ?? '');
+    return await _chatWithFallback(prompt);
   }
 
   /// Generate a response for general conversation.
   Future<AiResponse> chat(String message) async {
     if (_chat == null) throw Exception('Gemini not initialized');
+    return await _chatWithFallback(message);
+  }
 
-    final response = await _chat!.sendMessage(Content.text(message));
-    return AiResponse.parse(response.text ?? '');
+  /// Send a chat message with automatic model fallback on quota error.
+  Future<AiResponse> _chatWithFallback(String message) async {
+    for (int attempt = 0; attempt <= _chatModels.length; attempt++) {
+      try {
+        final response = await _chat!.sendMessage(Content.text(message));
+        return AiResponse.parse(response.text ?? '');
+      } catch (e) {
+        if (_isQuotaError(e) && _fallbackChatModel()) {
+          print('[GeminiService] Chat quota exceeded, switching to: ${currentChatModel}');
+          continue;
+        }
+        rethrow;
+      }
+    }
+    throw Exception('All models quota exceeded');
   }
 
   /// Reset the conversation context.
   void resetChat() {
     if (_model != null) {
       _startChatWithPrompt();
+    }
+    if (_agentModel != null) {
+      _agentChat = _agentModel!.startChat();
     }
   }
 

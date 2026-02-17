@@ -1,13 +1,15 @@
 import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/routine.dart';
+import 'notification_service.dart';
 
 /// Manages routine CRUD operations and persistence.
 class RoutineService {
   static const _key = 'routines';
   final SharedPreferences _prefs;
+  final NotificationService? _notification;
 
-  RoutineService(this._prefs);
+  RoutineService(this._prefs, [this._notification]);
 
   List<Routine> getAll() {
     final raw = _prefs.getString(_key);
@@ -25,6 +27,7 @@ class RoutineService {
     final routines = getAll();
     routines.add(routine);
     await saveAll(routines);
+    await _syncNotification(routine);
   }
 
   Future<void> update(Routine routine) async {
@@ -33,11 +36,14 @@ class RoutineService {
     if (index >= 0) {
       routines[index] = routine;
       await saveAll(routines);
+      await _syncNotification(routine);
     }
   }
 
   Future<void> delete(String id) async {
     final routines = getAll();
+    final routine = routines.firstWhere((r) => r.id == id, orElse: () => routines.first);
+    await _cancelNotification(routine);
     routines.removeWhere((r) => r.id == id);
     await saveAll(routines);
   }
@@ -49,5 +55,68 @@ class RoutineService {
       if (r.isActiveNow()) return r;
     }
     return null;
+  }
+
+  /// Reschedule all routine notifications (call on app start).
+  Future<void> rescheduleAllNotifications() async {
+    final routines = getAll();
+    for (final r in routines) {
+      await _syncNotification(r);
+    }
+  }
+
+  // ─── Notification Scheduling ─────────────────────
+
+  int _notificationBaseId(String routineId) =>
+      NotificationService.routineBase + (routineId.hashCode.abs() % 9000);
+
+  Future<void> _syncNotification(Routine routine) async {
+    if (_notification == null) return;
+    await _cancelNotification(routine);
+    if (!routine.notifyOnStart || !routine.isEnabled) return;
+
+    final baseId = _notificationBaseId(routine.id);
+    final hasActiveDays = routine.activeDays.any((d) => d);
+
+    if (!hasActiveDays) {
+      // No active days — one-time notification
+      final now = DateTime.now();
+      var target = DateTime(now.year, now.month, now.day, routine.startTime.hour, routine.startTime.minute);
+      if (target.isBefore(now)) {
+        target = target.add(const Duration(days: 1));
+      }
+      await _notification!.scheduleExact(
+        id: baseId,
+        title: routine.name,
+        body: '루틴 시작 시간입니다',
+        dateTime: target,
+        channelId: NotificationService.routineChannelId,
+        channelName: '루틴 알림',
+      );
+    } else {
+      // Weekly: schedule for each active day
+      for (int i = 0; i < 7; i++) {
+        if (routine.activeDays[i]) {
+          await _notification!.scheduleWeekly(
+            id: baseId + i,
+            title: routine.name,
+            body: '루틴 시작 시간입니다',
+            hour: routine.startTime.hour,
+            minute: routine.startTime.minute,
+            dayOfWeek: i + 1, // 1=Mon ... 7=Sun
+            channelId: NotificationService.routineChannelId,
+            channelName: '루틴 알림',
+          );
+        }
+      }
+    }
+  }
+
+  Future<void> _cancelNotification(Routine routine) async {
+    if (_notification == null) return;
+    final baseId = _notificationBaseId(routine.id);
+    for (int i = 0; i < 7; i++) {
+      await _notification!.cancel(baseId + i);
+    }
   }
 }

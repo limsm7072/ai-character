@@ -1,0 +1,745 @@
+import 'package:flutter/material.dart';
+import 'package:table_calendar/table_calendar.dart';
+import 'package:intl/intl.dart';
+import '../models/calendar_event.dart';
+import '../services/calendar_service.dart';
+import '../services/routine_service.dart';
+import '../services/routine_completion_service.dart';
+import '../services/settings_service.dart';
+import '../utils/lunar_calendar.dart';
+
+class CalendarScreen extends StatefulWidget {
+  final CalendarService calendarService;
+  final RoutineService? routineService;
+  final RoutineCompletionService? completionService;
+  final SettingsService? settingsService;
+
+  const CalendarScreen({
+    super.key,
+    required this.calendarService,
+    this.routineService,
+    this.completionService,
+    this.settingsService,
+  });
+
+  @override
+  State<CalendarScreen> createState() => _CalendarScreenState();
+}
+
+class _CalendarScreenState extends State<CalendarScreen> {
+  DateTime _focusedDay = DateTime.now();
+  DateTime _selectedDay = DateTime.now();
+  late bool _showLunar;
+  late bool _showDDay;
+
+  @override
+  void initState() {
+    super.initState();
+    _showLunar = widget.settingsService?.showLunar ?? true;
+    _showDDay = widget.settingsService?.showDDay ?? true;
+  }
+
+  String _formatDate(DateTime dt) =>
+      '${dt.year}-${dt.month.toString().padLeft(2, '0')}-${dt.day.toString().padLeft(2, '0')}';
+
+  @override
+  Widget build(BuildContext context) {
+    final theme = Theme.of(context);
+    final selectedStr = _formatDate(_selectedDay);
+    final events = widget.calendarService.getByDate(selectedStr);
+    final routineInfo = _getRoutineInfo(selectedStr);
+    final ddayEvents = _showDDay ? widget.calendarService.getDDayEvents() : <CalendarEvent>[];
+
+    return Scaffold(
+      appBar: AppBar(
+        title: const Text('캘린더'),
+        actions: [
+          // Lunar toggle
+          IconButton(
+            icon: Icon(
+              Icons.dark_mode_outlined,
+              color: _showLunar ? theme.colorScheme.primary : Colors.grey,
+            ),
+            tooltip: _showLunar ? '음력 숨기기' : '음력 보기',
+            onPressed: () {
+              setState(() => _showLunar = !_showLunar);
+              widget.settingsService?.setShowLunar(_showLunar);
+            },
+          ),
+          // D-Day toggle
+          IconButton(
+            icon: Icon(
+              Icons.flag_outlined,
+              color: _showDDay ? theme.colorScheme.primary : Colors.grey,
+            ),
+            tooltip: _showDDay ? 'D-Day 숨기기' : 'D-Day 보기',
+            onPressed: () {
+              setState(() => _showDDay = !_showDDay);
+              widget.settingsService?.setShowDDay(_showDDay);
+            },
+          ),
+        ],
+      ),
+      floatingActionButton: FloatingActionButton(
+        onPressed: () => _showEditSheet(context),
+        child: const Icon(Icons.add),
+      ),
+      body: SafeArea(
+        child: ListView(
+          children: [
+            // D-Day banner
+            if (_showDDay && ddayEvents.isNotEmpty)
+              SizedBox(
+                height: 44,
+                child: ListView.separated(
+                  scrollDirection: Axis.horizontal,
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                  itemCount: ddayEvents.length,
+                  separatorBuilder: (_, __) => const SizedBox(width: 8),
+                  itemBuilder: (_, i) {
+                    final e = ddayEvents[i];
+                    return Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: Colors.red.withValues(alpha: 0.1),
+                        borderRadius: BorderRadius.circular(16),
+                        border: Border.all(color: Colors.red.withValues(alpha: 0.3)),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Text(
+                            e.dDayString(),
+                            style: const TextStyle(
+                              fontSize: 12,
+                              fontWeight: FontWeight.bold,
+                              color: Colors.red,
+                            ),
+                          ),
+                          const SizedBox(width: 6),
+                          Text(
+                            e.title,
+                            style: const TextStyle(fontSize: 12),
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                ),
+              ),
+            // Calendar
+            TableCalendar(
+              locale: 'ko_KR',
+              firstDay: DateTime(2020),
+              lastDay: DateTime(2100),
+              focusedDay: _focusedDay,
+              selectedDayPredicate: (day) => isSameDay(day, _selectedDay),
+              availableCalendarFormats: const {CalendarFormat.month: '월'},
+              headerStyle: const HeaderStyle(
+                formatButtonVisible: false,
+                titleCentered: true,
+              ),
+              onDaySelected: (selected, focused) {
+                setState(() {
+                  _selectedDay = selected;
+                  _focusedDay = focused;
+                });
+              },
+              rowHeight: _showLunar ? 56 : 48,
+              calendarStyle: CalendarStyle(
+                todayDecoration: const BoxDecoration(
+                  color: Colors.teal,
+                  shape: BoxShape.circle,
+                ),
+                selectedDecoration: const BoxDecoration(
+                  color: Colors.deepOrange,
+                  shape: BoxShape.circle,
+                ),
+                cellMargin: const EdgeInsets.all(2),
+                todayTextStyle: const TextStyle(color: Colors.white, fontSize: 14),
+                selectedTextStyle: const TextStyle(color: Colors.white, fontSize: 14),
+                defaultTextStyle: const TextStyle(fontSize: 14),
+                weekendTextStyle: TextStyle(fontSize: 14, color: Colors.red[300]),
+                outsideTextStyle: TextStyle(fontSize: 14, color: Colors.grey[400]),
+              ),
+              calendarBuilders: CalendarBuilders(
+                // Custom day cell with lunar date
+                defaultBuilder: _showLunar ? _buildDayCell : null,
+                todayBuilder: _showLunar ? (ctx, day, focused) => _buildDayCell(ctx, day, focused, isToday: true) : null,
+                selectedBuilder: _showLunar ? (ctx, day, focused) => _buildDayCell(ctx, day, focused, isSelected: true) : null,
+                outsideBuilder: _showLunar ? (ctx, day, focused) => _buildDayCell(ctx, day, focused, isOutside: true) : null,
+                markerBuilder: (context, day, _) {
+                  final dateStr = _formatDate(day);
+                  final markers = <Widget>[];
+
+                  // Routine markers
+                  final rInfo = _getRoutineInfo(dateStr);
+                  if (rInfo.total > 0) {
+                    if (rInfo.completed == rInfo.total) {
+                      markers.add(_dot(Colors.green));
+                    } else if (rInfo.completed > 0) {
+                      markers.add(_dot(Colors.orange));
+                    }
+                  }
+
+                  // Event marker
+                  if (widget.calendarService.getByDate(dateStr).isNotEmpty) {
+                    markers.add(_dot(Colors.blue));
+                  }
+
+                  // Holiday marker (solar + lunar)
+                  final holiday = LunarCalendar.getHoliday(day);
+                  if (holiday != null) {
+                    markers.add(_dot(Colors.red));
+                  }
+
+                  if (markers.isEmpty) return null;
+                  return Positioned(
+                    bottom: _showLunar ? 2 : 1,
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: markers,
+                    ),
+                  );
+                },
+              ),
+            ),
+            const Divider(height: 1),
+            // Content below calendar
+            Padding(
+              padding: const EdgeInsets.all(16),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  // Lunar info for selected day
+                  if (_showLunar) ...[
+                    _buildLunarInfo(),
+                    const SizedBox(height: 12),
+                  ],
+                  // Holiday info for selected day
+                  if (!_showLunar) ...[
+                    Builder(builder: (_) {
+                      final holiday = LunarCalendar.getHoliday(_selectedDay);
+                      if (holiday == null) return const SizedBox.shrink();
+                      return Padding(
+                        padding: const EdgeInsets.only(bottom: 12),
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                          decoration: BoxDecoration(
+                            color: Colors.red.withValues(alpha: 0.05),
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: Colors.red.withValues(alpha: 0.15)),
+                          ),
+                          child: Row(
+                            children: [
+                              Icon(Icons.celebration, size: 16, color: Colors.red[300]),
+                              const SizedBox(width: 8),
+                              Text(holiday, style: TextStyle(fontSize: 13, color: Colors.red[700])),
+                            ],
+                          ),
+                        ),
+                      );
+                    }),
+                  ],
+                  // Routine section
+                  if (routineInfo.total > 0) ...[
+                    Text('루틴', style: TextStyle(fontWeight: FontWeight.bold, color: theme.colorScheme.primary)),
+                    const SizedBox(height: 4),
+                    Text(
+                      '${routineInfo.completed}/${routineInfo.total} 완료',
+                      style: TextStyle(fontSize: 13, color: Colors.grey[600]),
+                    ),
+                    if (routineInfo.names.isNotEmpty)
+                      ...routineInfo.names.map((info) => Padding(
+                            padding: const EdgeInsets.only(top: 2),
+                            child: Row(
+                              children: [
+                                Icon(
+                                  info.done ? Icons.check_circle : Icons.radio_button_unchecked,
+                                  size: 16,
+                                  color: info.done ? Colors.green : Colors.grey,
+                                ),
+                                const SizedBox(width: 8),
+                                Expanded(
+                                  child: Text(info.name, style: const TextStyle(fontSize: 13), overflow: TextOverflow.ellipsis),
+                                ),
+                              ],
+                            ),
+                          )),
+                    const SizedBox(height: 16),
+                  ],
+                  // Events section
+                  Text('일정', style: TextStyle(fontWeight: FontWeight.bold, color: theme.colorScheme.primary)),
+                  const SizedBox(height: 4),
+                  if (events.isEmpty)
+                    Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 8),
+                      child: Text('일정이 없습니다', style: TextStyle(color: Colors.grey[500], fontSize: 13)),
+                    ),
+                  ...events.map((e) => Dismissible(
+                        key: Key(e.id),
+                        direction: DismissDirection.endToStart,
+                        background: Container(
+                          alignment: Alignment.centerRight,
+                          padding: const EdgeInsets.only(right: 20),
+                          color: Colors.red,
+                          child: const Icon(Icons.delete, color: Colors.white),
+                        ),
+                        onDismissed: (_) async {
+                          await widget.calendarService.delete(e.id);
+                          setState(() {});
+                        },
+                        child: ListTile(
+                          contentPadding: EdgeInsets.zero,
+                          leading: CircleAvatar(
+                            radius: 6,
+                            backgroundColor: _parseColor(e.color),
+                          ),
+                          title: Row(
+                            children: [
+                              Flexible(child: Text(e.title, overflow: TextOverflow.ellipsis)),
+                              if (e.isDDay && _showDDay) ...[
+                                const SizedBox(width: 6),
+                                Container(
+                                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+                                  decoration: BoxDecoration(
+                                    color: Colors.red.withValues(alpha: 0.1),
+                                    borderRadius: BorderRadius.circular(8),
+                                  ),
+                                  child: Text(
+                                    e.dDayString(),
+                                    style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.red),
+                                  ),
+                                ),
+                              ],
+                            ],
+                          ),
+                          subtitle: Text(e.timeString),
+                          trailing: e.description.isNotEmpty
+                              ? const Icon(Icons.notes, size: 16)
+                              : null,
+                          onTap: () => _showEditSheet(context, event: e),
+                        ),
+                      )),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ─── Lunar day cell builder ───────────────────────────
+
+  Widget _buildDayCell(BuildContext context, DateTime day, DateTime focusedDay, {
+    bool isToday = false,
+    bool isSelected = false,
+    bool isOutside = false,
+  }) {
+    final lunar = LunarCalendar.solarToLunar(day);
+    final holiday = LunarCalendar.getHoliday(day);
+    final solarHoliday = LunarCalendar.getSolarHoliday(day.month, day.day);
+    final lunarHoliday = LunarCalendar.getLunarHoliday(day);
+    final isWeekend = day.weekday == DateTime.saturday || day.weekday == DateTime.sunday;
+    final isHoliday = holiday != null;
+
+    Color textColor;
+    if (isOutside) {
+      textColor = Colors.grey[400]!;
+    } else if (isToday || isSelected) {
+      textColor = Colors.white;
+    } else if (isHoliday || isWeekend) {
+      textColor = Colors.red[400]!;
+    } else {
+      textColor = Theme.of(context).textTheme.bodyMedium?.color ?? Colors.black;
+    }
+
+    // Subtitle text: holiday name > lunar month start > lunar day
+    String lunarText = '';
+    if (holiday != null) {
+      lunarText = holiday;
+    } else if (lunar != null) {
+      if (lunar.day == 1) {
+        lunarText = '${lunar.month}월';
+      } else {
+        lunarText = '${lunar.day}';
+      }
+    }
+
+    Color lunarColor;
+    if (isToday || isSelected) {
+      lunarColor = Colors.white70;
+    } else if (isHoliday) {
+      lunarColor = Colors.red[300]!;
+    } else if (isOutside) {
+      lunarColor = Colors.grey[400]!;
+    } else {
+      lunarColor = Colors.grey[500]!;
+    }
+
+    return Container(
+      margin: const EdgeInsets.all(2),
+      decoration: isToday || isSelected
+          ? BoxDecoration(
+              color: isSelected ? Colors.deepOrange : Colors.teal,
+              shape: BoxShape.circle,
+            )
+          : null,
+      alignment: Alignment.center,
+      child: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Text(
+            '${day.day}',
+            style: TextStyle(fontSize: 14, color: textColor),
+          ),
+          if (lunarText.isNotEmpty)
+            Text(
+              lunarText,
+              style: TextStyle(fontSize: 8, color: lunarColor),
+              overflow: TextOverflow.ellipsis,
+            ),
+        ],
+      ),
+    );
+  }
+
+  // ─── Lunar info widget ────────────────────────────────
+
+  Widget _buildLunarInfo() {
+    final lunar = LunarCalendar.solarToLunar(_selectedDay);
+    if (lunar == null) return const SizedBox.shrink();
+
+    final holiday = LunarCalendar.getHoliday(_selectedDay);
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: Colors.purple.withValues(alpha: 0.05),
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(color: Colors.purple.withValues(alpha: 0.15)),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.dark_mode_outlined, size: 16, color: Colors.purple[300]),
+          const SizedBox(width: 8),
+          Text(
+            lunar.shortString,
+            style: TextStyle(fontSize: 13, color: Colors.purple[700]),
+          ),
+          if (holiday != null) ...[
+            const SizedBox(width: 8),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+              decoration: BoxDecoration(
+                color: Colors.purple.withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Text(
+                holiday,
+                style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.purple[700]),
+              ),
+            ),
+          ],
+        ],
+      ),
+    );
+  }
+
+  // ─── Helpers ──────────────────────────────────────────
+
+  Widget _dot(Color color) => Container(
+        width: 5,
+        height: 5,
+        margin: const EdgeInsets.symmetric(horizontal: 1),
+        decoration: BoxDecoration(color: color, shape: BoxShape.circle),
+      );
+
+  Color _parseColor(String hex) {
+    try {
+      return Color(int.parse(hex.replaceFirst('#', '0xFF')));
+    } catch (_) {
+      return Colors.blue;
+    }
+  }
+
+  _RoutineInfo _getRoutineInfo(String dateStr) {
+    if (widget.routineService == null || widget.completionService == null) {
+      return _RoutineInfo(total: 0, completed: 0, names: []);
+    }
+    final date = DateTime.tryParse(dateStr);
+    if (date == null) return _RoutineInfo(total: 0, completed: 0, names: []);
+
+    final routines = widget.routineService!.getAll();
+    final active = routines.where((r) => r.isActiveOnDate(date)).toList();
+    int completed = 0;
+    final names = <_RoutineNameInfo>[];
+    for (final r in active) {
+      final done = widget.completionService!.isCompleted(r.id, dateStr) ||
+          widget.completionService!.isSkipped(r.id, dateStr);
+      if (done) completed++;
+      names.add(_RoutineNameInfo(name: r.name, done: done));
+    }
+    return _RoutineInfo(total: active.length, completed: completed, names: names);
+  }
+
+  Future<void> _showEditSheet(BuildContext context, {CalendarEvent? event}) async {
+    final result = await showModalBottomSheet<CalendarEvent>(
+      context: context,
+      isScrollControlled: true,
+      builder: (_) => _EventEditSheet(
+        event: event,
+        initialDate: _selectedDay,
+      ),
+    );
+    if (result == null) return;
+
+    if (event != null) {
+      result.id = event.id;
+      result.createdAt = event.createdAt;
+      await widget.calendarService.update(result);
+    } else {
+      await widget.calendarService.add(result);
+    }
+    setState(() {});
+  }
+}
+
+class _RoutineInfo {
+  final int total;
+  final int completed;
+  final List<_RoutineNameInfo> names;
+  _RoutineInfo({required this.total, required this.completed, required this.names});
+}
+
+class _RoutineNameInfo {
+  final String name;
+  final bool done;
+  _RoutineNameInfo({required this.name, required this.done});
+}
+
+// ─── Event Edit Sheet ──────────────────────────────────
+
+class _EventEditSheet extends StatefulWidget {
+  final CalendarEvent? event;
+  final DateTime initialDate;
+
+  const _EventEditSheet({this.event, required this.initialDate});
+
+  @override
+  State<_EventEditSheet> createState() => _EventEditSheetState();
+}
+
+class _EventEditSheetState extends State<_EventEditSheet> {
+  late TextEditingController _titleController;
+  late TextEditingController _descController;
+  late DateTime _date;
+  int? _startHour;
+  int? _startMinute;
+  int? _endHour;
+  int? _endMinute;
+  String _color = '#2196F3';
+  bool _isDDay = false;
+
+  static const _colorOptions = [
+    '#2196F3', '#4CAF50', '#FF9800', '#E91E63', '#9C27B0', '#00BCD4',
+  ];
+
+  @override
+  void initState() {
+    super.initState();
+    _titleController = TextEditingController(text: widget.event?.title ?? '');
+    _descController = TextEditingController(text: widget.event?.description ?? '');
+    _date = widget.event != null
+        ? DateTime.parse(widget.event!.date)
+        : widget.initialDate;
+    _startHour = widget.event?.startHour;
+    _startMinute = widget.event?.startMinute;
+    _endHour = widget.event?.endHour;
+    _endMinute = widget.event?.endMinute;
+    _color = widget.event?.color ?? '#2196F3';
+    _isDDay = widget.event?.isDDay ?? false;
+  }
+
+  @override
+  void dispose() {
+    _titleController.dispose();
+    _descController.dispose();
+    super.dispose();
+  }
+
+  String _formatDate(DateTime dt) =>
+      '${dt.year}-${dt.month.toString().padLeft(2, '0')}-${dt.day.toString().padLeft(2, '0')}';
+
+  @override
+  Widget build(BuildContext context) {
+    return SafeArea(
+      child: SingleChildScrollView(
+        padding: EdgeInsets.fromLTRB(
+          24, 24, 24, 24 + MediaQuery.of(context).viewInsets.bottom,
+        ),
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              widget.event == null ? '일정 추가' : '일정 편집',
+              style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 16),
+            TextField(
+              controller: _titleController,
+              decoration: const InputDecoration(
+                labelText: '제목',
+                border: OutlineInputBorder(),
+              ),
+            ),
+            const SizedBox(height: 12),
+            // Date picker + D-Day toggle
+            Row(
+              children: [
+                OutlinedButton.icon(
+                  onPressed: _pickDate,
+                  icon: const Icon(Icons.calendar_today, size: 18),
+                  label: Text(_formatDate(_date)),
+                ),
+                const Spacer(),
+                FilterChip(
+                  label: const Text('D-Day'),
+                  selected: _isDDay,
+                  onSelected: (v) => setState(() => _isDDay = v),
+                  avatar: Icon(
+                    Icons.flag,
+                    size: 16,
+                    color: _isDDay ? Colors.red : Colors.grey,
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            // Time pickers
+            Row(
+              children: [
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: _pickStartTime,
+                    child: Text(_startHour != null
+                        ? '${_startHour!.toString().padLeft(2, '0')}:${(_startMinute ?? 0).toString().padLeft(2, '0')}'
+                        : '시작 시간'),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: _pickEndTime,
+                    child: Text(_endHour != null
+                        ? '${_endHour!.toString().padLeft(2, '0')}:${(_endMinute ?? 0).toString().padLeft(2, '0')}'
+                        : '종료 시간'),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            TextField(
+              controller: _descController,
+              decoration: const InputDecoration(
+                labelText: '설명 (선택)',
+                border: OutlineInputBorder(),
+              ),
+              maxLines: 2,
+            ),
+            const SizedBox(height: 12),
+            // Color picker
+            Wrap(
+              spacing: 8,
+              children: _colorOptions.map((c) {
+                final isSelected = c == _color;
+                return GestureDetector(
+                  onTap: () => setState(() => _color = c),
+                  child: Container(
+                    width: 32,
+                    height: 32,
+                    decoration: BoxDecoration(
+                      color: Color(int.parse(c.replaceFirst('#', '0xFF'))),
+                      shape: BoxShape.circle,
+                      border: isSelected
+                          ? Border.all(color: Colors.white, width: 3)
+                          : null,
+                      boxShadow: isSelected
+                          ? [const BoxShadow(color: Colors.black26, blurRadius: 4)]
+                          : null,
+                    ),
+                  ),
+                );
+              }).toList(),
+            ),
+            const SizedBox(height: 24),
+            SizedBox(
+              width: double.infinity,
+              child: FilledButton(
+                onPressed: _save,
+                child: const Text('저장'),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _pickDate() async {
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: _date,
+      firstDate: DateTime(2020),
+      lastDate: DateTime(2100),
+    );
+    if (picked != null) setState(() => _date = picked);
+  }
+
+  Future<void> _pickStartTime() async {
+    final picked = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay(hour: _startHour ?? 9, minute: _startMinute ?? 0),
+    );
+    if (picked != null) {
+      setState(() {
+        _startHour = picked.hour;
+        _startMinute = picked.minute;
+      });
+    }
+  }
+
+  Future<void> _pickEndTime() async {
+    final picked = await showTimePicker(
+      context: context,
+      initialTime: TimeOfDay(hour: _endHour ?? 10, minute: _endMinute ?? 0),
+    );
+    if (picked != null) {
+      setState(() {
+        _endHour = picked.hour;
+        _endMinute = picked.minute;
+      });
+    }
+  }
+
+  void _save() {
+    final title = _titleController.text.trim();
+    if (title.isEmpty) return;
+    Navigator.pop(
+      context,
+      CalendarEvent(
+        id: DateTime.now().millisecondsSinceEpoch.toString(),
+        title: title,
+        description: _descController.text.trim(),
+        date: _formatDate(_date),
+        startHour: _startHour,
+        startMinute: _startMinute,
+        endHour: _endHour,
+        endMinute: _endMinute,
+        color: _color,
+        isDDay: _isDDay,
+      ),
+    );
+  }
+}

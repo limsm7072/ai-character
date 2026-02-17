@@ -4,6 +4,7 @@ import '../services/routine_service.dart';
 import '../services/routine_completion_service.dart';
 import '../services/distraction_log_service.dart';
 import '../services/app_detection_service.dart';
+import '../services/health_service.dart';
 import '../models/distraction_log.dart';
 import 'routine_stats_screen.dart';
 
@@ -12,6 +13,8 @@ class StatsScreen extends StatefulWidget {
   final RoutineCompletionService completionService;
   final DistractionLogService distractionLogService;
   final AppDetectionService? appDetectionService;
+  final HealthService? healthService;
+  final int initialTab;
 
   const StatsScreen({
     super.key,
@@ -19,6 +22,8 @@ class StatsScreen extends StatefulWidget {
     required this.completionService,
     required this.distractionLogService,
     this.appDetectionService,
+    this.healthService,
+    this.initialTab = 0,
   });
 
   @override
@@ -26,21 +31,72 @@ class StatsScreen extends StatefulWidget {
 }
 
 class _StatsScreenState extends State<StatsScreen> {
-  bool _appUsageWeekly = false;
   bool _appUsageLoading = false;
-  List<Map<String, dynamic>> _appUsageData = [];
   bool? _hasUsagePermission;
+  List<_DayUsageData> _weeklyDayData = [];
+  Duration _prevWeekTotal = Duration.zero;
+  int? _selectedDayIndex;
+  String? _selectedAppFilter;
 
   // 딴짓 탭 필터: 0=오늘, 1=이번 주, 2=전체
   int _distractionFilter = 0;
+
+  // 앱 사용 통계에서 제외할 패키지 (시스템/유틸리티)
+  static const _hiddenAppPrefixes = [
+    'com.android.',
+    'com.google.android.inputmethod',
+    'com.google.android.gms',
+    'com.google.android.gsf',
+    'com.google.android.providers',
+    'com.google.android.ext.',
+    'com.google.android.overlay',
+    'com.google.android.packageinstaller',
+    'com.google.android.permissioncontroller',
+    'com.samsung.android.lool',       // Device care
+    'com.samsung.android.themecenter',
+    'com.samsung.android.app.routines',
+    'com.samsung.android.dialer',
+    'com.samsung.android.incallui',
+    'com.samsung.android.server.',
+    'com.samsung.android.oneui',
+    'com.sec.android.',
+    'android',
+  ];
+  static const _hiddenAppPackages = {
+    'com.burockgames.timeclocker',     // StayFree
+    'com.stayfreeapps.android',        // StayFree (alt)
+    'com.zerodesktop.appdetox',        // AppDetox
+    'com.yoongoo.screentime',          // Screen Time
+    'com.aicharacter.ai_character',    // 자기 자신
+    'com.google.android.apps.wellbeing', // Digital Wellbeing
+  };
+
+  bool _isHiddenApp(String pkg) {
+    if (_hiddenAppPackages.contains(pkg)) return true;
+    for (final prefix in _hiddenAppPrefixes) {
+      if (pkg.startsWith(prefix)) return true;
+    }
+    return false;
+  }
+
+  // 건강 탭
+  bool _healthLoading = false;
+  bool _healthLoaded = false;
+  int _todaySteps = 0;
+  List<DailySteps> _weeklySteps = [];
+  SleepData? _sleepData;
+  HeartRateData? _heartRate;
+  HeartRateRange? _heartRateRange;
 
   String _formatDate(DateTime dt) =>
       '${dt.year}-${dt.month.toString().padLeft(2, '0')}-${dt.day.toString().padLeft(2, '0')}';
 
   @override
   Widget build(BuildContext context) {
-    return DefaultTabController(
-      length: 3,
+    return Scaffold(
+      body: DefaultTabController(
+      length: 4,
+      initialIndex: widget.initialTab,
       child: NestedScrollView(
         headerSliverBuilder: (context, innerBoxIsScrolled) => [
           SliverAppBar(
@@ -51,10 +107,12 @@ class _StatsScreenState extends State<StatsScreen> {
               labelColor: Theme.of(context).colorScheme.primary,
               unselectedLabelColor: Colors.grey,
               indicatorColor: Theme.of(context).colorScheme.primary,
+              isScrollable: false,
               tabs: const [
                 Tab(text: '완료율'),
-                Tab(text: '루틴 중 딴짓'),
+                Tab(text: '딴짓'),
                 Tab(text: '앱 사용'),
+                Tab(text: '건강'),
               ],
             ),
           ),
@@ -64,9 +122,11 @@ class _StatsScreenState extends State<StatsScreen> {
             _buildCompletionTab(),
             _buildDistractionTab(),
             _buildAppUsageTab(),
+            _buildHealthTab(),
           ],
         ),
       ),
+    ),
     );
   }
 
@@ -535,6 +595,8 @@ class _StatsScreenState extends State<StatsScreen> {
                 routineId: routine.id,
                 routineName: routine.name,
                 logService: widget.distractionLogService,
+                routineStartTime: routine.startTime,
+                routineEndTime: routine.endTime,
               ),
             ),
           );
@@ -662,9 +724,10 @@ class _StatsScreenState extends State<StatsScreen> {
         // 전체
         final stats =
             widget.distractionLogService.getRoutineStats(routine.id);
-        totalCount += stats.totalDistractions;
-        totalTime += stats.totalTime;
         for (final entry in stats.appBreakdown.entries) {
+          if (_isHiddenApp(entry.value.appPackage)) continue;
+          totalCount += entry.value.count;
+          totalTime += entry.value.totalTime;
           final existing = appBreakdown[entry.key];
           if (existing != null) {
             existing.count += entry.value.count;
@@ -683,9 +746,10 @@ class _StatsScreenState extends State<StatsScreen> {
         for (final date in filterDates) {
           final stats = widget.distractionLogService
               .getRoutineStats(routine.id, date: date);
-          totalCount += stats.totalDistractions;
-          totalTime += stats.totalTime;
           for (final entry in stats.appBreakdown.entries) {
+            if (_isHiddenApp(entry.value.appPackage)) continue;
+            totalCount += entry.value.count;
+            totalTime += entry.value.totalTime;
             final existing = appBreakdown[entry.key];
             if (existing != null) {
               existing.count += entry.value.count;
@@ -938,6 +1002,553 @@ class _StatsScreenState extends State<StatsScreen> {
     }
   }
 
+  // ==================== 건강 탭 ====================
+
+  Future<void> _loadHealthData() async {
+    final hs = widget.healthService;
+    if (hs == null) return;
+
+    setState(() => _healthLoading = true);
+
+    try {
+      if (!hs.isAuthorized) {
+        final granted = await hs.requestAuthorization();
+        if (!granted) {
+          setState(() {
+            _healthLoading = false;
+            _healthLoaded = true;
+          });
+          return;
+        }
+      }
+
+      final steps = await hs.getTodaySteps();
+      final weekly = await hs.getWeeklySteps();
+      final sleep = await hs.getLastSleep();
+      final hr = await hs.getLatestHeartRate();
+      final hrRange = await hs.getTodayHeartRateRange();
+
+      if (mounted) {
+        setState(() {
+          _todaySteps = steps;
+          _weeklySteps = weekly;
+          _sleepData = sleep;
+          _heartRate = hr;
+          _heartRateRange = hrRange;
+          _healthLoading = false;
+          _healthLoaded = true;
+        });
+      }
+    } catch (e) {
+      print('[StatsScreen] _loadHealthData error: $e');
+      if (mounted) setState(() => _healthLoading = false);
+    }
+  }
+
+  Widget _buildHealthTab() {
+    final hs = widget.healthService;
+
+    if (hs == null) {
+      return Center(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            Icon(Icons.health_and_safety, size: 64, color: Colors.grey[400]),
+            const SizedBox(height: 16),
+            Text(
+              '건강 데이터를 사용할 수 없습니다',
+              style: TextStyle(fontSize: 16, color: Colors.grey[500]),
+            ),
+          ],
+        ),
+      );
+    }
+
+    if (!_healthLoaded && !_healthLoading) {
+      Future.microtask(() => _loadHealthData());
+    }
+
+    if (_healthLoading) {
+      return const Center(child: CircularProgressIndicator());
+    }
+
+    if (_healthLoaded && !hs.isAuthorized) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(32),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.health_and_safety_outlined, size: 64, color: Colors.grey[400]),
+              const SizedBox(height: 16),
+              Text(
+                'Health Connect 연결이 필요합니다',
+                style: TextStyle(fontSize: 16, color: Colors.grey[600]),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 8),
+              Text(
+                '삼성헬스 데이터를 보려면\nHealth Connect 권한을 허용해주세요',
+                style: TextStyle(fontSize: 13, color: Colors.grey[500]),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 20),
+              FilledButton.icon(
+                onPressed: () async {
+                  setState(() {
+                    _healthLoaded = false;
+                    _healthLoading = false;
+                  });
+                },
+                icon: const Icon(Icons.link),
+                label: const Text('권한 요청'),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    final hasAnyData = _todaySteps > 0 || _sleepData != null || _heartRate != null;
+
+    if (!hasAnyData) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.all(32),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.sensors_off, size: 64, color: Colors.grey[400]),
+              const SizedBox(height: 16),
+              Text(
+                '건강 데이터가 없습니다',
+                style: TextStyle(fontSize: 16, color: Colors.grey[600]),
+              ),
+              const SizedBox(height: 8),
+              Text(
+                '삼성헬스에서 Health Connect 동기화를\n켜고 데이터가 쌓이면 여기에 표시됩니다',
+                style: TextStyle(fontSize: 13, color: Colors.grey[500]),
+                textAlign: TextAlign.center,
+              ),
+              const SizedBox(height: 20),
+              OutlinedButton.icon(
+                onPressed: () {
+                  setState(() {
+                    _healthLoaded = false;
+                    _healthLoading = false;
+                  });
+                },
+                icon: const Icon(Icons.refresh),
+                label: const Text('새로고침'),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return ListView(
+      padding: const EdgeInsets.all(16),
+      children: [
+        // Steps today
+        _buildStepsCard(),
+        const SizedBox(height: 12),
+
+        // Weekly steps bar chart
+        if (_weeklySteps.isNotEmpty) ...[
+          _buildWeeklyStepsChart(),
+          const SizedBox(height: 12),
+        ],
+
+        // Sleep
+        if (_sleepData != null) ...[
+          _buildSleepCard(_sleepData!),
+          const SizedBox(height: 12),
+        ],
+
+        // Heart rate
+        if (_heartRate != null || _heartRateRange != null) ...[
+          _buildHeartRateCard(),
+          const SizedBox(height: 12),
+        ],
+
+        // Refresh
+        Center(
+          child: TextButton.icon(
+            onPressed: () {
+              setState(() {
+                _healthLoaded = false;
+                _healthLoading = false;
+              });
+            },
+            icon: const Icon(Icons.refresh, size: 18),
+            label: const Text('새로고침'),
+          ),
+        ),
+        const SizedBox(height: 16),
+      ],
+    );
+  }
+
+  Widget _buildStepsCard() {
+    const goal = 10000;
+    final pct = (_todaySteps / goal).clamp(0.0, 1.0);
+    final pctInt = (pct * 100).round();
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.directions_walk, color: Colors.green, size: 24),
+                const SizedBox(width: 8),
+                const Text(
+                  '오늘의 걸음',
+                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+            Row(
+              children: [
+                SizedBox(
+                  width: 80,
+                  height: 80,
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      CircularProgressIndicator(
+                        value: pct,
+                        strokeWidth: 7,
+                        strokeCap: StrokeCap.round,
+                        backgroundColor: Colors.green.withOpacity(0.12),
+                        color: Colors.green,
+                      ),
+                      Center(
+                        child: Text(
+                          '$pctInt%',
+                          style: const TextStyle(
+                            fontSize: 18,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.green,
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+                const SizedBox(width: 20),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      '${_formatStepNumber(_todaySteps)}보',
+                      style: const TextStyle(
+                        fontSize: 28,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    Text(
+                      '목표: ${_formatStepNumber(goal)}보',
+                      style: TextStyle(fontSize: 13, color: Colors.grey[600]),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildWeeklyStepsChart() {
+    const maxBarHeight = 100.0;
+    final dayNames = ['월', '화', '수', '목', '금', '토', '일'];
+
+    int maxSteps = 0;
+    for (final ds in _weeklySteps) {
+      if (ds.steps > maxSteps) maxSteps = ds.steps;
+    }
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(8, 16, 8, 12),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const Padding(
+              padding: EdgeInsets.symmetric(horizontal: 8),
+              child: Text(
+                '주간 걸음',
+                style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+              ),
+            ),
+            const SizedBox(height: 12),
+            SizedBox(
+              height: maxBarHeight + 50,
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: List.generate(_weeklySteps.length, (i) {
+                  final ds = _weeklySteps[i];
+                  final barHeight = maxSteps > 0
+                      ? (ds.steps / maxSteps * maxBarHeight)
+                      : 0.0;
+                  final date = DateTime.parse(ds.date);
+                  final dayLabel = dayNames[date.weekday - 1];
+                  final isToday = ds.date == _formatDate(DateTime.now());
+
+                  return Expanded(
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 4),
+                      child: Column(
+                        mainAxisAlignment: MainAxisAlignment.end,
+                        children: [
+                          if (ds.steps > 0)
+                            Text(
+                              _shortSteps(ds.steps),
+                              style: TextStyle(
+                                fontSize: 9,
+                                color: isToday
+                                    ? Colors.green
+                                    : Colors.grey[600],
+                                fontWeight: isToday
+                                    ? FontWeight.bold
+                                    : FontWeight.normal,
+                              ),
+                            ),
+                          const SizedBox(height: 2),
+                          Container(
+                            height: barHeight > 0 ? barHeight : 2,
+                            decoration: BoxDecoration(
+                              color: isToday
+                                  ? Colors.green
+                                  : Colors.green.withOpacity(0.5),
+                              borderRadius: BorderRadius.circular(4),
+                              border: isToday
+                                  ? Border.all(color: Colors.green[700]!, width: 1.5)
+                                  : null,
+                            ),
+                          ),
+                          const SizedBox(height: 6),
+                          Text(
+                            dayLabel,
+                            style: TextStyle(
+                              fontSize: 12,
+                              fontWeight: isToday ? FontWeight.bold : FontWeight.normal,
+                              color: isToday ? Colors.green : Colors.grey[700],
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                }),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSleepCard(SleepData sleep) {
+    final h = sleep.total.inHours;
+    final m = sleep.total.inMinutes.remainder(60);
+
+    final bedHour = sleep.bedTime.hour.toString().padLeft(2, '0');
+    final bedMin = sleep.bedTime.minute.toString().padLeft(2, '0');
+    final wakeHour = sleep.wakeTime.hour.toString().padLeft(2, '0');
+    final wakeMin = sleep.wakeTime.minute.toString().padLeft(2, '0');
+
+    final totalMin = sleep.total.inMinutes;
+    final deepMin = sleep.deep.inMinutes;
+    final remMin = sleep.rem.inMinutes;
+    final lightMin = sleep.light.inMinutes;
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.bedtime, color: Colors.indigo, size: 24),
+                const SizedBox(width: 8),
+                const Text(
+                  '수면',
+                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Text(
+              '${h}시간 ${m}분',
+              style: const TextStyle(
+                fontSize: 24,
+                fontWeight: FontWeight.bold,
+                color: Colors.indigo,
+              ),
+            ),
+            const SizedBox(height: 8),
+            Text(
+              '취침 $bedHour:$bedMin  ->  기상 $wakeHour:$wakeMin',
+              style: TextStyle(fontSize: 13, color: Colors.grey[600]),
+            ),
+            if (totalMin > 0 && (deepMin > 0 || remMin > 0 || lightMin > 0)) ...[
+              const SizedBox(height: 12),
+              // Sleep stage bar
+              ClipRRect(
+                borderRadius: BorderRadius.circular(6),
+                child: SizedBox(
+                  height: 12,
+                  child: Row(
+                    children: [
+                      if (deepMin > 0)
+                        Flexible(
+                          flex: deepMin,
+                          child: Container(color: Colors.indigo[700]),
+                        ),
+                      if (remMin > 0)
+                        Flexible(
+                          flex: remMin,
+                          child: Container(color: Colors.blue[400]),
+                        ),
+                      if (lightMin > 0)
+                        Flexible(
+                          flex: lightMin,
+                          child: Container(color: Colors.lightBlue[200]),
+                        ),
+                    ],
+                  ),
+                ),
+              ),
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  if (deepMin > 0)
+                    _buildSleepLegend(Colors.indigo[700]!, '깊은', _formatSleepDuration(sleep.deep)),
+                  if (remMin > 0)
+                    _buildSleepLegend(Colors.blue[400]!, '렘', _formatSleepDuration(sleep.rem)),
+                  if (lightMin > 0)
+                    _buildSleepLegend(Colors.lightBlue[200]!, '얕은', _formatSleepDuration(sleep.light)),
+                ],
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildSleepLegend(Color color, String label, String duration) {
+    return Expanded(
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 10,
+            height: 10,
+            decoration: BoxDecoration(
+              color: color,
+              borderRadius: BorderRadius.circular(2),
+            ),
+          ),
+          const SizedBox(width: 4),
+          Flexible(
+            child: Text(
+              '$label $duration',
+              style: TextStyle(fontSize: 11, color: Colors.grey[600]),
+              overflow: TextOverflow.ellipsis,
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildHeartRateCard() {
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.favorite, color: Colors.red, size: 24),
+                const SizedBox(width: 8),
+                const Text(
+                  '심박수',
+                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            if (_heartRate != null)
+              Row(
+                crossAxisAlignment: CrossAxisAlignment.end,
+                children: [
+                  Text(
+                    '${_heartRate!.bpm}',
+                    style: const TextStyle(
+                      fontSize: 32,
+                      fontWeight: FontWeight.bold,
+                      color: Colors.red,
+                    ),
+                  ),
+                  const SizedBox(width: 4),
+                  const Padding(
+                    padding: EdgeInsets.only(bottom: 4),
+                    child: Text(
+                      'bpm',
+                      style: TextStyle(fontSize: 14, color: Colors.red),
+                    ),
+                  ),
+                ],
+              ),
+            if (_heartRateRange != null) ...[
+              const SizedBox(height: 8),
+              Text(
+                '오늘 범위: ${_heartRateRange!.min}~${_heartRateRange!.max} bpm (평균 ${_heartRateRange!.avg})',
+                style: TextStyle(fontSize: 13, color: Colors.grey[600]),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  String _formatStepNumber(int n) {
+    if (n < 1000) return '$n';
+    final str = n.toString();
+    final buffer = StringBuffer();
+    for (int i = 0; i < str.length; i++) {
+      if (i > 0 && (str.length - i) % 3 == 0) buffer.write(',');
+      buffer.write(str[i]);
+    }
+    return buffer.toString();
+  }
+
+  String _shortSteps(int steps) {
+    if (steps >= 10000) return '${(steps / 1000).toStringAsFixed(1)}k';
+    if (steps >= 1000) return '${(steps / 1000).toStringAsFixed(1)}k';
+    return '$steps';
+  }
+
+  String _formatSleepDuration(Duration d) {
+    final h = d.inHours;
+    final m = d.inMinutes.remainder(60);
+    if (h > 0 && m > 0) return '${h}h ${m}m';
+    if (h > 0) return '${h}h';
+    return '${m}m';
+  }
+
   // ==================== 앱 사용 탭 ====================
 
   Future<void> _loadAppUsageStats() async {
@@ -949,7 +1560,7 @@ class _StatsScreenState extends State<StatsScreen> {
       setState(() {
         _hasUsagePermission = false;
         _appUsageLoading = false;
-        _appUsageData = [];
+        _weeklyDayData = [];
       });
       return;
     }
@@ -960,34 +1571,51 @@ class _StatsScreenState extends State<StatsScreen> {
     });
 
     final now = DateTime.now();
-    final days = _appUsageWeekly ? 7 : 1;
-    final Map<String, Map<String, dynamic>> merged = {};
+    final today = DateTime(now.year, now.month, now.day);
+    final monday = today.subtract(Duration(days: now.weekday - 1));
+    const dayLabels = ['월', '화', '수', '목', '금', '토', '일'];
 
-    for (int i = 0; i < days; i++) {
-      final date = now.subtract(Duration(days: i));
+    // Load this week (Mon-Sun)
+    final weekData = <_DayUsageData>[];
+    for (int i = 0; i < 7; i++) {
+      final date = monday.add(Duration(days: i));
+      final dateStr = _formatDate(date);
+
+      if (date.isAfter(today)) {
+        weekData.add(_DayUsageData(dateStr: dateStr, dayLabel: dayLabels[i], apps: {}));
+        continue;
+      }
+
+      final dayStats = await service.getDailyUsageStats(dateStr);
+      final apps = <String, _AppTimeEntry>{};
+      for (final entry in dayStats) {
+        final pkg = entry['appPackage'] as String? ?? '';
+        if (_isHiddenApp(pkg)) continue;
+        final timeMs = entry['totalTime'] as int? ?? 0;
+        final label = entry['appLabel'] as String? ?? pkg;
+        apps[pkg] = _AppTimeEntry(label: label, package: pkg, time: Duration(milliseconds: timeMs));
+      }
+
+      weekData.add(_DayUsageData(dateStr: dateStr, dayLabel: dayLabels[i], apps: apps));
+    }
+
+    // Load previous week total for comparison
+    Duration prevTotal = Duration.zero;
+    final prevMonday = monday.subtract(const Duration(days: 7));
+    for (int i = 0; i < 7; i++) {
+      final date = prevMonday.add(Duration(days: i));
       final dateStr = _formatDate(date);
       final dayStats = await service.getDailyUsageStats(dateStr);
       for (final entry in dayStats) {
         final pkg = entry['appPackage'] as String? ?? '';
-        final time = entry['totalTime'] as int? ?? 0;
-        final label = entry['appLabel'] as String? ?? pkg;
-        if (merged.containsKey(pkg)) {
-          merged[pkg]!['totalTime'] = (merged[pkg]!['totalTime'] as int) + time;
-        } else {
-          merged[pkg] = {
-            'appPackage': pkg,
-            'appLabel': label,
-            'totalTime': time,
-          };
-        }
+        if (_isHiddenApp(pkg)) continue;
+        prevTotal += Duration(milliseconds: (entry['totalTime'] as int? ?? 0));
       }
     }
 
-    final results = merged.values.toList()
-      ..sort((a, b) => (b['totalTime'] as int).compareTo(a['totalTime'] as int));
-
     setState(() {
-      _appUsageData = results;
+      _weeklyDayData = weekData;
+      _prevWeekTotal = prevTotal;
       _appUsageLoading = false;
     });
   }
@@ -1009,7 +1637,6 @@ class _StatsScreenState extends State<StatsScreen> {
       );
     }
 
-    // Load data on first build or when toggle changes
     if (_hasUsagePermission == null && !_appUsageLoading) {
       Future.microtask(() => _loadAppUsageStats());
     }
@@ -1038,7 +1665,6 @@ class _StatsScreenState extends State<StatsScreen> {
               FilledButton.icon(
                 onPressed: () async {
                   await widget.appDetectionService!.requestPermission();
-                  // Retry after returning from settings
                   Future.delayed(const Duration(seconds: 1), () {
                     _loadAppUsageStats();
                   });
@@ -1056,38 +1682,87 @@ class _StatsScreenState extends State<StatsScreen> {
       return const Center(child: CircularProgressIndicator());
     }
 
-    final totalMs = _appUsageData.fold<int>(
-      0, (sum, e) => sum + (e['totalTime'] as int? ?? 0));
-    final totalDuration = Duration(milliseconds: totalMs);
+    // Compute weekly app totals
+    final weeklyAppTotals = <String, _AppTimeEntry>{};
+    for (final day in _weeklyDayData) {
+      for (final entry in day.apps.entries) {
+        final existing = weeklyAppTotals[entry.key];
+        if (existing != null) {
+          weeklyAppTotals[entry.key] = _AppTimeEntry(
+            label: entry.value.label,
+            package: entry.value.package,
+            time: existing.time + entry.value.time,
+          );
+        } else {
+          weeklyAppTotals[entry.key] = _AppTimeEntry(
+            label: entry.value.label,
+            package: entry.value.package,
+            time: entry.value.time,
+          );
+        }
+      }
+    }
+
+    final topApps = weeklyAppTotals.values.toList()
+      ..sort((a, b) => b.time.compareTo(a.time));
+
+    final weekTotal = _weeklyDayData.fold<Duration>(
+      Duration.zero, (sum, d) => sum + d.totalTime);
+
+    // Determine display data
+    Duration displayTotal;
+    List<_AppTimeEntry> displayApps;
+    if (_selectedDayIndex != null) {
+      final day = _weeklyDayData[_selectedDayIndex!];
+      displayTotal = day.totalTime;
+      displayApps = day.apps.values.toList();
+    } else {
+      displayTotal = weekTotal;
+      displayApps = List.of(topApps);
+    }
+
+    if (_selectedAppFilter != null) {
+      displayApps = displayApps
+          .where((a) => a.package == _selectedAppFilter)
+          .toList();
+    }
+    displayApps.sort((a, b) => b.time.compareTo(a.time));
 
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
-        // 오늘/이번 주 토글
+        // Week summary card
+        _buildWeekSummaryCard(weekTotal),
+        const SizedBox(height: 16),
+
+        // Weekly bar chart
+        _buildWeeklyBarChart(topApps),
+        const SizedBox(height: 12),
+
+        // App filter legend
+        if (topApps.isNotEmpty) ...[
+          _buildAppFilterLegend(topApps.take(6).toList()),
+          const SizedBox(height: 16),
+        ],
+
+        // Section header
         Row(
           children: [
-            ChoiceChip(
-              label: const Text('오늘'),
-              selected: !_appUsageWeekly,
-              onSelected: (selected) {
-                if (selected) {
-                  setState(() => _appUsageWeekly = false);
-                  _loadAppUsageStats();
-                }
-              },
+            Expanded(
+              child: Text(
+                _selectedDayIndex != null
+                    ? _formatDateWithDay(
+                        _weeklyDayData[_selectedDayIndex!].dateStr)
+                    : '주간 앱 사용',
+                style: const TextStyle(
+                    fontSize: 16, fontWeight: FontWeight.bold),
+              ),
             ),
-            const SizedBox(width: 8),
-            ChoiceChip(
-              label: const Text('이번 주'),
-              selected: _appUsageWeekly,
-              onSelected: (selected) {
-                if (selected) {
-                  setState(() => _appUsageWeekly = true);
-                  _loadAppUsageStats();
-                }
-              },
-            ),
-            const Spacer(),
+            if (_selectedDayIndex != null)
+              TextButton(
+                onPressed: () => setState(() => _selectedDayIndex = null),
+                child: const Text('주간 전체'),
+              ),
             IconButton(
               icon: const Icon(Icons.refresh, size: 20),
               onPressed: _loadAppUsageStats,
@@ -1095,75 +1770,361 @@ class _StatsScreenState extends State<StatsScreen> {
             ),
           ],
         ),
-        const SizedBox(height: 16),
+        const SizedBox(height: 8),
 
-        // 총 사용 시간 요약
-        Card(
-          child: Padding(
-            padding: const EdgeInsets.all(16),
-            child: Row(
-              children: [
-                Icon(Icons.phone_android, color: Colors.blue, size: 28),
-                const SizedBox(width: 12),
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(
-                        '총 사용 시간',
-                        style: TextStyle(fontSize: 12, color: Colors.grey[600]),
-                      ),
-                      Text(
-                        _formatDuration(totalDuration),
-                        style: const TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                          color: Colors.blue,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                Text(
-                  '${_appUsageData.length}개 앱',
-                  style: TextStyle(fontSize: 13, color: Colors.grey[600]),
-                ),
-              ],
-            ),
-          ),
-        ),
-        const SizedBox(height: 16),
-
-        if (_appUsageData.isEmpty)
-          Center(
-            child: Padding(
-              padding: const EdgeInsets.all(32),
+        if (displayApps.isEmpty)
+          Padding(
+            padding: const EdgeInsets.all(32),
+            child: Center(
               child: Text(
                 '사용 기록이 없습니다',
                 style: TextStyle(color: Colors.grey[500]),
               ),
             ),
           )
-        else ...[
-          Text(
-            '앱별 사용 시간',
-            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-          ),
-          const SizedBox(height: 12),
-          ..._appUsageData.map((app) => _buildAppUsageCard(app, totalMs)),
-        ],
+        else
+          ...displayApps
+              .map((app) => _buildAppUsageEntry(app, displayTotal)),
         const SizedBox(height: 16),
       ],
     );
   }
 
-  Widget _buildAppUsageCard(Map<String, dynamic> app, int totalMs) {
-    final label = app['appLabel'] as String? ?? '';
-    final timeMs = app['totalTime'] as int? ?? 0;
-    final duration = Duration(milliseconds: timeMs);
-    final percentage = totalMs > 0 ? (timeMs / totalMs * 100).round() : 0;
-    final ratio = totalMs > 0 ? timeMs / totalMs : 0.0;
-    final color = _getAppColor(label);
+  Widget _buildWeekSummaryCard(Duration weekTotal) {
+    final diff = weekTotal - _prevWeekTotal;
+    final isIncrease = diff.inSeconds > 0;
+    final isDecrease = diff.inSeconds < 0;
+    final absDiff = diff.abs();
+
+    final prevSec = _prevWeekTotal.inSeconds;
+    final changePercent =
+        prevSec > 0 ? (diff.inSeconds / prevSec * 100).round().abs() : 0;
+
+    final daysWithData =
+        _weeklyDayData.where((d) => d.totalTime.inSeconds > 0).length;
+    final avgPerDay = daysWithData > 0
+        ? Duration(milliseconds: weekTotal.inMilliseconds ~/ daysWithData)
+        : Duration.zero;
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                const Icon(Icons.phone_android, color: Colors.blue, size: 24),
+                const SizedBox(width: 8),
+                const Text(
+                  '이번 주 사용',
+                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Text(
+              _formatDuration(weekTotal),
+              style: const TextStyle(
+                fontSize: 24,
+                fontWeight: FontWeight.bold,
+                color: Colors.blue,
+              ),
+            ),
+            const SizedBox(height: 8),
+            if (_prevWeekTotal.inSeconds > 0)
+              Row(
+                children: [
+                  Icon(
+                    isIncrease
+                        ? Icons.arrow_upward
+                        : isDecrease
+                            ? Icons.arrow_downward
+                            : Icons.remove,
+                    size: 14,
+                    color: isIncrease ? Colors.red : Colors.green,
+                  ),
+                  const SizedBox(width: 4),
+                  Text(
+                    '전주 대비 ${_formatDuration(absDiff)}'
+                    ' ${isIncrease ? "증가" : isDecrease ? "감소" : ""}'
+                    '${changePercent > 0 ? " ($changePercent%)" : ""}',
+                    style: TextStyle(
+                      fontSize: 12,
+                      color: isIncrease ? Colors.red : Colors.green,
+                    ),
+                  ),
+                ],
+              ),
+            const SizedBox(height: 4),
+            Text(
+              '하루 평균 ${_formatDuration(avgPerDay)}',
+              style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildWeeklyBarChart(List<_AppTimeEntry> topApps) {
+    const barPadding = 4.0;
+    final now = DateTime.now();
+    final today = DateTime(now.year, now.month, now.day);
+
+    // Find max daily total for scaling
+    int maxMs = 0;
+    for (final day in _weeklyDayData) {
+      final ms = _selectedAppFilter != null
+          ? (day.apps[_selectedAppFilter]?.time.inMilliseconds ?? 0)
+          : day.totalTime.inMilliseconds;
+      if (ms > maxMs) maxMs = ms;
+    }
+
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(8, 16, 8, 12),
+        child: SizedBox(
+          height: 200,
+          child: Row(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: List.generate(7, (i) {
+              final day = _weeklyDayData[i];
+              final dayMs = _selectedAppFilter != null
+                  ? (day.apps[_selectedAppFilter]?.time.inMilliseconds ?? 0)
+                  : day.totalTime.inMilliseconds;
+              final ratio = maxMs > 0 ? dayMs / maxMs : 0.0;
+              final isSelected = _selectedDayIndex == i;
+              final isFuture = DateTime.parse(day.dateStr).isAfter(today);
+
+              return Expanded(
+                child: GestureDetector(
+                  onTap: isFuture
+                      ? null
+                      : () {
+                          setState(() {
+                            _selectedDayIndex =
+                                _selectedDayIndex == i ? null : i;
+                          });
+                        },
+                  child: Padding(
+                    padding:
+                        const EdgeInsets.symmetric(horizontal: barPadding),
+                    child: Column(
+                      children: [
+                        // Time label + Bar (flexible area)
+                        Expanded(
+                          child: Column(
+                            mainAxisAlignment: MainAxisAlignment.end,
+                            children: [
+                              if (dayMs > 0)
+                                Text(
+                                  _shortDuration(Duration(milliseconds: dayMs)),
+                                  style: TextStyle(
+                                    fontSize: 9,
+                                    color: isSelected
+                                        ? Theme.of(context).colorScheme.primary
+                                        : Colors.grey[600],
+                                    fontWeight: isSelected
+                                        ? FontWeight.bold
+                                        : FontWeight.normal,
+                                  ),
+                                ),
+                              const SizedBox(height: 2),
+                              if (ratio > 0)
+                                Flexible(
+                                  child: FractionallySizedBox(
+                                    heightFactor: ratio,
+                                    child: Container(
+                                      decoration: BoxDecoration(
+                                        borderRadius: BorderRadius.circular(4),
+                                        border: isSelected
+                                            ? Border.all(
+                                                color: Theme.of(context)
+                                                    .colorScheme
+                                                    .primary,
+                                                width: 2,
+                                              )
+                                            : null,
+                                      ),
+                                      child: ClipRRect(
+                                        borderRadius: BorderRadius.circular(
+                                            isSelected ? 2 : 4),
+                                        child: _buildStackedBar(
+                                            day, topApps, 999),
+                                      ),
+                                    ),
+                                  ),
+                                )
+                              else if (!isFuture)
+                                Container(
+                                  height: 2,
+                                  decoration: BoxDecoration(
+                                    color: Colors.grey[300],
+                                    borderRadius: BorderRadius.circular(1),
+                                  ),
+                                ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(height: 6),
+                        // Day label
+                        Text(
+                          day.dayLabel,
+                          style: TextStyle(
+                            fontSize: 12,
+                            fontWeight: isSelected
+                                ? FontWeight.bold
+                                : FontWeight.normal,
+                            color: isSelected
+                                ? Theme.of(context).colorScheme.primary
+                                : isFuture
+                                    ? Colors.grey[400]
+                                    : Colors.grey[700],
+                          ),
+                        ),
+                        // Date
+                        Text(
+                          _shortDate(day.dateStr),
+                          style: TextStyle(
+                              fontSize: 9, color: Colors.grey[500]),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              );
+            }),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget _buildStackedBar(
+      _DayUsageData day, List<_AppTimeEntry> topApps, double barHeight) {
+    if (barHeight <= 0 || day.totalTime.inMilliseconds <= 0) {
+      return const SizedBox.shrink();
+    }
+
+    // If app filter is active, single color bar
+    if (_selectedAppFilter != null) {
+      final appEntry = day.apps[_selectedAppFilter];
+      return Container(
+        width: double.infinity,
+        color: appEntry != null
+            ? _getAppColor(appEntry.label)
+            : Colors.grey[300],
+      );
+    }
+
+    // Stacked bar: top 5 apps + other
+    final dayTotal = day.totalTime.inMilliseconds;
+    final segments = <_BarSegment>[];
+    int topMs = 0;
+
+    for (int j = 0; j < topApps.length && j < 5; j++) {
+      final appMs =
+          day.apps[topApps[j].package]?.time.inMilliseconds ?? 0;
+      if (appMs > 0) {
+        segments.add(_BarSegment(
+            flex: appMs, color: _getAppColor(topApps[j].label)));
+        topMs += appMs;
+      }
+    }
+
+    final otherMs = dayTotal - topMs;
+    if (otherMs > 0) {
+      segments
+          .add(_BarSegment(flex: otherMs, color: Colors.grey[300]!));
+    }
+
+    if (segments.isEmpty) return const SizedBox.shrink();
+
+    return Column(
+      children: segments
+          .map((s) => Flexible(
+                flex: s.flex,
+                child:
+                    Container(width: double.infinity, color: s.color),
+              ))
+          .toList(),
+    );
+  }
+
+  Widget _buildAppFilterLegend(List<_AppTimeEntry> topApps) {
+    return Wrap(
+      spacing: 8,
+      runSpacing: 6,
+      children: [
+        _buildFilterChip('전체', null, null),
+        ...topApps.map((app) => _buildFilterChip(
+              app.label,
+              app.package,
+              _getAppColor(app.label),
+            )),
+      ],
+    );
+  }
+
+  Widget _buildFilterChip(String label, String? package, Color? color) {
+    final isSelected = _selectedAppFilter == package;
+    final activeColor = color ?? Theme.of(context).colorScheme.primary;
+
+    return GestureDetector(
+      onTap: () {
+        setState(() {
+          _selectedAppFilter =
+              _selectedAppFilter == package ? null : package;
+        });
+      },
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+        decoration: BoxDecoration(
+          color: isSelected
+              ? activeColor.withOpacity(0.15)
+              : Colors.grey[100],
+          borderRadius: BorderRadius.circular(16),
+          border: Border.all(
+            color: isSelected ? activeColor : Colors.grey[300]!,
+            width: isSelected ? 1.5 : 1,
+          ),
+        ),
+        child: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (color != null) ...[
+              Container(
+                width: 8,
+                height: 8,
+                decoration: BoxDecoration(
+                  color: color,
+                  shape: BoxShape.circle,
+                ),
+              ),
+              const SizedBox(width: 4),
+            ],
+            Text(
+              label,
+              style: TextStyle(
+                fontSize: 11,
+                fontWeight:
+                    isSelected ? FontWeight.bold : FontWeight.normal,
+                color: isSelected ? activeColor : Colors.grey[700],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildAppUsageEntry(_AppTimeEntry app, Duration totalDuration) {
+    final totalMs = totalDuration.inMilliseconds;
+    final appMs = app.time.inMilliseconds;
+    final percentage = totalMs > 0 ? (appMs / totalMs * 100).round() : 0;
+    final ratio = totalMs > 0 ? appMs / totalMs : 0.0;
+    final color = _getAppColor(app.label);
 
     return Card(
       margin: const EdgeInsets.symmetric(vertical: 4),
@@ -1175,7 +2136,7 @@ class _StatsScreenState extends State<StatsScreen> {
               radius: 18,
               backgroundColor: color.withOpacity(0.15),
               child: Text(
-                label.isNotEmpty ? label[0] : '?',
+                app.label.isNotEmpty ? app.label[0] : '?',
                 style: TextStyle(
                   fontSize: 14,
                   color: color,
@@ -1188,7 +2149,7 @@ class _StatsScreenState extends State<StatsScreen> {
               child: Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
-                  Text(label,
+                  Text(app.label,
                       style: const TextStyle(fontWeight: FontWeight.w600)),
                   const SizedBox(height: 4),
                   ClipRRect(
@@ -1208,7 +2169,7 @@ class _StatsScreenState extends State<StatsScreen> {
               crossAxisAlignment: CrossAxisAlignment.end,
               children: [
                 Text(
-                  _formatDuration(duration),
+                  _formatDuration(app.time),
                   style: TextStyle(
                     fontSize: 13,
                     fontWeight: FontWeight.bold,
@@ -1226,4 +2187,72 @@ class _StatsScreenState extends State<StatsScreen> {
       ),
     );
   }
+
+  String _shortDuration(Duration d) {
+    if (d.inHours > 0) {
+      final mins = d.inMinutes.remainder(60);
+      return mins > 0 ? '${d.inHours}h${mins}m' : '${d.inHours}h';
+    } else if (d.inMinutes > 0) {
+      return '${d.inMinutes}m';
+    }
+    return '';
+  }
+
+  String _shortDate(String dateStr) {
+    try {
+      final parts = dateStr.split('-');
+      return '${int.parse(parts[1])}/${int.parse(parts[2])}';
+    } catch (_) {
+      return '';
+    }
+  }
+
+  String _formatDateWithDay(String dateStr) {
+    try {
+      final parts = dateStr.split('-');
+      final date = DateTime(
+          int.parse(parts[0]), int.parse(parts[1]), int.parse(parts[2]));
+      const dayNames = ['월', '화', '수', '목', '금', '토', '일'];
+      return '${int.parse(parts[1])}월 ${int.parse(parts[2])}일'
+          ' (${dayNames[date.weekday - 1]})';
+    } catch (_) {
+      return dateStr;
+    }
+  }
+}
+
+// --- Helper data classes for weekly bar chart ---
+
+class _DayUsageData {
+  final String dateStr;
+  final String dayLabel;
+  final Map<String, _AppTimeEntry> apps;
+
+  _DayUsageData({
+    required this.dateStr,
+    required this.dayLabel,
+    required this.apps,
+  });
+
+  Duration get totalTime =>
+      apps.values.fold(Duration.zero, (sum, e) => sum + e.time);
+}
+
+class _AppTimeEntry {
+  final String label;
+  final String package;
+  final Duration time;
+
+  _AppTimeEntry({
+    required this.label,
+    required this.package,
+    required this.time,
+  });
+}
+
+class _BarSegment {
+  final int flex;
+  final Color color;
+
+  _BarSegment({required this.flex, required this.color});
 }

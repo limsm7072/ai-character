@@ -8,6 +8,7 @@ class Routine {
   List<String> blockedApps; // package names to block
   List<bool> activeDays; // Mon-Sun (7 elements)
   bool isEnabled;
+  bool notifyOnStart;
 
   Routine({
     required this.id,
@@ -19,11 +20,12 @@ class Routine {
     this.blockedApps = const [],
     List<bool>? activeDays,
     this.isEnabled = true,
+    this.notifyOnStart = false,
   }) : activeDays = activeDays ?? List.filled(7, true);
 
   /// Check if this routine is active on a specific date (considering startDate and activeDays).
+  /// Note: does NOT check isEnabled — callers decide whether to filter by enabled status.
   bool isActiveOnDate(DateTime date) {
-    if (!isEnabled) return false;
     if (startDate != null) {
       final parts = startDate!.split('-');
       if (parts.length == 3) {
@@ -38,6 +40,7 @@ class Routine {
   }
 
   bool isActiveNow() {
+    if (!isEnabled) return false;
     final now = DateTime.now();
     if (!isActiveOnDate(now)) return false;
 
@@ -65,6 +68,7 @@ class Routine {
         'blockedApps': blockedApps,
         'activeDays': activeDays,
         'isEnabled': isEnabled,
+        'notifyOnStart': notifyOnStart,
       };
 
   factory Routine.fromJson(Map<String, dynamic> json) => Routine(
@@ -83,6 +87,7 @@ class Routine {
         blockedApps: List<String>.from(json['blockedApps'] ?? []),
         activeDays: List<bool>.from(json['activeDays'] ?? List.filled(7, true)),
         isEnabled: json['isEnabled'] ?? true,
+        notifyOnStart: json['notifyOnStart'] ?? false,
       );
 }
 

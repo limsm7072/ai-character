@@ -26,6 +26,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   static const _channel = MethodChannel('com.aicharacter.ai_character/usage_stats');
 
   late TextEditingController _apiKeyController;
+  late TextEditingController _nameController;
   final _appDetection = AppDetectionService();
   final _overlayService = OverlayService();
   bool _hasUsagePermission = false;
@@ -36,6 +37,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
     super.initState();
     _apiKeyController =
         TextEditingController(text: widget.settingsService.apiKey);
+    _nameController =
+        TextEditingController(text: widget.settingsService.characterName);
     _checkPermissions();
   }
 
@@ -51,6 +54,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   @override
   void dispose() {
     _apiKeyController.dispose();
+    _nameController.dispose();
     super.dispose();
   }
 
@@ -242,6 +246,32 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
           // Character Selection
           _buildSectionHeader('캐릭터'),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            child: TextField(
+              controller: _nameController,
+              decoration: InputDecoration(
+                labelText: '캐릭터 이름',
+                hintText: '루나',
+                border: const OutlineInputBorder(),
+                suffixIcon: IconButton(
+                  icon: const Icon(Icons.save),
+                  onPressed: () async {
+                    final name = _nameController.text.trim();
+                    if (name.isNotEmpty) {
+                      await widget.settingsService.setCharacterName(name);
+                      if (mounted) {
+                        setState(() {});
+                        ScaffoldMessenger.of(context).showSnackBar(
+                          SnackBar(content: Text('캐릭터 이름이 "$name"(으)로 변경되었습니다')),
+                        );
+                      }
+                    }
+                  },
+                ),
+              ),
+            ),
+          ),
           ListTile(
             title: const Text('캐릭터 선택'),
             subtitle: Text(CharacterRegistry.getById(
@@ -371,7 +401,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
         tooltip: '미리 듣기',
         onPressed: () async {
           await widget.ttsService.applyPreset(preset.id);
-          await widget.ttsService.speak('안녕! 나는 루나야. 오늘도 파이팅!');
+          await widget.ttsService.speak('안녕! 나는 ${widget.settingsService.characterName}야. 오늘도 파이팅!');
           if (mounted) {
             final used = widget.ttsService.lastUsedEdgeTts;
             final err = widget.ttsService.lastEdgeError;

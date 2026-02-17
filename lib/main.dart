@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:intl/date_symbol_data_local.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:spine_flutter/spine_flutter.dart';
 import 'screens/home_screen.dart';
@@ -14,6 +15,15 @@ import 'services/routine_monitor.dart';
 import 'services/distraction_log_service.dart';
 import 'services/routine_completion_service.dart';
 import 'services/accessory_service.dart';
+import 'services/health_service.dart';
+import 'services/todo_service.dart';
+import 'services/memo_service.dart';
+import 'services/notification_service.dart';
+import 'services/alarm_service.dart';
+import 'services/timer_service.dart';
+import 'services/calendar_service.dart';
+import 'services/weather_service.dart';
+import 'services/news_service.dart';
 import 'widgets/overlay_character.dart';
 
 /// Entry point for the overlay window (displayed on top of other apps).
@@ -36,23 +46,46 @@ void overlayMain() async {
 
 void main() async {
   WidgetsFlutterBinding.ensureInitialized();
+  await SystemChrome.setPreferredOrientations([DeviceOrientation.portraitUp]);
+  await initializeDateFormatting('ko_KR');
   await initSpineFlutter(enableMemoryDebugging: false);
 
   final prefs = await SharedPreferences.getInstance();
-  final routineService = RoutineService(prefs);
   final settingsService = SettingsService(prefs);
   final distractionLogService = DistractionLogService(prefs);
   final completionService = RoutineCompletionService(prefs);
   final accessoryService = AccessoryService(prefs);
+  final todoService = TodoService(prefs);
+  final memoService = MemoService(prefs);
+
+  final notificationService = NotificationService();
+  try {
+    await notificationService.initialize();
+  } catch (e) {
+    print('[Main] NotificationService init failed: $e');
+  }
+  final routineService = RoutineService(prefs, notificationService);
+  final alarmService = AlarmService(prefs, notificationService);
+  final timerService = TimerService(prefs, notificationService);
+  final calendarService = CalendarService(prefs);
+  final weatherService = WeatherService(prefs, settingsService);
+  final newsService = NewsService(prefs);
+  try {
+    await alarmService.rescheduleAll();
+  } catch (e) {
+    print('[Main] rescheduleAll failed: $e');
+  }
 
   final geminiService = GeminiService();
   final ttsService = TtsService();
   final overlayService = OverlayService();
   final appDetectionService = AppDetectionService();
+  final healthService = HealthService();
+  await healthService.checkExistingPermissions();
 
   final apiKey = settingsService.apiKey;
   if (apiKey.isNotEmpty) {
-    geminiService.initialize(apiKey);
+    geminiService.initialize(apiKey, characterName: settingsService.characterName);
   }
 
   await ttsService.initialize();
@@ -82,6 +115,14 @@ void main() async {
     completionService: completionService,
     ttsService: ttsService,
     accessoryService: accessoryService,
+    healthService: healthService,
+    todoService: todoService,
+    memoService: memoService,
+    alarmService: alarmService,
+    timerService: timerService,
+    calendarService: calendarService,
+    weatherService: weatherService,
+    newsService: newsService,
   ));
 }
 
@@ -94,6 +135,14 @@ class AiCharacterApp extends StatefulWidget {
   final RoutineCompletionService completionService;
   final TtsService ttsService;
   final AccessoryService accessoryService;
+  final HealthService healthService;
+  final TodoService todoService;
+  final MemoService memoService;
+  final AlarmService alarmService;
+  final TimerService timerService;
+  final CalendarService calendarService;
+  final WeatherService weatherService;
+  final NewsService newsService;
 
   const AiCharacterApp({
     super.key,
@@ -105,6 +154,14 @@ class AiCharacterApp extends StatefulWidget {
     required this.completionService,
     required this.ttsService,
     required this.accessoryService,
+    required this.healthService,
+    required this.todoService,
+    required this.memoService,
+    required this.alarmService,
+    required this.timerService,
+    required this.calendarService,
+    required this.weatherService,
+    required this.newsService,
   });
 
   @override
@@ -126,6 +183,20 @@ class _AiCharacterAppState extends State<AiCharacterApp>
     const channel = MethodChannel('com.aicharacter.ai_character/usage_stats');
     try {
       await channel.invokeMethod('requestNotificationPermission');
+    } catch (_) {}
+
+    // Request notification + exact alarm permissions via flutter_local_notifications
+    final notificationService = NotificationService();
+    try {
+      await notificationService.requestPermissions();
+    } catch (_) {}
+
+    // Reschedule alarms + routine notifications after permissions are granted
+    try {
+      await widget.alarmService.rescheduleAll();
+    } catch (_) {}
+    try {
+      await widget.routineService.rescheduleAllNotifications();
     } catch (_) {}
 
     // Small delay to let permission dialog complete
@@ -165,6 +236,14 @@ class _AiCharacterAppState extends State<AiCharacterApp>
         completionService: widget.completionService,
         ttsService: widget.ttsService,
         accessoryService: widget.accessoryService,
+        healthService: widget.healthService,
+        todoService: widget.todoService,
+        memoService: widget.memoService,
+        alarmService: widget.alarmService,
+        timerService: widget.timerService,
+        calendarService: widget.calendarService,
+        weatherService: widget.weatherService,
+        newsService: widget.newsService,
         onCompletionUnchecked: widget.routineMonitor.forceCheck,
       ),
     );

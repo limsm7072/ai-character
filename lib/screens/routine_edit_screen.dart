@@ -26,6 +26,7 @@ class _RoutineEditScreenState extends State<RoutineEditScreen> {
   late List<String> _blockedApps;
   DateTime _startDate = DateTime.now();
   bool _isEditing = false;
+  bool _notifyOnStart = false;
 
   // Common app packages for selection
   static const _commonApps = <String, String>{
@@ -54,6 +55,7 @@ class _RoutineEditScreenState extends State<RoutineEditScreen> {
     _endTime = r?.endTime ?? const model.TimeOfDay(hour: 10, minute: 0);
     _activeDays = r?.activeDays.toList() ?? List.filled(7, true);
     _blockedApps = r?.blockedApps.toList() ?? [];
+    _notifyOnStart = r?.notifyOnStart ?? false;
     if (r?.startDate != null) {
       final parts = r!.startDate!.split('-');
       if (parts.length == 3) {
@@ -87,7 +89,7 @@ class _RoutineEditScreenState extends State<RoutineEditScreen> {
       body: Form(
         key: _formKey,
         child: ListView(
-          padding: const EdgeInsets.all(16),
+          padding: EdgeInsets.fromLTRB(16, 16, 16, 16 + MediaQuery.of(context).viewPadding.bottom),
           children: [
             // Name
             TextFormField(
@@ -169,7 +171,20 @@ class _RoutineEditScreenState extends State<RoutineEditScreen> {
                 ),
               ],
             ),
-            const SizedBox(height: 24),
+            const SizedBox(height: 16),
+
+            // Notify on start
+            SwitchListTile(
+              title: const Text('시작 알림'),
+              subtitle: Text(
+                '루틴 시작 시간에 알림을 보냅니다',
+                style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+              ),
+              value: _notifyOnStart,
+              onChanged: (v) => setState(() => _notifyOnStart = v),
+              contentPadding: EdgeInsets.zero,
+            ),
+            const SizedBox(height: 16),
 
             // Active days
             const Text('요일',
@@ -235,8 +250,9 @@ class _RoutineEditScreenState extends State<RoutineEditScreen> {
 
   Widget _buildDaySelector() {
     const days = ['월', '화', '수', '목', '금', '토', '일'];
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+    return Wrap(
+      spacing: 6,
+      runSpacing: 4,
       children: List.generate(7, (i) {
         return FilterChip(
           label: Text(days[i]),
@@ -285,6 +301,7 @@ class _RoutineEditScreenState extends State<RoutineEditScreen> {
       endTime: _endTime,
       blockedApps: _blockedApps,
       activeDays: _activeDays,
+      notifyOnStart: _notifyOnStart,
     );
 
     if (_isEditing) {

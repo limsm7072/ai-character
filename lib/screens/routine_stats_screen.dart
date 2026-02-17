@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../models/routine.dart' as model;
 import '../models/distraction_log.dart';
 import '../services/distraction_log_service.dart';
 
@@ -6,12 +7,16 @@ class RoutineStatsScreen extends StatefulWidget {
   final String routineId;
   final String routineName;
   final DistractionLogService logService;
+  final model.TimeOfDay? routineStartTime;
+  final model.TimeOfDay? routineEndTime;
 
   const RoutineStatsScreen({
     super.key,
     required this.routineId,
     required this.routineName,
     required this.logService,
+    this.routineStartTime,
+    this.routineEndTime,
   });
 
   @override
@@ -243,9 +248,180 @@ class _RoutineStatsScreenState extends State<RoutineStatsScreen> {
         ),
         const SizedBox(height: 8),
 
+        // Timeline bar
+        if (widget.routineStartTime != null && widget.routineEndTime != null)
+          _buildTimelineBar(),
+
         // App breakdown
         ...apps.map((app) => _buildAppCard(app, stats.totalTime)),
       ],
+    );
+  }
+
+  Widget _buildTimelineBar() {
+    final startTime = widget.routineStartTime!;
+    final endTime = widget.routineEndTime!;
+
+    // Parse selected date
+    final parts = _selectedDate.split('-');
+    final year = int.parse(parts[0]);
+    final month = int.parse(parts[1]);
+    final day = int.parse(parts[2]);
+
+    final routineStartEpoch = DateTime(year, month, day, startTime.hour, startTime.minute).millisecondsSinceEpoch;
+    var routineEndEpoch = DateTime(year, month, day, endTime.hour, endTime.minute).millisecondsSinceEpoch;
+
+    // Overnight routine: end is next day
+    if (routineEndEpoch <= routineStartEpoch) {
+      routineEndEpoch = DateTime(year, month, day + 1, endTime.hour, endTime.minute).millisecondsSinceEpoch;
+    }
+
+    final totalMs = routineEndEpoch - routineStartEpoch;
+    if (totalMs <= 0) return const SizedBox.shrink();
+
+    // Get individual logs for this date
+    final logs = widget.logService.getByRoutineAndDate(widget.routineId, _selectedDate);
+    if (logs.isEmpty) return const SizedBox.shrink();
+
+    // Build timeline blocks
+    final blocks = <_TimelineBlock>[];
+    for (final log in logs) {
+      final left = ((log.startTime - routineStartEpoch) / totalMs).clamp(0.0, 1.0);
+      final right = ((log.endTime - routineStartEpoch) / totalMs).clamp(0.0, 1.0);
+      if (right > left) {
+        blocks.add(_TimelineBlock(
+          left: left,
+          right: right,
+          color: _getAppColor(log.appLabel),
+          appLabel: log.appLabel,
+          duration: log.duration,
+        ));
+      }
+    }
+
+    // Compute focus stats
+    final distractionMs = logs.fold<int>(0, (sum, l) {
+      final clampedStart = l.startTime.clamp(routineStartEpoch, routineEndEpoch);
+      final clampedEnd = l.endTime.clamp(routineStartEpoch, routineEndEpoch);
+      return sum + (clampedEnd - clampedStart);
+    });
+    final focusMs = totalMs - distractionMs;
+    final focusRate = (focusMs / totalMs * 100).round();
+
+    // Build legend: group by app label
+    final legendMap = <String, _LegendEntry>{};
+    for (final log in logs) {
+      final entry = legendMap.putIfAbsent(
+        log.appLabel,
+        () => _LegendEntry(appLabel: log.appLabel, color: _getAppColor(log.appLabel)),
+      );
+      entry.totalDuration += log.duration;
+    }
+    final legendEntries = legendMap.values.toList()
+      ..sort((a, b) => b.totalDuration.compareTo(a.totalDuration));
+
+    // Calculate hour markers
+    final hourMarkers = <_HourMarker>[];
+    // Start from the next full hour after routine start
+    final startDateTime = DateTime.fromMillisecondsSinceEpoch(routineStartEpoch);
+    final endDateTime = DateTime.fromMillisecondsSinceEpoch(routineEndEpoch);
+    var markerTime = DateTime(startDateTime.year, startDateTime.month, startDateTime.day, startDateTime.hour + 1);
+    while (markerTime.isBefore(endDateTime)) {
+      final pos = (markerTime.millisecondsSinceEpoch - routineStartEpoch) / totalMs;
+      if (pos > 0.05 && pos < 0.95) {
+        hourMarkers.add(_HourMarker(position: pos, label: '${markerTime.hour}:00'));
+      }
+      markerTime = markerTime.add(const Duration(hours: 1));
+    }
+
+    return Card(
+      margin: const EdgeInsets.only(bottom: 8),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.timeline, size: 20, color: Theme.of(context).colorScheme.primary),
+                const SizedBox(width: 8),
+                const Text(
+                  '시간대별 딴짓',
+                  style: TextStyle(fontSize: 15, fontWeight: FontWeight.bold),
+                ),
+              ],
+            ),
+            const SizedBox(height: 16),
+
+            // Time labels
+            Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: [
+                Text(startTime.format(), style: TextStyle(fontSize: 11, color: Colors.grey[600])),
+                Text(endTime.format(), style: TextStyle(fontSize: 11, color: Colors.grey[600])),
+              ],
+            ),
+            const SizedBox(height: 4),
+
+            // Timeline bar
+            SizedBox(
+              height: 32,
+              child: CustomPaint(
+                size: Size.infinite,
+                painter: _TimelineBarPainter(
+                  blocks: blocks,
+                  hourMarkers: hourMarkers,
+                ),
+              ),
+            ),
+            const SizedBox(height: 12),
+
+            // Legend
+            Wrap(
+              spacing: 12,
+              runSpacing: 6,
+              children: legendEntries.map((e) => Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 10,
+                    height: 10,
+                    decoration: BoxDecoration(
+                      color: e.color,
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                  const SizedBox(width: 4),
+                  Text(
+                    '${e.appLabel} ${_formatDuration(e.totalDuration)}',
+                    style: TextStyle(fontSize: 11, color: Colors.grey[700]),
+                  ),
+                ],
+              )).toList(),
+            ),
+            const SizedBox(height: 10),
+
+            // Focus summary
+            Row(
+              children: [
+                Icon(Icons.center_focus_strong, size: 14, color: Colors.green[600]),
+                const SizedBox(width: 4),
+                Text(
+                  '집중 $focusRate% (${_formatDuration(Duration(milliseconds: focusMs))})',
+                  style: TextStyle(fontSize: 12, color: Colors.green[700], fontWeight: FontWeight.w600),
+                ),
+                const SizedBox(width: 12),
+                Icon(Icons.phone_android, size: 14, color: Colors.red[400]),
+                const SizedBox(width: 4),
+                Text(
+                  '딴짓 ${_formatDuration(Duration(milliseconds: distractionMs))}',
+                  style: TextStyle(fontSize: 12, color: Colors.red[400]),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
     );
   }
 
@@ -372,4 +548,97 @@ class _RoutineStatsScreenState extends State<RoutineStatsScreen> {
       ),
     );
   }
+}
+
+// --- Helper classes for timeline bar ---
+
+class _TimelineBlock {
+  final double left;
+  final double right;
+  final Color color;
+  final String appLabel;
+  final Duration duration;
+
+  _TimelineBlock({
+    required this.left,
+    required this.right,
+    required this.color,
+    required this.appLabel,
+    required this.duration,
+  });
+}
+
+class _HourMarker {
+  final double position;
+  final String label;
+
+  _HourMarker({required this.position, required this.label});
+}
+
+class _LegendEntry {
+  final String appLabel;
+  final Color color;
+  Duration totalDuration;
+
+  _LegendEntry({required this.appLabel, required this.color, this.totalDuration = Duration.zero});
+}
+
+class _TimelineBarPainter extends CustomPainter {
+  final List<_TimelineBlock> blocks;
+  final List<_HourMarker> hourMarkers;
+
+  _TimelineBarPainter({required this.blocks, required this.hourMarkers});
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final barHeight = size.height;
+    final barRect = Rect.fromLTWH(0, 0, size.width, barHeight);
+
+    // Background (focus area) - light green
+    final bgPaint = Paint()..color = const Color(0xFFE8F5E9);
+    canvas.drawRRect(
+      RRect.fromRectAndRadius(barRect, const Radius.circular(6)),
+      bgPaint,
+    );
+
+    // Clip to rounded rect
+    canvas.save();
+    canvas.clipRRect(RRect.fromRectAndRadius(barRect, const Radius.circular(6)));
+
+    // Draw distraction blocks
+    for (final block in blocks) {
+      final blockRect = Rect.fromLTWH(
+        block.left * size.width,
+        0,
+        (block.right - block.left) * size.width,
+        barHeight,
+      );
+      final blockPaint = Paint()..color = block.color.withValues(alpha: 0.85);
+      canvas.drawRect(blockRect, blockPaint);
+    }
+
+    canvas.restore();
+
+    // Draw hour markers
+    final markerPaint = Paint()
+      ..color = const Color(0x44000000)
+      ..strokeWidth = 1;
+    final textStyle = const TextStyle(fontSize: 9, color: Color(0x88000000));
+
+    for (final marker in hourMarkers) {
+      final x = marker.position * size.width;
+      canvas.drawLine(Offset(x, 0), Offset(x, barHeight), markerPaint);
+
+      final textSpan = TextSpan(text: marker.label, style: textStyle);
+      final textPainter = TextPainter(
+        text: textSpan,
+        textDirection: TextDirection.ltr,
+      );
+      textPainter.layout();
+      textPainter.paint(canvas, Offset(x - textPainter.width / 2, barHeight / 2 - textPainter.height / 2));
+    }
+  }
+
+  @override
+  bool shouldRepaint(covariant _TimelineBarPainter oldDelegate) => true;
 }

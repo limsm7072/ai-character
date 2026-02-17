@@ -1,5 +1,4 @@
 import 'package:flutter/material.dart';
-import '../models/routine.dart' as model;
 import '../services/routine_service.dart';
 import '../services/settings_service.dart';
 import '../services/app_detection_service.dart';
@@ -7,8 +6,15 @@ import '../services/distraction_log_service.dart';
 import '../services/routine_completion_service.dart';
 import '../services/tts_service.dart';
 import '../services/accessory_service.dart';
-import 'routine_edit_screen.dart';
-import 'stats_screen.dart';
+import '../services/health_service.dart';
+import '../services/todo_service.dart';
+import '../services/memo_service.dart';
+import '../services/alarm_service.dart';
+import '../services/timer_service.dart';
+import '../services/calendar_service.dart';
+import '../services/weather_service.dart';
+import '../services/news_service.dart';
+import 'dashboard_screen.dart';
 import 'settings_screen.dart';
 import 'character_chat_screen.dart';
 
@@ -20,6 +26,14 @@ class HomeScreen extends StatefulWidget {
   final RoutineCompletionService completionService;
   final TtsService ttsService;
   final AccessoryService accessoryService;
+  final HealthService? healthService;
+  final TodoService todoService;
+  final MemoService memoService;
+  final AlarmService alarmService;
+  final TimerService timerService;
+  final CalendarService calendarService;
+  final WeatherService weatherService;
+  final NewsService newsService;
   final VoidCallback? onCompletionUnchecked;
 
   const HomeScreen({
@@ -31,6 +45,14 @@ class HomeScreen extends StatefulWidget {
     required this.completionService,
     required this.ttsService,
     required this.accessoryService,
+    this.healthService,
+    required this.todoService,
+    required this.memoService,
+    required this.alarmService,
+    required this.timerService,
+    required this.calendarService,
+    required this.weatherService,
+    required this.newsService,
     this.onCompletionUnchecked,
   });
 
@@ -39,51 +61,8 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
-  List<model.Routine> _routines = [];
   int _currentIndex = 0;
-  late DateTime _selectedDate;
-  late String _selectedDateStr;
-  int _weekOffset = 0;
-
-  // ─── Lifecycle ──────────────────────────────────────────
-
-  @override
-  void initState() {
-    super.initState();
-    _selectedDate = DateTime.now();
-    _selectedDateStr = _formatDate(_selectedDate);
-    _loadRoutines();
-  }
-
-  // ─── State helpers ──────────────────────────────────────
-
-  void _loadRoutines() {
-    setState(() => _routines = widget.routineService.getAll());
-  }
-
-  void _goToToday() {
-    final today = DateTime.now();
-    setState(() {
-      _weekOffset = 0;
-      _selectedDate = today;
-      _selectedDateStr = _formatDate(today);
-    });
-  }
-
-  String _formatDate(DateTime dt) =>
-      '${dt.year}-${dt.month.toString().padLeft(2, '0')}-${dt.day.toString().padLeft(2, '0')}';
-
-  String get _todayStr => widget.completionService.todayStr();
-  bool get _isSelectedToday => _selectedDateStr == _todayStr;
-
-  List<model.Routine> get _filteredRoutines =>
-      _routines.where((r) => r.isActiveOnDate(_selectedDate)).toList();
-
-  DateTime _mondayOf(DateTime date) =>
-      DateTime(date.year, date.month, date.day)
-          .subtract(Duration(days: date.weekday - 1));
-
-  // ─── Main build ─────────────────────────────────────────
+  final _dashboardKey = GlobalKey<DashboardScreenState>();
 
   @override
   Widget build(BuildContext context) {
@@ -91,18 +70,34 @@ class _HomeScreenState extends State<HomeScreen> {
       body: IndexedStack(
         index: _currentIndex,
         children: [
-          _buildRoutineList(),
-          StatsScreen(
+          DashboardScreen(
+            key: _dashboardKey,
             routineService: widget.routineService,
             completionService: widget.completionService,
+            settingsService: widget.settingsService,
+            todoService: widget.todoService,
+            memoService: widget.memoService,
             distractionLogService: widget.distractionLogService,
-            appDetectionService: widget.appDetection,
+            healthService: widget.healthService,
+            appDetection: widget.appDetection,
+            alarmService: widget.alarmService,
+            timerService: widget.timerService,
+            calendarService: widget.calendarService,
+            weatherService: widget.weatherService,
+            newsService: widget.newsService,
+            onCompletionUnchecked: widget.onCompletionUnchecked,
           ),
           CharacterChatScreen(
             settingsService: widget.settingsService,
             accessoryService: widget.accessoryService,
             routineService: widget.routineService,
             completionService: widget.completionService,
+            healthService: widget.healthService,
+            todoService: widget.todoService,
+            memoService: widget.memoService,
+            alarmService: widget.alarmService,
+            calendarService: widget.calendarService,
+            onRoutinesChanged: () => _dashboardKey.currentState?.refresh(),
           ),
           SettingsScreen(
             settingsService: widget.settingsService,
@@ -114,324 +109,16 @@ class _HomeScreenState extends State<HomeScreen> {
       bottomNavigationBar: NavigationBar(
         selectedIndex: _currentIndex,
         onDestinationSelected: (i) {
-          if (i == 0) _loadRoutines();
+          if (i == 0) _dashboardKey.currentState?.refresh();
           setState(() => _currentIndex = i);
         },
-        destinations: const [
-          NavigationDestination(icon: Icon(Icons.checklist), label: '루틴'),
-          NavigationDestination(icon: Icon(Icons.bar_chart), label: '통계'),
-          NavigationDestination(icon: Icon(Icons.chat_bubble_outline), label: '루나'),
-          NavigationDestination(icon: Icon(Icons.settings), label: '설정'),
-        ],
-      ),
-      floatingActionButton: _currentIndex == 0
-          ? FloatingActionButton(onPressed: _addRoutine, child: const Icon(Icons.add))
-          : null,
-    );
-  }
-
-  // ─── Week/day selector ──────────────────────────────────
-
-  Widget _buildDaySelector() {
-    final today = DateTime.now();
-    final monday = _mondayOf(today).add(Duration(days: _weekOffset * 7));
-    final sunday = monday.add(const Duration(days: 6));
-    final dayNames = ['월', '화', '수', '목', '금', '토', '일'];
-    final todayStr = _formatDate(today);
-    final theme = Theme.of(context);
-
-    final weekMonth = monday.add(const Duration(days: 3));
-
-    return Column(
-      children: [
-        // Week navigation
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 4),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceBetween,
-            children: [
-              IconButton(
-                icon: const Icon(Icons.chevron_left),
-                onPressed: () => setState(() => _weekOffset--),
-                visualDensity: VisualDensity.compact,
-              ),
-              GestureDetector(
-                onTap: _goToToday,
-                child: Text(
-                  '${weekMonth.month}월 (${monday.month}/${monday.day} - ${sunday.month}/${sunday.day})',
-                  style: TextStyle(
-                    fontSize: 13,
-                    fontWeight: FontWeight.w600,
-                    color: _weekOffset == 0
-                        ? theme.colorScheme.primary
-                        : theme.colorScheme.onSurface,
-                  ),
-                ),
-              ),
-              IconButton(
-                icon: const Icon(Icons.chevron_right),
-                onPressed: () => setState(() => _weekOffset++),
-                visualDensity: VisualDensity.compact,
-              ),
-            ],
+        destinations: [
+          const NavigationDestination(icon: Icon(Icons.home), label: '홈'),
+          NavigationDestination(
+            icon: const Icon(Icons.chat_bubble_outline),
+            label: widget.settingsService.characterName,
           ),
-        ),
-        // Day chips
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-          child: Row(
-            mainAxisAlignment: MainAxisAlignment.spaceEvenly,
-            children: List.generate(7, (i) {
-              final date = monday.add(Duration(days: i));
-              final dateStr = _formatDate(date);
-              final isSelected = dateStr == _selectedDateStr;
-              final isToday = dateStr == todayStr;
-
-              return Expanded(
-                child: GestureDetector(
-                  onTap: () => setState(() {
-                    _selectedDate = date;
-                    _selectedDateStr = dateStr;
-                  }),
-                  child: Container(
-                    margin: const EdgeInsets.symmetric(horizontal: 2),
-                    padding: const EdgeInsets.symmetric(vertical: 8),
-                    decoration: BoxDecoration(
-                      color: isSelected
-                          ? theme.colorScheme.primary
-                          : isToday
-                              ? theme.colorScheme.primary.withOpacity(0.15)
-                              : Colors.transparent,
-                      borderRadius: BorderRadius.circular(12),
-                    ),
-                    child: Column(
-                      mainAxisSize: MainAxisSize.min,
-                      children: [
-                        Text(
-                          dayNames[i],
-                          style: TextStyle(
-                            fontSize: 11,
-                            color: isSelected
-                                ? theme.colorScheme.onPrimary
-                                : isToday ? theme.colorScheme.primary : Colors.grey[600],
-                          ),
-                        ),
-                        const SizedBox(height: 2),
-                        Text(
-                          '${date.day}',
-                          style: TextStyle(
-                            fontSize: 15,
-                            fontWeight: isToday ? FontWeight.bold : FontWeight.normal,
-                            color: isSelected
-                                ? theme.colorScheme.onPrimary
-                                : isToday ? theme.colorScheme.primary : theme.colorScheme.onSurface,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
-                ),
-              );
-            }),
-          ),
-        ),
-      ],
-    );
-  }
-
-  // ─── Routine list ───────────────────────────────────────
-
-  Widget _buildRoutineList() {
-    final filtered = _filteredRoutines;
-
-    return CustomScrollView(
-      slivers: [
-        SliverAppBar.large(
-          title: const Text('루틴 관리'),
-          actions: [
-            if (!_isSelectedToday || _weekOffset != 0)
-              TextButton.icon(
-                onPressed: _goToToday,
-                icon: const Icon(Icons.today, size: 18),
-                label: const Text('오늘'),
-              ),
-            IconButton(icon: const Icon(Icons.info_outline), onPressed: _showInfo),
-          ],
-        ),
-        SliverToBoxAdapter(child: _buildDaySelector()),
-        const SliverToBoxAdapter(child: Divider(height: 1)),
-        if (filtered.isEmpty)
-          _buildEmptyState()
-        else
-          SliverList(
-            delegate: SliverChildBuilderDelegate(
-              (context, index) => _buildRoutineCard(filtered[index]),
-              childCount: filtered.length,
-            ),
-          ),
-      ],
-    );
-  }
-
-  Widget _buildEmptyState() {
-    return SliverFillRemaining(
-      child: Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.event_note, size: 64, color: Colors.grey[400]),
-            const SizedBox(height: 16),
-            Text(
-              _routines.isEmpty ? '루틴을 추가해보세요!' : '이 날에 활성화된 루틴이 없어요',
-              style: TextStyle(fontSize: 18, color: Colors.grey[600]),
-            ),
-            if (_routines.isEmpty) ...[
-              const SizedBox(height: 8),
-              Text(
-                '루틴 시간에 딴짓하면\n루나가 잔소리해줄 거예요',
-                textAlign: TextAlign.center,
-                style: TextStyle(color: Colors.grey[500]),
-              ),
-            ],
-          ],
-        ),
-      ),
-    );
-  }
-
-  // ─── Routine card ───────────────────────────────────────
-
-  Widget _buildRoutineCard(model.Routine routine) {
-    final isCompleted = widget.completionService.isCompleted(routine.id, _selectedDateStr);
-    final isSkipped = widget.completionService.isSkipped(routine.id, _selectedDateStr);
-
-    final dayNames = ['월', '화', '수', '목', '금', '토', '일'];
-    final activeDays = [
-      for (int i = 0; i < 7; i++)
-        if (routine.activeDays[i]) dayNames[i],
-    ];
-
-    return Card(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-      child: ListTile(
-        leading: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [_buildCheckCircle(routine.id, isCompleted, isSkipped)],
-        ),
-        title: Text(
-          routine.name,
-          style: TextStyle(
-            fontWeight: FontWeight.bold,
-            decoration: routine.isEnabled ? null : TextDecoration.lineThrough,
-          ),
-        ),
-        subtitle: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              '${routine.startTime.format()} - ${routine.endTime.format()}',
-              style: const TextStyle(fontSize: 13),
-            ),
-            Text(
-              activeDays.length == 7 ? '매일' : activeDays.join(' '),
-              style: TextStyle(fontSize: 12, color: Colors.grey[600]),
-            ),
-          ],
-        ),
-        trailing: Switch(
-          value: routine.isEnabled,
-          onChanged: (val) async {
-            routine.isEnabled = val;
-            await widget.routineService.update(routine);
-            _loadRoutines();
-          },
-        ),
-        onTap: () => _editRoutine(routine),
-        isThreeLine: true,
-      ),
-    );
-  }
-
-  /// Completion check circle: tap cycles none → completed → skipped → none
-  Widget _buildCheckCircle(String routineId, bool isCompleted, bool isSkipped) {
-    final hasCheck = isCompleted || isSkipped;
-    final color = isCompleted ? Colors.green : isSkipped ? Colors.orange : Colors.transparent;
-
-    return GestureDetector(
-      onTap: () async {
-        if (!isCompleted && !isSkipped) {
-          await widget.completionService.toggleCompletion(routineId, _selectedDateStr);
-        } else if (isCompleted) {
-          await widget.completionService.markSkipped(routineId, _selectedDateStr);
-        } else {
-          await widget.completionService.toggleCompletion(routineId, _selectedDateStr);
-          widget.onCompletionUnchecked?.call();
-        }
-        setState(() {});
-      },
-      child: Container(
-        width: 36,
-        height: 36,
-        decoration: BoxDecoration(
-          shape: BoxShape.circle,
-          color: hasCheck ? color : Colors.transparent,
-          border: Border.all(color: hasCheck ? color : Colors.grey[400]!, width: 2),
-        ),
-        child: hasCheck
-            ? Icon(isSkipped ? Icons.close : Icons.check, color: Colors.white, size: 20)
-            : null,
-      ),
-    );
-  }
-
-  // ─── Navigation ─────────────────────────────────────────
-
-  Future<void> _addRoutine() async {
-    final result = await Navigator.push<bool>(
-      context,
-      MaterialPageRoute(
-        builder: (_) => RoutineEditScreen(routineService: widget.routineService),
-      ),
-    );
-    if (result == true) _loadRoutines();
-  }
-
-  Future<void> _editRoutine(model.Routine routine) async {
-    final result = await Navigator.push<bool>(
-      context,
-      MaterialPageRoute(
-        builder: (_) => RoutineEditScreen(
-          routineService: widget.routineService,
-          routine: routine,
-        ),
-      ),
-    );
-    if (result == true) _loadRoutines();
-  }
-
-  // ─── Info dialog ────────────────────────────────────────
-
-  void _showInfo() {
-    showDialog(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: const Text('AI 루틴 잔소리'),
-        content: const Text(
-          '루틴 시간에 다른 앱을 사용하면 '
-          'AI 캐릭터 "루나"가 나타나서 잔소리해줍니다.\n\n'
-          '1. 루틴을 추가하세요\n'
-          '2. 차단할 앱을 선택하세요\n'
-          '3. 루틴 시간에 딴짓하면 루나가 나타나요!\n\n'
-          '루틴 완료 시 체크 표시를 눌러\n'
-          '통계 탭에서 완료율을 확인하세요.\n\n'
-          '설정에서 Gemini API 키를 입력해야\n'
-          'AI 대화가 작동합니다.',
-        ),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context),
-            child: const Text('확인'),
-          ),
+          const NavigationDestination(icon: Icon(Icons.settings), label: '설정'),
         ],
       ),
     );

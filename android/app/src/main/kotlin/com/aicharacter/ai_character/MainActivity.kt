@@ -12,12 +12,12 @@ import android.provider.Settings
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
 import android.media.MediaPlayer
-import io.flutter.embedding.android.FlutterActivity
+import io.flutter.embedding.android.FlutterFragmentActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.EventChannel
 import io.flutter.plugin.common.MethodChannel
 
-class MainActivity : FlutterActivity() {
+class MainActivity : FlutterFragmentActivity() {
     private val CHANNEL = "com.aicharacter.ai_character/usage_stats"
     private val AUDIO_CHANNEL = "com.aicharacter.ai_character/audio"
     private val SPEECH_CHANNEL = "com.aicharacter.ai_character/speech"

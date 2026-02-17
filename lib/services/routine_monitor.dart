@@ -129,7 +129,7 @@ class RoutineMonitor {
       final dateStr = _formatDate(targetDate);
 
       for (final r in routines) {
-        if (!r.isActiveOnDate(targetDate)) continue;
+        if (!r.isEnabled || !r.isActiveOnDate(targetDate)) continue;
         if (_completionService.hasRecord(r.id, dateStr)) continue;
         if (daysAgo == 0 && !_hasRoutineEnded(r, nowMinutes)) continue;
 
