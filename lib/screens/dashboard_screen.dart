@@ -13,7 +13,9 @@ import '../services/calendar_service.dart';
 import '../services/news_service.dart';
 import '../services/card_service.dart';
 import '../services/weather_service.dart';
+import '../services/recommendation_service.dart';
 import '../models/weather_data.dart';
+import '../models/recommendation_data.dart';
 import 'package:geolocator/geolocator.dart';
 import '../widgets/news_ticker.dart';
 import 'routine_list_screen.dart';
@@ -26,6 +28,7 @@ import 'calendar_screen.dart';
 import 'card_screen.dart';
 import 'weather_screen.dart';
 import 'news_screen.dart';
+import 'recommendation_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
   final RoutineService routineService;
@@ -42,6 +45,7 @@ class DashboardScreen extends StatefulWidget {
   final NewsService newsService;
   final CardService cardService;
   final WeatherService weatherService;
+  final RecommendationService recommendationService;
   final VoidCallback? onCompletionUnchecked;
 
   const DashboardScreen({
@@ -60,6 +64,7 @@ class DashboardScreen extends StatefulWidget {
     required this.newsService,
     required this.cardService,
     required this.weatherService,
+    required this.recommendationService,
     this.onCompletionUnchecked,
   });
 
@@ -70,6 +75,7 @@ class DashboardScreen extends StatefulWidget {
 class DashboardScreenState extends State<DashboardScreen> {
   List<String> _headlines = [];
   WeatherData? _weather;
+  RecommendationData? _recommendation;
   bool _editMode = false;
 
   @override
@@ -77,8 +83,10 @@ class DashboardScreenState extends State<DashboardScreen> {
     super.initState();
     _headlines = widget.newsService.getCached();
     _weather = widget.weatherService.getCached();
+    _recommendation = widget.recommendationService.getCached();
     _loadNews();
     _loadWeather();
+    _loadRecommendation();
   }
 
   Future<void> _loadNews() async {
@@ -111,10 +119,18 @@ class DashboardScreenState extends State<DashboardScreen> {
     if (mounted && data != null) setState(() => _weather = data);
   }
 
+  Future<void> _loadRecommendation() async {
+    try {
+      final data = await widget.recommendationService.fetch();
+      if (mounted) setState(() => _recommendation = data);
+    } catch (_) {}
+  }
+
   void refresh() {
     if (mounted) setState(() {});
     _loadNews();
     _loadWeather();
+    _loadRecommendation();
   }
 
   String _formatDate(DateTime dt) =>
@@ -126,6 +142,8 @@ class DashboardScreenState extends State<DashboardScreen> {
   Widget? _buildSection(String id, BuildContext context, DateTime now, String todayStr, ThemeData theme) {
     final large = widget.settingsService.isDashboardSectionLarge(id);
     switch (id) {
+      case 'recommend':
+        return large ? _buildRecommendLarge(theme) : _buildRecommendSmall(theme);
       case 'news':
         return large ? _buildNewsLarge(theme) : _buildNewsSmall(theme);
       case 'weather':
@@ -151,6 +169,99 @@ class DashboardScreenState extends State<DashboardScreen> {
       default:
         return null;
     }
+  }
+
+  // ─── 맞춤 정보 ──────────────────────────────────────
+
+  Widget? _buildRecommendLarge(ThemeData theme) {
+    final tipCount = _recommendation?.tips.length ?? 0;
+    final articleCount = _recommendation?.articles.length ?? 0;
+    if (tipCount == 0 && articleCount == 0 && _recommendation == null) return null;
+    return InkWell(
+      borderRadius: BorderRadius.circular(16),
+      onTap: () => _push(context, RecommendationScreen(recommendationService: widget.recommendationService)),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: theme.colorScheme.surfaceContainerLow,
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.auto_awesome_outlined, size: 18, color: theme.colorScheme.primary),
+                const SizedBox(width: 8),
+                Text('맞춤 정보', style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600)),
+                const Spacer(),
+                if (tipCount + articleCount > 0)
+                  Text('${tipCount + articleCount}건', style: TextStyle(fontSize: 13, color: theme.colorScheme.onSurfaceVariant)),
+              ],
+            ),
+            if (_recommendation != null && _recommendation!.tips.isNotEmpty) ...[
+              const SizedBox(height: 10),
+              ..._recommendation!.tips.take(2).map((tip) => Padding(
+                padding: const EdgeInsets.only(bottom: 6),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 4, height: 4,
+                      decoration: BoxDecoration(color: theme.colorScheme.primary.withValues(alpha: 0.5), shape: BoxShape.circle),
+                    ),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(tip.title, style: TextStyle(fontSize: 13, color: theme.colorScheme.onSurfaceVariant), overflow: TextOverflow.ellipsis),
+                    ),
+                  ],
+                ),
+              )),
+            ],
+            if (_recommendation != null && _recommendation!.articles.isNotEmpty) ...[
+              const SizedBox(height: 4),
+              ..._recommendation!.articles.take(2).map((a) => Padding(
+                padding: const EdgeInsets.only(bottom: 6),
+                child: Row(
+                  children: [
+                    Icon(Icons.article_outlined, size: 14, color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.5)),
+                    const SizedBox(width: 8),
+                    Expanded(
+                      child: Text(a.title, style: TextStyle(fontSize: 13, color: theme.colorScheme.onSurfaceVariant), overflow: TextOverflow.ellipsis),
+                    ),
+                  ],
+                ),
+              )),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget? _buildRecommendSmall(ThemeData theme) {
+    final tipCount = _recommendation?.tips.length ?? 0;
+    final articleCount = _recommendation?.articles.length ?? 0;
+    if (tipCount == 0 && articleCount == 0 && _recommendation == null) return null;
+    return InkWell(
+      borderRadius: BorderRadius.circular(12),
+      onTap: () => _push(context, RecommendationScreen(recommendationService: widget.recommendationService)),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        decoration: BoxDecoration(
+          color: theme.colorScheme.surfaceContainerLow,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Row(
+          children: [
+            Icon(Icons.auto_awesome_outlined, size: 18, color: theme.colorScheme.primary),
+            const SizedBox(width: 10),
+            Text('맞춤 정보', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: theme.colorScheme.onSurface)),
+            const Spacer(),
+            Text('${tipCount + articleCount}건', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: theme.colorScheme.onSurfaceVariant)),
+          ],
+        ),
+      ),
+    );
   }
 
   // ─── 뉴스 ────────────────────────────────────────
@@ -1008,7 +1119,7 @@ class DashboardScreenState extends State<DashboardScreen> {
 
   String _sectionLabel(String id) {
     const labels = {
-      'news': '뉴스', 'weather': '날씨', 'routine': '루틴', 'todo': '할 일',
+      'recommend': '맞춤 정보', 'news': '뉴스', 'weather': '날씨', 'routine': '루틴', 'todo': '할 일',
       'card': '명함', 'calendar': '캘린더', 'stats': '통계', 'alarm': '알람',
       'timer': '타이머', 'memo': '메모', 'dday': 'D-Day',
     };
@@ -1017,7 +1128,7 @@ class DashboardScreenState extends State<DashboardScreen> {
 
   IconData _sectionIcon(String id) {
     const icons = {
-      'news': Icons.newspaper_outlined, 'weather': Icons.wb_sunny_outlined,
+      'recommend': Icons.auto_awesome_outlined, 'news': Icons.newspaper_outlined, 'weather': Icons.wb_sunny_outlined,
       'routine': Icons.check_circle_outline, 'todo': Icons.checklist,
       'card': Icons.badge_outlined, 'calendar': Icons.calendar_month_outlined,
       'stats': Icons.bar_chart_rounded, 'alarm': Icons.alarm_rounded,

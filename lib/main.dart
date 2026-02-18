@@ -25,6 +25,7 @@ import 'services/calendar_service.dart';
 import 'services/news_service.dart';
 import 'services/card_service.dart';
 import 'services/weather_service.dart';
+import 'services/recommendation_service.dart';
 import 'widgets/overlay_character.dart';
 import 'theme/app_theme.dart';
 
@@ -86,6 +87,18 @@ void main() async {
   final healthService = HealthService();
   await healthService.checkExistingPermissions();
 
+  final recommendationService = RecommendationService(
+    prefs: prefs,
+    cardService: cardService,
+    routineService: routineService,
+    completionService: completionService,
+    todoService: todoService,
+    memoService: memoService,
+    calendarService: calendarService,
+    weatherService: weatherService,
+    healthService: healthService,
+  );
+
   final apiKey = settingsService.apiKey;
   if (apiKey.isNotEmpty) {
     geminiService.initialize(apiKey, characterName: settingsService.characterName);
@@ -127,6 +140,7 @@ void main() async {
     newsService: newsService,
     cardService: cardService,
     weatherService: weatherService,
+    recommendationService: recommendationService,
   ));
 }
 
@@ -148,6 +162,7 @@ class AiCharacterApp extends StatefulWidget {
   final NewsService newsService;
   final CardService cardService;
   final WeatherService weatherService;
+  final RecommendationService recommendationService;
 
   const AiCharacterApp({
     super.key,
@@ -168,6 +183,7 @@ class AiCharacterApp extends StatefulWidget {
     required this.newsService,
     required this.cardService,
     required this.weatherService,
+    required this.recommendationService,
   });
 
   @override
@@ -243,6 +259,7 @@ class _AiCharacterAppState extends State<AiCharacterApp>
         newsService: widget.newsService,
         cardService: widget.cardService,
         weatherService: widget.weatherService,
+        recommendationService: widget.recommendationService,
         onCompletionUnchecked: widget.routineMonitor.forceCheck,
       ),
     );

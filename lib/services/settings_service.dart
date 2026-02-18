@@ -86,7 +86,7 @@ class SettingsService {
 
   // Dashboard order
   static const _dashboardOrderKey = 'dashboard_order';
-  static const defaultDashboardOrder = ['news', 'weather', 'routine', 'todo', 'card', 'calendar', 'stats', 'alarm', 'timer', 'memo', 'dday'];
+  static const defaultDashboardOrder = ['recommend', 'news', 'weather', 'routine', 'todo', 'card', 'calendar', 'stats', 'alarm', 'timer', 'memo', 'dday'];
 
   List<String> get dashboardOrder {
     final raw = _prefs.getString(_dashboardOrderKey);
@@ -118,7 +118,7 @@ class SettingsService {
   // Dashboard section sizes (true=large, false=small)
   static const _dashboardSizesKey = 'dashboard_sizes';
   // All sections default to large
-  static const _defaultLargeSections = {'news', 'weather', 'routine', 'todo', 'card', 'calendar', 'stats', 'alarm', 'timer', 'memo', 'dday'};
+  static const _defaultLargeSections = {'recommend', 'news', 'weather', 'routine', 'todo', 'card', 'calendar', 'stats', 'alarm', 'timer', 'memo', 'dday'};
 
   bool isDashboardSectionLarge(String id) {
     final raw = _prefs.getString(_dashboardSizesKey);
