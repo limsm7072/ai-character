@@ -108,6 +108,9 @@ class RecommendationService {
       _addWords(words, card.position);
       _addWords(words, card.city);
       _addWords(words, card.province);
+      if (card.interest1.isNotEmpty) _addWords(words, card.interest1);
+      if (card.interest2.isNotEmpty) _addWords(words, card.interest2);
+      if (card.interest3.isNotEmpty) _addWords(words, card.interest3);
     }
 
     // 루틴: name, description

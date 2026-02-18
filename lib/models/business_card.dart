@@ -10,6 +10,9 @@ class BusinessCard {
   String city;     // 시/구
   String gender;   // '남', '여', ''
   String birthYear; // e.g. '1990'
+  String interest1;
+  String interest2;
+  String interest3;
   String photoPath; // 로컬 사진 경로
   int theme; // 0=미니멀화이트, 1=다크, 2=그라데이션, 3=파스텔
 
@@ -23,6 +26,7 @@ class BusinessCard {
   bool showGender;
   bool showBirthYear;
   bool showPhoto;
+  bool showInterests;
 
   BusinessCard({
     this.name = '',
@@ -36,6 +40,9 @@ class BusinessCard {
     this.city = '',
     this.gender = '',
     this.birthYear = '',
+    this.interest1 = '',
+    this.interest2 = '',
+    this.interest3 = '',
     this.photoPath = '',
     this.theme = 0,
     this.showCompany = true,
@@ -47,6 +54,7 @@ class BusinessCard {
     this.showGender = true,
     this.showBirthYear = true,
     this.showPhoto = true,
+    this.showInterests = true,
   });
 
   Map<String, dynamic> toJson() => {
@@ -61,6 +69,9 @@ class BusinessCard {
     'city': city,
     'gender': gender,
     'birthYear': birthYear,
+    'interest1': interest1,
+    'interest2': interest2,
+    'interest3': interest3,
     'photoPath': photoPath,
     'theme': theme,
     'showCompany': showCompany,
@@ -72,6 +83,7 @@ class BusinessCard {
     'showGender': showGender,
     'showBirthYear': showBirthYear,
     'showPhoto': showPhoto,
+    'showInterests': showInterests,
   };
 
   factory BusinessCard.fromJson(Map<String, dynamic> json) => BusinessCard(
@@ -86,6 +98,9 @@ class BusinessCard {
     city: json['city'] as String? ?? '',
     gender: json['gender'] as String? ?? '',
     birthYear: json['birthYear'] as String? ?? '',
+    interest1: json['interest1'] as String? ?? '',
+    interest2: json['interest2'] as String? ?? '',
+    interest3: json['interest3'] as String? ?? '',
     photoPath: json['photoPath'] as String? ?? '',
     theme: json['theme'] as int? ?? 0,
     showCompany: json['showCompany'] as bool? ?? true,
@@ -97,7 +112,16 @@ class BusinessCard {
     showGender: json['showGender'] as bool? ?? true,
     showBirthYear: json['showBirthYear'] as bool? ?? true,
     showPhoto: json['showPhoto'] as bool? ?? true,
+    showInterests: json['showInterests'] as bool? ?? true,
   );
+
+  String get interestsText {
+    final parts = <String>[];
+    if (interest1.isNotEmpty) parts.add(interest1);
+    if (interest2.isNotEmpty) parts.add(interest2);
+    if (interest3.isNotEmpty) parts.add(interest3);
+    return parts.join(', ');
+  }
 
   String get locationText {
     final parts = <String>[];
@@ -139,6 +163,7 @@ class BusinessCard {
     if (showEmail && email.isNotEmpty) parts.add('Email: $email');
     if (showGender && gender.isNotEmpty) parts.add('성별: $gender');
     if (showBirthYear && birthYear.isNotEmpty) parts.add('${birthYear}년생');
+    if (showInterests && interestsText.isNotEmpty) parts.add('관심사: $interestsText');
     if (showBio && bio.isNotEmpty) parts.add(bio);
     return parts.join('\n');
   }

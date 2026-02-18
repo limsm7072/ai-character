@@ -32,6 +32,9 @@ class _CardScreenState extends State<CardScreen> {
   late TextEditingController _provinceCtrl;
   late TextEditingController _cityCtrl;
   late TextEditingController _birthYearCtrl;
+  late TextEditingController _interest1Ctrl;
+  late TextEditingController _interest2Ctrl;
+  late TextEditingController _interest3Ctrl;
 
   @override
   void initState() {
@@ -48,6 +51,9 @@ class _CardScreenState extends State<CardScreen> {
     _provinceCtrl = TextEditingController(text: _card.province);
     _cityCtrl = TextEditingController(text: _card.city);
     _birthYearCtrl = TextEditingController(text: _card.birthYear);
+    _interest1Ctrl = TextEditingController(text: _card.interest1);
+    _interest2Ctrl = TextEditingController(text: _card.interest2);
+    _interest3Ctrl = TextEditingController(text: _card.interest3);
   }
 
   @override
@@ -62,6 +68,9 @@ class _CardScreenState extends State<CardScreen> {
     _provinceCtrl.dispose();
     _cityCtrl.dispose();
     _birthYearCtrl.dispose();
+    _interest1Ctrl.dispose();
+    _interest2Ctrl.dispose();
+    _interest3Ctrl.dispose();
     super.dispose();
   }
 
@@ -76,6 +85,9 @@ class _CardScreenState extends State<CardScreen> {
     _card.province = _provinceCtrl.text.trim();
     _card.city = _cityCtrl.text.trim();
     _card.birthYear = _birthYearCtrl.text.trim();
+    _card.interest1 = _interest1Ctrl.text.trim();
+    _card.interest2 = _interest2Ctrl.text.trim();
+    _card.interest3 = _interest3Ctrl.text.trim();
     setState(() {});
   }
 
@@ -258,6 +270,9 @@ class _CardScreenState extends State<CardScreen> {
               visible: _card.showBirthYear,
               onToggle: (v) => setState(() => _card.showBirthYear = v)),
 
+          // ─── 관심사 ──────────────────
+          _buildInterestsRow(theme),
+
           _buildField('한 줄 소개', _bioCtrl, Icons.info_outline,
               visible: _card.showBio,
               onToggle: (v) => setState(() => _card.showBio = v)),
@@ -350,6 +365,8 @@ class _CardScreenState extends State<CardScreen> {
             _previewRow(Icons.wc_outlined, _card.gender, t),
           if (_card.showBirthYear && _card.birthYear.isNotEmpty)
             _previewRow(Icons.cake_outlined, '${_card.birthYear}년생', t),
+          if (_card.showInterests && _card.interestsText.isNotEmpty)
+            _previewRow(Icons.interests_outlined, _card.interestsText, t),
           if (_card.showBio && _card.bio.isNotEmpty) ...[
             const SizedBox(height: 8),
             Text(
@@ -544,6 +561,66 @@ class _CardScreenState extends State<CardScreen> {
       selected: selected,
       onSelected: (v) => setState(() => _card.gender = v ? label : ''),
       visualDensity: VisualDensity.compact,
+    );
+  }
+
+  // ─── 관심사 입력 (3칸 한 줄 + 토글) ─────────
+
+  Widget _buildInterestsRow(ThemeData theme) {
+    return Padding(
+      padding: const EdgeInsets.only(bottom: 12),
+      child: Row(
+        children: [
+          Expanded(
+            child: TextField(
+              controller: _interest1Ctrl,
+              onChanged: (_) => _updateCard(),
+              decoration: InputDecoration(
+                labelText: '관심사 1',
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: TextField(
+              controller: _interest2Ctrl,
+              onChanged: (_) => _updateCard(),
+              decoration: InputDecoration(
+                labelText: '관심사 2',
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          Expanded(
+            child: TextField(
+              controller: _interest3Ctrl,
+              onChanged: (_) => _updateCard(),
+              decoration: InputDecoration(
+                labelText: '관심사 3',
+                border: OutlineInputBorder(borderRadius: BorderRadius.circular(12)),
+                contentPadding: const EdgeInsets.symmetric(horizontal: 12, vertical: 14),
+              ),
+            ),
+          ),
+          const SizedBox(width: 8),
+          SizedBox(
+            width: 40,
+            child: IconButton(
+              icon: Icon(
+                _card.showInterests ? Icons.visibility : Icons.visibility_off,
+                size: 20,
+                color: _card.showInterests ? AppColors.primary : AppColors.grey400,
+              ),
+              tooltip: _card.showInterests ? '공개' : '비공개',
+              onPressed: () => setState(() => _card.showInterests = !_card.showInterests),
+            ),
+          ),
+        ],
+      ),
     );
   }
 
