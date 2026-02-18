@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../models/routine.dart' as model;
 import '../models/distraction_log.dart';
 import '../services/distraction_log_service.dart';
+import '../theme/app_colors.dart';
 
 class RoutineStatsScreen extends StatefulWidget {
   final String routineId;
@@ -64,16 +65,16 @@ class _RoutineStatsScreenState extends State<RoutineStatsScreen> {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(Icons.emoji_events, size: 64, color: Colors.amber[300]),
+                  Icon(Icons.emoji_events, size: 64, color: AppColors.trophy),
                   const SizedBox(height: 16),
                   Text(
                     '딴짓 기록이 없어요!',
-                    style: TextStyle(fontSize: 18, color: Colors.grey[600]),
+                    style: TextStyle(fontSize: 18, color: AppColors.grey600),
                   ),
                   const SizedBox(height: 8),
                   Text(
                     '이대로 집중 잘 하고 있네요',
-                    style: TextStyle(color: Colors.grey[500]),
+                    style: TextStyle(color: AppColors.grey500),
                   ),
                 ],
               ),
@@ -142,7 +143,7 @@ class _RoutineStatsScreenState extends State<RoutineStatsScreen> {
                     icon: Icons.warning_amber,
                     label: '총 딴짓 횟수',
                     value: '${_totalStats.totalDistractions}회',
-                    color: Colors.orange,
+                    color: AppColors.warning,
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -151,7 +152,7 @@ class _RoutineStatsScreenState extends State<RoutineStatsScreen> {
                     icon: Icons.timer,
                     label: '총 딴짓 시간',
                     value: _formatDuration(_totalStats.totalTime),
-                    color: Colors.red,
+                    color: AppColors.error,
                   ),
                 ),
               ],
@@ -164,7 +165,7 @@ class _RoutineStatsScreenState extends State<RoutineStatsScreen> {
                     icon: Icons.calendar_today,
                     label: '기록된 일수',
                     value: '${_statsByDate.length}일',
-                    color: Colors.blue,
+                    color: AppColors.info,
                   ),
                 ),
                 const SizedBox(width: 12),
@@ -173,7 +174,7 @@ class _RoutineStatsScreenState extends State<RoutineStatsScreen> {
                     icon: Icons.apps,
                     label: '사용한 앱 수',
                     value: '${_totalStats.appBreakdown.length}개',
-                    color: Colors.purple,
+                    color: AppColors.calendarLunar,
                   ),
                 ),
               ],
@@ -210,7 +211,7 @@ class _RoutineStatsScreenState extends State<RoutineStatsScreen> {
           ),
           Text(
             label,
-            style: TextStyle(fontSize: 11, color: Colors.grey[600]),
+            style: TextStyle(fontSize: 11, color: AppColors.grey600),
             textAlign: TextAlign.center,
           ),
         ],
@@ -240,7 +241,7 @@ class _RoutineStatsScreenState extends State<RoutineStatsScreen> {
                 const SizedBox(height: 8),
                 Text(
                   '딴짓 ${stats.totalDistractions}회 / ${_formatDuration(stats.totalTime)}',
-                  style: TextStyle(color: Colors.grey[600]),
+                  style: TextStyle(color: AppColors.grey600),
                 ),
               ],
             ),
@@ -357,8 +358,8 @@ class _RoutineStatsScreenState extends State<RoutineStatsScreen> {
             Row(
               mainAxisAlignment: MainAxisAlignment.spaceBetween,
               children: [
-                Text(startTime.format(), style: TextStyle(fontSize: 11, color: Colors.grey[600])),
-                Text(endTime.format(), style: TextStyle(fontSize: 11, color: Colors.grey[600])),
+                Text(startTime.format(), style: TextStyle(fontSize: 11, color: AppColors.grey600)),
+                Text(endTime.format(), style: TextStyle(fontSize: 11, color: AppColors.grey600)),
               ],
             ),
             const SizedBox(height: 4),
@@ -394,7 +395,7 @@ class _RoutineStatsScreenState extends State<RoutineStatsScreen> {
                   const SizedBox(width: 4),
                   Text(
                     '${e.appLabel} ${_formatDuration(e.totalDuration)}',
-                    style: TextStyle(fontSize: 11, color: Colors.grey[700]),
+                    style: TextStyle(fontSize: 11, color: AppColors.grey700),
                   ),
                 ],
               )).toList(),
@@ -404,18 +405,18 @@ class _RoutineStatsScreenState extends State<RoutineStatsScreen> {
             // Focus summary
             Row(
               children: [
-                Icon(Icons.center_focus_strong, size: 14, color: Colors.green[600]),
+                Icon(Icons.center_focus_strong, size: 14, color: AppColors.successDark),
                 const SizedBox(width: 4),
                 Text(
                   '집중 $focusRate% (${_formatDuration(Duration(milliseconds: focusMs))})',
-                  style: TextStyle(fontSize: 12, color: Colors.green[700], fontWeight: FontWeight.w600),
+                  style: TextStyle(fontSize: 12, color: AppColors.successDark, fontWeight: FontWeight.w600),
                 ),
                 const SizedBox(width: 12),
-                Icon(Icons.phone_android, size: 14, color: Colors.red[400]),
+                Icon(Icons.phone_android, size: 14, color: AppColors.errorMid),
                 const SizedBox(width: 4),
                 Text(
                   '딴짓 ${_formatDuration(Duration(milliseconds: distractionMs))}',
-                  style: TextStyle(fontSize: 12, color: Colors.red[400]),
+                  style: TextStyle(fontSize: 12, color: AppColors.errorMid),
                 ),
               ],
             ),
@@ -458,7 +459,7 @@ class _RoutineStatsScreenState extends State<RoutineStatsScreen> {
                 Text(_formatDuration(app.totalTime)),
                 const SizedBox(width: 12),
                 Text('$percentage%',
-                    style: TextStyle(color: Colors.red[400])),
+                    style: TextStyle(color: AppColors.errorMid)),
               ],
             ),
             const SizedBox(height: 6),
@@ -469,7 +470,7 @@ class _RoutineStatsScreenState extends State<RoutineStatsScreen> {
                     ? app.totalTime.inSeconds / totalTime.inSeconds
                     : 0,
                 minHeight: 6,
-                backgroundColor: Colors.grey[200],
+                backgroundColor: AppColors.grey200,
               ),
             ),
           ],
@@ -481,17 +482,7 @@ class _RoutineStatsScreenState extends State<RoutineStatsScreen> {
 
   Color _getAppColor(String label) {
     final hash = label.hashCode;
-    final colors = [
-      Colors.red,
-      Colors.blue,
-      Colors.green,
-      Colors.orange,
-      Colors.purple,
-      Colors.teal,
-      Colors.pink,
-      Colors.indigo,
-    ];
-    return colors[hash.abs() % colors.length];
+    return AppColors.chartColors[hash.abs() % AppColors.chartColors.length];
   }
 
   String _formatDuration(Duration d) {
@@ -541,7 +532,7 @@ class _RoutineStatsScreenState extends State<RoutineStatsScreen> {
                 setState(() => _loadStats());
               }
             },
-            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            style: TextButton.styleFrom(foregroundColor: AppColors.error),
             child: const Text('삭제'),
           ),
         ],
@@ -595,7 +586,7 @@ class _TimelineBarPainter extends CustomPainter {
     final barRect = Rect.fromLTWH(0, 0, size.width, barHeight);
 
     // Background (focus area) - light green
-    final bgPaint = Paint()..color = const Color(0xFFE8F5E9);
+    final bgPaint = Paint()..color = AppColors.successBg;
     canvas.drawRRect(
       RRect.fromRectAndRadius(barRect, const Radius.circular(6)),
       bgPaint,

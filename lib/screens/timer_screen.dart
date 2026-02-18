@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../models/timer_preset.dart';
 import '../services/timer_service.dart';
+import '../theme/app_colors.dart';
 
 class TimerScreen extends StatefulWidget {
   final TimerService timerService;
@@ -427,13 +428,13 @@ class _PomodoroTabState extends State<_PomodoroTab> {
                   style: TextStyle(
                     fontSize: 22,
                     fontWeight: FontWeight.bold,
-                    color: _isFocusPhase ? theme.colorScheme.primary : Colors.green,
+                    color: _isFocusPhase ? theme.colorScheme.primary : AppColors.success,
                   ),
                 ),
                 const SizedBox(height: 4),
                 Text(
                   '$_currentSession/$_targetSessions 세션',
-                  style: TextStyle(fontSize: 14, color: Colors.grey[600]),
+                  style: TextStyle(fontSize: 14, color: AppColors.grey600),
                 ),
                 const SizedBox(height: 20),
                 // Circular progress
@@ -449,7 +450,7 @@ class _PomodoroTabState extends State<_PomodoroTab> {
                         child: CircularProgressIndicator(
                           value: progress,
                           strokeWidth: 8,
-                          color: _isFocusPhase ? theme.colorScheme.primary : Colors.green,
+                          color: _isFocusPhase ? theme.colorScheme.primary : AppColors.success,
                           backgroundColor: theme.colorScheme.surfaceContainerHighest,
                         ),
                       ),
@@ -504,7 +505,7 @@ class _PomodoroTabState extends State<_PomodoroTab> {
                             });
                           },
                         ),
-                        Container(width: 1, height: 36, color: Colors.grey[300]),
+                        Container(width: 1, height: 36, color: AppColors.grey300),
                         _CompactSetting(
                           label: '휴식(분)',
                           value: _breakMinutes,
@@ -516,7 +517,7 @@ class _PomodoroTabState extends State<_PomodoroTab> {
                             });
                           },
                         ),
-                        Container(width: 1, height: 36, color: Colors.grey[300]),
+                        Container(width: 1, height: 36, color: AppColors.grey300),
                         _CompactSetting(
                           label: '세션',
                           value: _targetSessions,
@@ -664,7 +665,7 @@ class _FocusModeScreenState extends State<_FocusModeScreen> {
     final theme = Theme.of(context);
     final progress = _totalPhaseSeconds > 0 ? _s.remaining / _totalPhaseSeconds : 0.0;
     final isFocus = _s.isFocusPhase;
-    final accentColor = isFocus ? theme.colorScheme.primary : Colors.green;
+    final accentColor = isFocus ? theme.colorScheme.primary : AppColors.success;
 
     return PopScope(
       canPop: false,
@@ -672,7 +673,7 @@ class _FocusModeScreenState extends State<_FocusModeScreen> {
         if (!didPop) _exit();
       },
       child: Scaffold(
-        backgroundColor: Colors.black,
+        backgroundColor: AppColors.black,
         body: GestureDetector(
           onTap: _startPause,
           child: Stack(
@@ -707,7 +708,7 @@ class _FocusModeScreenState extends State<_FocusModeScreen> {
                               value: progress,
                               strokeWidth: 6,
                               color: accentColor,
-                              backgroundColor: Colors.white.withValues(alpha: 0.08),
+                              backgroundColor: AppColors.white.withValues(alpha: 0.08),
                             ),
                           ),
                           Text(
@@ -715,7 +716,7 @@ class _FocusModeScreenState extends State<_FocusModeScreen> {
                             style: const TextStyle(
                               fontSize: 52,
                               fontWeight: FontWeight.w200,
-                              color: Colors.white,
+                              color: AppColors.white,
                               letterSpacing: 2,
                             ),
                           ),
@@ -728,7 +729,7 @@ class _FocusModeScreenState extends State<_FocusModeScreen> {
                       '${_s.currentSession} / ${_s.targetSessions}',
                       style: TextStyle(
                         fontSize: 14,
-                        color: Colors.white.withValues(alpha: 0.4),
+                        color: AppColors.white.withValues(alpha: 0.4),
                       ),
                     ),
                     const SizedBox(height: 40),
@@ -736,14 +737,14 @@ class _FocusModeScreenState extends State<_FocusModeScreen> {
                     Icon(
                       _isRunning ? Icons.pause_rounded : Icons.play_arrow_rounded,
                       size: 36,
-                      color: Colors.white.withValues(alpha: 0.3),
+                      color: AppColors.white.withValues(alpha: 0.3),
                     ),
                     const SizedBox(height: 8),
                     Text(
                       _isRunning ? '탭하여 일시정지' : '탭하여 시작',
                       style: TextStyle(
                         fontSize: 12,
-                        color: Colors.white.withValues(alpha: 0.25),
+                        color: AppColors.white.withValues(alpha: 0.25),
                       ),
                     ),
                   ],
@@ -757,7 +758,7 @@ class _FocusModeScreenState extends State<_FocusModeScreen> {
                   onPressed: _exit,
                   icon: Icon(
                     Icons.close,
-                    color: Colors.white.withValues(alpha: 0.4),
+                    color: AppColors.white.withValues(alpha: 0.4),
                     size: 24,
                   ),
                 ),
@@ -795,7 +796,7 @@ class _CompactSetting extends StatelessWidget {
       child: Column(
         mainAxisSize: MainAxisSize.min,
         children: [
-          Text(label, style: TextStyle(fontSize: 11, color: Colors.grey[600])),
+          Text(label, style: TextStyle(fontSize: 11, color: AppColors.grey600)),
           const SizedBox(height: 2),
           Row(
             mainAxisAlignment: MainAxisAlignment.center,

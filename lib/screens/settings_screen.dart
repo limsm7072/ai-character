@@ -5,17 +5,22 @@ import '../services/settings_service.dart';
 import '../services/app_detection_service.dart';
 import '../services/overlay_service.dart';
 import '../services/tts_service.dart';
+import '../services/weather_service.dart';
+import '../theme/app_colors.dart';
+import 'package:geolocator/geolocator.dart';
 
 class SettingsScreen extends StatefulWidget {
   final SettingsService settingsService;
   final AppDetectionService? appDetection;
   final TtsService ttsService;
+  final WeatherService weatherService;
 
   const SettingsScreen({
     super.key,
     required this.settingsService,
     this.appDetection,
     required this.ttsService,
+    required this.weatherService,
   });
 
   @override
@@ -224,24 +229,14 @@ class _SettingsScreenState extends State<SettingsScreen> {
               setState(() {});
             },
           ),
-          // Female voices
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-            child: Text('여자 목소리',
-                style: TextStyle(fontSize: 12, color: Colors.grey[600])),
+          _buildVoiceGroup(
+            title: '여자 목소리',
+            presets: voicePresets.where((p) => p.gender == 'female').toList(),
           ),
-          ...voicePresets
-              .where((p) => p.gender == 'female')
-              .map((preset) => _buildVoiceTile(preset)),
-          // Male voices
-          Padding(
-            padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-            child: Text('남자 목소리',
-                style: TextStyle(fontSize: 12, color: Colors.grey[600])),
+          _buildVoiceGroup(
+            title: '남자 목소리',
+            presets: voicePresets.where((p) => p.gender == 'male').toList(),
           ),
-          ...voicePresets
-              .where((p) => p.gender == 'male')
-              .map((preset) => _buildVoiceTile(preset)),
           const Divider(),
 
           // Character Selection
@@ -306,12 +301,38 @@ class _SettingsScreenState extends State<SettingsScreen> {
               setState(() {});
             },
           ),
+          SwitchListTile(
+            title: const Text('앱 잠금'),
+            subtitle: const Text('루틴 시간에 차단된 앱을 강제로 닫습니다'),
+            value: widget.settingsService.appLockEnabled,
+            onChanged: (v) async {
+              await widget.settingsService.setAppLockEnabled(v);
+              setState(() {});
+            },
+          ),
+          const Divider(),
+
+          // Weather Section
+          _buildSectionHeader('날씨'),
+          ListTile(
+            title: Text(
+              widget.settingsService.weatherLocationName.isNotEmpty
+                  ? widget.settingsService.weatherLocationName
+                  : '현재 위치',
+            ),
+            subtitle: Text(
+              '위도 ${widget.settingsService.weatherLat.toStringAsFixed(4)}, '
+              '경도 ${widget.settingsService.weatherLon.toStringAsFixed(4)}',
+            ),
+            trailing: const Icon(Icons.my_location),
+            onTap: _updateWeatherLocation,
+          ),
           const SizedBox(height: 32),
 
           Center(
             child: Text(
               'AI Character v1.0.0',
-              style: TextStyle(color: Colors.grey[500], fontSize: 12),
+              style: TextStyle(color: AppColors.grey500, fontSize: 12),
             ),
           ),
           const SizedBox(height: 16),
@@ -382,11 +403,30 @@ class _SettingsScreenState extends State<SettingsScreen> {
       title: Text(title),
       subtitle: Text(subtitle),
       trailing: granted
-          ? const Icon(Icons.check_circle, color: Colors.green)
+          ? const Icon(Icons.check_circle, color: AppColors.success)
           : OutlinedButton(
               onPressed: onTap,
               child: const Text('허용'),
             ),
+    );
+  }
+
+  Widget _buildVoiceGroup({
+    required String title,
+    required List<VoicePreset> presets,
+  }) {
+    final selected = presets.any((p) => p.id == widget.settingsService.voicePreset);
+    final current = selected
+        ? presets.firstWhere((p) => p.id == widget.settingsService.voicePreset)
+        : null;
+
+    return ExpansionTile(
+      title: Text(title),
+      subtitle: current != null
+          ? Text(current.label, style: TextStyle(color: Theme.of(context).colorScheme.primary, fontSize: 13))
+          : null,
+      initiallyExpanded: selected,
+      children: presets.map((p) => _buildVoiceTile(p)).toList(),
     );
   }
 
@@ -431,6 +471,47 @@ class _SettingsScreenState extends State<SettingsScreen> {
     final minutes = seconds ~/ 60;
     if (minutes < 60) return '$minutes분마다 미완료 루틴 확인';
     return '${minutes ~/ 60}시간마다 미완료 루틴 확인';
+  }
+
+  Future<void> _updateWeatherLocation() async {
+    try {
+      var perm = await Geolocator.checkPermission();
+      if (perm == LocationPermission.denied) {
+        perm = await Geolocator.requestPermission();
+      }
+      if (perm == LocationPermission.deniedForever) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('위치 권한이 영구 거부됨. 설정에서 허용해주세요')),
+          );
+        }
+        return;
+      }
+      if (perm == LocationPermission.denied) return;
+
+      final pos = await Geolocator.getCurrentPosition(
+        locationSettings: const LocationSettings(accuracy: LocationAccuracy.high, timeLimit: Duration(seconds: 10)),
+      );
+      await widget.settingsService.setWeatherLocation(pos.latitude, pos.longitude);
+      // Fetch weather to trigger reverse geocoding for location name
+      final data = await widget.weatherService.fetch(pos.latitude, pos.longitude);
+      if (data != null && data.locationName.isNotEmpty) {
+        await widget.settingsService.setWeatherLocationName(data.locationName);
+      }
+      if (mounted) {
+        setState(() {});
+        final name = widget.settingsService.weatherLocationName;
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(name.isNotEmpty ? '위치 업데이트: $name' : '위치 업데이트 완료')),
+        );
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('위치 가져오기 실패: $e')),
+        );
+      }
+    }
   }
 
   String _intensityLabel(int level) {

@@ -15,6 +15,7 @@ import '../services/memo_service.dart';
 import '../services/alarm_service.dart';
 import '../services/calendar_service.dart';
 import '../widgets/spine_character_widget.dart';
+import '../theme/app_colors.dart';
 import 'dress_up_screen.dart';
 
 class CharacterChatScreen extends StatefulWidget {
@@ -256,20 +257,20 @@ class _CharacterChatScreenState extends State<CharacterChatScreen> {
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Icon(Icons.key, size: 48, color: Colors.grey[400]),
+                          Icon(Icons.key, size: 48, color: AppColors.grey400),
                           const SizedBox(height: 16),
                           Text(
                             'Gemini API 키를 설정해주세요',
                             style: TextStyle(
                               fontSize: 16,
-                              color: Colors.grey[600],
+                              color: AppColors.grey600,
                             ),
                           ),
                           const SizedBox(height: 8),
                           Text(
                             '설정 탭에서 API 키를 입력하면\n$_charName와 대화할 수 있어요',
                             textAlign: TextAlign.center,
-                            style: TextStyle(color: Colors.grey[500]),
+                            style: TextStyle(color: AppColors.grey500),
                           ),
                         ],
                       ),
@@ -282,13 +283,13 @@ class _CharacterChatScreenState extends State<CharacterChatScreen> {
                           children: [
                             Text(
                               '$_charName에게 말을 걸어보세요!',
-                              style: TextStyle(color: Colors.grey[500]),
+                              style: TextStyle(color: AppColors.grey500),
                             ),
                             const SizedBox(height: 8),
                             Text(
                               '루틴, 할 일, 메모, 알람, 일정도 대화로 관리해요',
                               style: TextStyle(
-                                color: Colors.grey[400],
+                                color: AppColors.grey400,
                                 fontSize: 12,
                               ),
                             ),
@@ -307,18 +308,18 @@ class _CharacterChatScreenState extends State<CharacterChatScreen> {
           if (_isListening)
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-              color: Colors.red.withValues(alpha: 0.1),
+              color: AppColors.error.withValues(alpha: 0.1),
               child: Row(
                 children: [
-                  const Icon(Icons.mic, color: Colors.red, size: 20),
+                  const Icon(Icons.mic, color: AppColors.error, size: 20),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
                       _currentWords.isEmpty ? '듣고 있어요...' : _currentWords,
                       style: TextStyle(
                         color: _currentWords.isEmpty
-                            ? Colors.grey[600]
-                            : Colors.black87,
+                            ? AppColors.grey600
+                            : AppColors.black87,
                         fontStyle: _currentWords.isEmpty
                             ? FontStyle.italic
                             : FontStyle.normal,
@@ -344,7 +345,7 @@ class _CharacterChatScreenState extends State<CharacterChatScreen> {
                 color: Theme.of(context).colorScheme.surface,
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.1),
+                    color: AppColors.black.withValues(alpha: 0.1),
                     blurRadius: 4,
                     offset: const Offset(0, -2),
                   ),
@@ -357,7 +358,7 @@ class _CharacterChatScreenState extends State<CharacterChatScreen> {
                     onPressed: _isLoading ? null : _toggleVoiceMode,
                     icon: Icon(
                       _voiceMode ? Icons.mic : Icons.mic_none,
-                      color: _voiceMode ? Colors.red : null,
+                      color: _voiceMode ? AppColors.error : null,
                     ),
                     tooltip: _voiceMode ? '음성 모드 끄기' : '음성 모드 켜기',
                   ),
@@ -453,14 +454,14 @@ class _CharacterChatScreenState extends State<CharacterChatScreen> {
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
         child: Row(
           children: [
-            Icon(Icons.build_circle_outlined, size: 14, color: Colors.grey[500]),
+            Icon(Icons.build_circle_outlined, size: 14, color: AppColors.grey500),
             const SizedBox(width: 6),
             Expanded(
               child: Text(
                 msg.text,
                 style: TextStyle(
                   fontSize: 12,
-                  color: Colors.grey[600],
+                  color: AppColors.grey600,
                   fontStyle: FontStyle.italic,
                 ),
               ),

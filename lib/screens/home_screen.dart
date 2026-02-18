@@ -12,8 +12,9 @@ import '../services/memo_service.dart';
 import '../services/alarm_service.dart';
 import '../services/timer_service.dart';
 import '../services/calendar_service.dart';
-import '../services/weather_service.dart';
 import '../services/news_service.dart';
+import '../services/card_service.dart';
+import '../services/weather_service.dart';
 import 'dashboard_screen.dart';
 import 'settings_screen.dart';
 import 'character_chat_screen.dart';
@@ -32,8 +33,9 @@ class HomeScreen extends StatefulWidget {
   final AlarmService alarmService;
   final TimerService timerService;
   final CalendarService calendarService;
-  final WeatherService weatherService;
   final NewsService newsService;
+  final CardService cardService;
+  final WeatherService weatherService;
   final VoidCallback? onCompletionUnchecked;
 
   const HomeScreen({
@@ -51,8 +53,9 @@ class HomeScreen extends StatefulWidget {
     required this.alarmService,
     required this.timerService,
     required this.calendarService,
-    required this.weatherService,
     required this.newsService,
+    required this.cardService,
+    required this.weatherService,
     this.onCompletionUnchecked,
   });
 
@@ -66,7 +69,9 @@ class _HomeScreenState extends State<HomeScreen> {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
+    return PopScope(
+      canPop: false,
+      child: Scaffold(
       body: IndexedStack(
         index: _currentIndex,
         children: [
@@ -83,8 +88,9 @@ class _HomeScreenState extends State<HomeScreen> {
             alarmService: widget.alarmService,
             timerService: widget.timerService,
             calendarService: widget.calendarService,
-            weatherService: widget.weatherService,
             newsService: widget.newsService,
+            cardService: widget.cardService,
+            weatherService: widget.weatherService,
             onCompletionUnchecked: widget.onCompletionUnchecked,
           ),
           CharacterChatScreen(
@@ -103,6 +109,7 @@ class _HomeScreenState extends State<HomeScreen> {
             settingsService: widget.settingsService,
             appDetection: widget.appDetection,
             ttsService: widget.ttsService,
+            weatherService: widget.weatherService,
           ),
         ],
       ),
@@ -121,6 +128,7 @@ class _HomeScreenState extends State<HomeScreen> {
           const NavigationDestination(icon: Icon(Icons.settings), label: '설정'),
         ],
       ),
+    ),
     );
   }
 }

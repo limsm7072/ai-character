@@ -25,6 +25,8 @@ class MainActivity : FlutterFragmentActivity() {
     private var eventSink: EventChannel.EventSink? = null
     private var mediaPlayer: MediaPlayer? = null
     private var speechResult: MethodChannel.Result? = null
+    private var pickImageResult: MethodChannel.Result? = null
+    private val PICK_IMAGE_REQUEST = 2001
 
     private val distractionReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
@@ -75,6 +77,77 @@ class MainActivity : FlutterFragmentActivity() {
                 "stopMonitorService" -> {
                     stopMonitorService()
                     result.success(true)
+                }
+                "shareText" -> {
+                    val text = call.argument<String>("text") ?: ""
+                    val intent = Intent(Intent.ACTION_SEND).apply {
+                        type = "text/plain"
+                        putExtra(Intent.EXTRA_TEXT, text)
+                    }
+                    startActivity(Intent.createChooser(intent, "공유"))
+                    result.success(true)
+                }
+                "shareFile" -> {
+                    val path = call.argument<String>("path") ?: ""
+                    val mimeType = call.argument<String>("mimeType") ?: "image/png"
+                    val file = java.io.File(path)
+                    if (!file.exists()) {
+                        result.error("FILE_NOT_FOUND", "File not found: $path", null)
+                    } else {
+                        val uri = androidx.core.content.FileProvider.getUriForFile(
+                            this, "$packageName.fileprovider", file
+                        )
+                        val intent = Intent(Intent.ACTION_SEND).apply {
+                            type = mimeType
+                            putExtra(Intent.EXTRA_STREAM, uri)
+                            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                        }
+                        startActivity(Intent.createChooser(intent, "공유"))
+                        result.success(true)
+                    }
+                }
+                "shareFiles" -> {
+                    val paths = call.argument<List<String>>("paths") ?: emptyList()
+                    val uris = ArrayList<Uri>()
+                    for (p in paths) {
+                        val f = java.io.File(p)
+                        if (f.exists()) {
+                            uris.add(androidx.core.content.FileProvider.getUriForFile(
+                                this, "$packageName.fileprovider", f
+                            ))
+                        }
+                    }
+                    if (uris.isEmpty()) {
+                        result.error("NO_FILES", "No valid files", null)
+                    } else {
+                        val intent = Intent(Intent.ACTION_SEND_MULTIPLE).apply {
+                            type = "*/*"
+                            putParcelableArrayListExtra(Intent.EXTRA_STREAM, uris)
+                            addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                        }
+                        startActivity(Intent.createChooser(intent, "명함 공유"))
+                        result.success(true)
+                    }
+                }
+                "getCacheDir" -> {
+                    result.success(cacheDir.absolutePath)
+                }
+                "pickImage" -> {
+                    pickImageResult = result
+                    val intent = Intent(Intent.ACTION_PICK).apply {
+                        type = "image/*"
+                    }
+                    startActivityForResult(intent, PICK_IMAGE_REQUEST)
+                }
+                "openUrl" -> {
+                    val url = call.argument<String>("url") ?: ""
+                    try {
+                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
+                        startActivity(intent)
+                        result.success(true)
+                    } catch (e: Exception) {
+                        result.error("OPEN_URL_ERROR", e.message, null)
+                    }
                 }
                 "testDetection" -> {
                     val fg = getForegroundApp()
@@ -127,6 +200,27 @@ class MainActivity : FlutterFragmentActivity() {
             registerReceiver(distractionReceiver, filter, RECEIVER_NOT_EXPORTED)
         } else {
             registerReceiver(distractionReceiver, filter)
+        }
+    }
+
+    override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
+        super.onActivityResult(requestCode, resultCode, data)
+        if (requestCode == PICK_IMAGE_REQUEST) {
+            if (resultCode == RESULT_OK && data?.data != null) {
+                try {
+                    val uri = data.data!!
+                    val dest = java.io.File(filesDir, "card_photo.jpg")
+                    contentResolver.openInputStream(uri)?.use { input ->
+                        dest.outputStream().use { output -> input.copyTo(output) }
+                    }
+                    pickImageResult?.success(dest.absolutePath)
+                } catch (e: Exception) {
+                    pickImageResult?.error("PICK_ERROR", e.message, null)
+                }
+            } else {
+                pickImageResult?.success(null)
+            }
+            pickImageResult = null
         }
     }
 

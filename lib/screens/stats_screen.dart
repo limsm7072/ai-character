@@ -6,6 +6,7 @@ import '../services/distraction_log_service.dart';
 import '../services/app_detection_service.dart';
 import '../services/health_service.dart';
 import '../models/distraction_log.dart';
+import '../theme/app_colors.dart';
 import 'routine_stats_screen.dart';
 
 class StatsScreen extends StatefulWidget {
@@ -105,7 +106,7 @@ class _StatsScreenState extends State<StatsScreen> {
             forceElevated: innerBoxIsScrolled,
             bottom: TabBar(
               labelColor: Theme.of(context).colorScheme.primary,
-              unselectedLabelColor: Colors.grey,
+              unselectedLabelColor: AppColors.grey500,
               indicatorColor: Theme.of(context).colorScheme.primary,
               isScrollable: false,
               tabs: const [
@@ -141,11 +142,11 @@ class _StatsScreenState extends State<StatsScreen> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.event_note, size: 64, color: Colors.grey[400]),
+            Icon(Icons.event_note, size: 64, color: AppColors.grey400),
             const SizedBox(height: 16),
             Text(
               '루틴을 추가하면 완료율을 볼 수 있어요',
-              style: TextStyle(fontSize: 16, color: Colors.grey[500]),
+              style: TextStyle(fontSize: 16, color: AppColors.grey500),
             ),
           ],
         ),
@@ -234,17 +235,17 @@ class _StatsScreenState extends State<StatsScreen> {
           label: '오늘',
           rate: todayRate,
           detail: '$todayCompleted/${todayActive.length}',
-          color: Colors.teal,
+          color: AppColors.primary,
         ),
         _buildCircularGauge(
           label: '이번 주',
           rate: weekRate,
-          color: Colors.blue,
+          color: AppColors.info,
         ),
         _buildCircularGauge(
           label: '이번 달',
           rate: monthRate,
-          color: Colors.purple,
+          color: AppColors.accent,
         ),
       ],
     );
@@ -286,10 +287,10 @@ class _StatsScreenState extends State<StatsScreen> {
           ),
         ),
         const SizedBox(height: 8),
-        Text(label, style: TextStyle(fontSize: 13, color: Colors.grey[600])),
+        Text(label, style: TextStyle(fontSize: 13, color: AppColors.grey600)),
         if (detail != null)
           Text(detail,
-              style: TextStyle(fontSize: 11, color: Colors.grey[500])),
+              style: TextStyle(fontSize: 11, color: AppColors.grey500)),
       ],
     );
   }
@@ -308,7 +309,7 @@ class _StatsScreenState extends State<StatsScreen> {
             Icon(
               hasStreak ? Icons.local_fire_department : Icons.bedtime_outlined,
               size: 32,
-              color: hasStreak ? Colors.deepOrange : Colors.grey,
+              color: hasStreak ? AppColors.streak : AppColors.grey500,
             ),
             const SizedBox(width: 12),
             Expanded(
@@ -322,12 +323,12 @@ class _StatsScreenState extends State<StatsScreen> {
                     style: TextStyle(
                       fontSize: 16,
                       fontWeight: FontWeight.bold,
-                      color: hasStreak ? Colors.deepOrange : Colors.grey,
+                      color: hasStreak ? AppColors.streak : AppColors.grey500,
                     ),
                   ),
                   Text(
                     hasStreak ? '매일 꾸준히 하고 있어요!' : '오늘부터 시작해보세요',
-                    style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                    style: TextStyle(fontSize: 12, color: AppColors.grey600),
                   ),
                 ],
               ),
@@ -428,7 +429,7 @@ class _StatsScreenState extends State<StatsScreen> {
                 child: Center(
                   child: Text(d,
                       style:
-                          TextStyle(fontSize: 10, color: Colors.grey[500])),
+                          TextStyle(fontSize: 10, color: AppColors.grey500)),
                 ),
               ))
           .toList(),
@@ -487,17 +488,17 @@ class _StatsScreenState extends State<StatsScreen> {
       {bool isToday = false, bool hasSkipped = false}) {
     Color cellColor;
     if (rate == null) {
-      cellColor = Colors.grey.withOpacity(0.08);
+      cellColor = AppColors.heatmapEmpty;
     } else if (hasSkipped) {
-      cellColor = Colors.orange[200]!;
+      cellColor = AppColors.heatmapSkip;
     } else if (rate >= 1.0) {
-      cellColor = Colors.green[400]!;
+      cellColor = AppColors.heatmapFull;
     } else if (rate >= 0.5) {
-      cellColor = Colors.green[200]!;
+      cellColor = AppColors.heatmapPartial;
     } else if (rate > 0) {
-      cellColor = Colors.green[100]!;
+      cellColor = AppColors.heatmapLow;
     } else {
-      cellColor = Colors.red[100]!;
+      cellColor = AppColors.heatmapMiss;
     }
 
     return Container(
@@ -518,15 +519,15 @@ class _StatsScreenState extends State<StatsScreen> {
     return Row(
       mainAxisAlignment: MainAxisAlignment.center,
       children: [
-        _buildLegendItem(Colors.grey.withOpacity(0.15), '없음'),
+        _buildLegendItem(AppColors.grey400.withOpacity(0.3), '없음'),
         const SizedBox(width: 8),
-        _buildLegendItem(Colors.red[100]!, '미완'),
+        _buildLegendItem(AppColors.heatmapMiss, '미완'),
         const SizedBox(width: 8),
-        _buildLegendItem(Colors.orange[200]!, '스킵'),
+        _buildLegendItem(AppColors.heatmapSkip, '스킵'),
         const SizedBox(width: 8),
-        _buildLegendItem(Colors.green[200]!, '일부'),
+        _buildLegendItem(AppColors.heatmapPartial, '일부'),
         const SizedBox(width: 8),
-        _buildLegendItem(Colors.green[400]!, '완료'),
+        _buildLegendItem(AppColors.heatmapFull, '완료'),
       ],
     );
   }
@@ -544,7 +545,7 @@ class _StatsScreenState extends State<StatsScreen> {
           ),
         ),
         const SizedBox(width: 3),
-        Text(label, style: TextStyle(fontSize: 10, color: Colors.grey[600])),
+        Text(label, style: TextStyle(fontSize: 10, color: AppColors.grey600)),
       ],
     );
   }
@@ -576,11 +577,11 @@ class _StatsScreenState extends State<StatsScreen> {
 
     Color barColor;
     if (percentage >= 80) {
-      barColor = Colors.green;
+      barColor = AppColors.success;
     } else if (percentage >= 50) {
-      barColor = Colors.orange;
+      barColor = AppColors.warning;
     } else {
-      barColor = Colors.red;
+      barColor = AppColors.error;
     }
 
     return Card(
@@ -621,7 +622,7 @@ class _StatsScreenState extends State<StatsScreen> {
                   ),
                   const SizedBox(width: 4),
                   Icon(Icons.chevron_right,
-                      size: 18, color: Colors.grey[400]),
+                      size: 18, color: AppColors.grey400),
                 ],
               ),
               const SizedBox(height: 10),
@@ -632,7 +633,7 @@ class _StatsScreenState extends State<StatsScreen> {
                 child: LinearProgressIndicator(
                   value: rate,
                   minHeight: 6,
-                  backgroundColor: Colors.grey[200],
+                  backgroundColor: AppColors.grey200,
                   color: barColor,
                 ),
               ),
@@ -660,22 +661,22 @@ class _StatsScreenState extends State<StatsScreen> {
         Color dotColor;
         IconData? dotIcon;
         if (isFuture || !isActive) {
-          dotColor = Colors.grey.withOpacity(0.15);
+          dotColor = AppColors.grey400.withOpacity(0.3);
         } else if (widget.completionService.isCompleted(routine.id, dateStr)) {
-          dotColor = Colors.green;
+          dotColor = AppColors.success;
           dotIcon = Icons.check;
         } else if (widget.completionService.isSkipped(routine.id, dateStr)) {
-          dotColor = Colors.orange;
+          dotColor = AppColors.warning;
           dotIcon = Icons.close;
         } else {
-          dotColor = Colors.red[100]!;
+          dotColor = AppColors.heatmapMiss;
         }
 
         return Column(
           children: [
             Text(
               dayNames[date.weekday - 1],
-              style: TextStyle(fontSize: 9, color: Colors.grey[500]),
+              style: TextStyle(fontSize: 9, color: AppColors.grey500),
             ),
             const SizedBox(height: 2),
             Container(
@@ -686,7 +687,7 @@ class _StatsScreenState extends State<StatsScreen> {
                 shape: BoxShape.circle,
               ),
               child: dotIcon != null
-                  ? Icon(dotIcon, size: 12, color: Colors.white)
+                  ? Icon(dotIcon, size: 12, color: AppColors.white)
                   : null,
             ),
           ],
@@ -795,16 +796,16 @@ class _StatsScreenState extends State<StatsScreen> {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(Icons.emoji_events, size: 64, color: Colors.amber[300]),
+                  Icon(Icons.emoji_events, size: 64, color: AppColors.trophy),
                   const SizedBox(height: 16),
                   Text(
                     '딴짓 기록이 없어요!',
-                    style: TextStyle(fontSize: 18, color: Colors.grey[600]),
+                    style: TextStyle(fontSize: 18, color: AppColors.grey600),
                   ),
                   const SizedBox(height: 8),
                   Text(
                     '이대로 집중 잘 하고 있네요',
-                    style: TextStyle(color: Colors.grey[500]),
+                    style: TextStyle(color: AppColors.grey500),
                   ),
                 ],
               ),
@@ -845,7 +846,7 @@ class _StatsScreenState extends State<StatsScreen> {
                 icon: Icons.warning_amber_rounded,
                 label: '총 횟수',
                 value: '$totalCount회',
-                color: Colors.orange,
+                color: AppColors.warning,
               ),
             ),
             const SizedBox(width: 12),
@@ -854,7 +855,7 @@ class _StatsScreenState extends State<StatsScreen> {
                 icon: Icons.timer_outlined,
                 label: '총 시간',
                 value: _formatDuration(totalTime),
-                color: Colors.red,
+                color: AppColors.error,
               ),
             ),
           ],
@@ -899,7 +900,7 @@ class _StatsScreenState extends State<StatsScreen> {
             ),
             const SizedBox(height: 2),
             Text(label,
-                style: TextStyle(fontSize: 12, color: Colors.grey[600])),
+                style: TextStyle(fontSize: 12, color: AppColors.grey600)),
           ],
         ),
       ),
@@ -946,7 +947,7 @@ class _StatsScreenState extends State<StatsScreen> {
                           ? app.totalTime.inSeconds / totalTime.inSeconds
                           : 0,
                       minHeight: 6,
-                      backgroundColor: Colors.grey[200],
+                      backgroundColor: AppColors.grey200,
                       color: color,
                     ),
                   ),
@@ -965,7 +966,7 @@ class _StatsScreenState extends State<StatsScreen> {
                 Text(
                   '${app.count}회',
                   style:
-                      TextStyle(fontSize: 11, color: Colors.grey[600]),
+                      TextStyle(fontSize: 11, color: AppColors.grey600),
                 ),
               ],
             ),
@@ -979,16 +980,7 @@ class _StatsScreenState extends State<StatsScreen> {
 
   Color _getAppColor(String label) {
     final hash = label.hashCode;
-    final colors = [
-      Colors.red,
-      Colors.blue,
-      Colors.green,
-      Colors.orange,
-      Colors.purple,
-      Colors.teal,
-      Colors.pink,
-      Colors.indigo,
-    ];
+    final colors = AppColors.chartColors;
     return colors[hash.abs() % colors.length];
   }
 
@@ -1053,11 +1045,11 @@ class _StatsScreenState extends State<StatsScreen> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.health_and_safety, size: 64, color: Colors.grey[400]),
+            Icon(Icons.health_and_safety, size: 64, color: AppColors.grey400),
             const SizedBox(height: 16),
             Text(
               '건강 데이터를 사용할 수 없습니다',
-              style: TextStyle(fontSize: 16, color: Colors.grey[500]),
+              style: TextStyle(fontSize: 16, color: AppColors.grey500),
             ),
           ],
         ),
@@ -1079,17 +1071,17 @@ class _StatsScreenState extends State<StatsScreen> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(Icons.health_and_safety_outlined, size: 64, color: Colors.grey[400]),
+              Icon(Icons.health_and_safety_outlined, size: 64, color: AppColors.grey400),
               const SizedBox(height: 16),
               Text(
                 'Health Connect 연결이 필요합니다',
-                style: TextStyle(fontSize: 16, color: Colors.grey[600]),
+                style: TextStyle(fontSize: 16, color: AppColors.grey600),
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 8),
               Text(
                 '삼성헬스 데이터를 보려면\nHealth Connect 권한을 허용해주세요',
-                style: TextStyle(fontSize: 13, color: Colors.grey[500]),
+                style: TextStyle(fontSize: 13, color: AppColors.grey500),
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 20),
@@ -1118,16 +1110,16 @@ class _StatsScreenState extends State<StatsScreen> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(Icons.sensors_off, size: 64, color: Colors.grey[400]),
+              Icon(Icons.sensors_off, size: 64, color: AppColors.grey400),
               const SizedBox(height: 16),
               Text(
                 '건강 데이터가 없습니다',
-                style: TextStyle(fontSize: 16, color: Colors.grey[600]),
+                style: TextStyle(fontSize: 16, color: AppColors.grey600),
               ),
               const SizedBox(height: 8),
               Text(
                 '삼성헬스에서 Health Connect 동기화를\n켜고 데이터가 쌓이면 여기에 표시됩니다',
-                style: TextStyle(fontSize: 13, color: Colors.grey[500]),
+                style: TextStyle(fontSize: 13, color: AppColors.grey500),
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 20),
@@ -1203,7 +1195,7 @@ class _StatsScreenState extends State<StatsScreen> {
           children: [
             Row(
               children: [
-                const Icon(Icons.directions_walk, color: Colors.green, size: 24),
+                const Icon(Icons.directions_walk, color: AppColors.success, size: 24),
                 const SizedBox(width: 8),
                 const Text(
                   '오늘의 걸음',
@@ -1224,8 +1216,8 @@ class _StatsScreenState extends State<StatsScreen> {
                         value: pct,
                         strokeWidth: 7,
                         strokeCap: StrokeCap.round,
-                        backgroundColor: Colors.green.withOpacity(0.12),
-                        color: Colors.green,
+                        backgroundColor: AppColors.success.withOpacity(0.12),
+                        color: AppColors.success,
                       ),
                       Center(
                         child: Text(
@@ -1233,7 +1225,7 @@ class _StatsScreenState extends State<StatsScreen> {
                           style: const TextStyle(
                             fontSize: 18,
                             fontWeight: FontWeight.bold,
-                            color: Colors.green,
+                            color: AppColors.success,
                           ),
                         ),
                       ),
@@ -1253,7 +1245,7 @@ class _StatsScreenState extends State<StatsScreen> {
                     ),
                     Text(
                       '목표: ${_formatStepNumber(goal)}보',
-                      style: TextStyle(fontSize: 13, color: Colors.grey[600]),
+                      style: TextStyle(fontSize: 13, color: AppColors.grey600),
                     ),
                   ],
                 ),
@@ -1313,8 +1305,8 @@ class _StatsScreenState extends State<StatsScreen> {
                               style: TextStyle(
                                 fontSize: 9,
                                 color: isToday
-                                    ? Colors.green
-                                    : Colors.grey[600],
+                                    ? AppColors.success
+                                    : AppColors.grey600,
                                 fontWeight: isToday
                                     ? FontWeight.bold
                                     : FontWeight.normal,
@@ -1325,11 +1317,11 @@ class _StatsScreenState extends State<StatsScreen> {
                             height: barHeight > 0 ? barHeight : 2,
                             decoration: BoxDecoration(
                               color: isToday
-                                  ? Colors.green
-                                  : Colors.green.withOpacity(0.5),
+                                  ? AppColors.success
+                                  : AppColors.success.withOpacity(0.5),
                               borderRadius: BorderRadius.circular(4),
                               border: isToday
-                                  ? Border.all(color: Colors.green[700]!, width: 1.5)
+                                  ? Border.all(color: AppColors.successDark, width: 1.5)
                                   : null,
                             ),
                           ),
@@ -1339,7 +1331,7 @@ class _StatsScreenState extends State<StatsScreen> {
                             style: TextStyle(
                               fontSize: 12,
                               fontWeight: isToday ? FontWeight.bold : FontWeight.normal,
-                              color: isToday ? Colors.green : Colors.grey[700],
+                              color: isToday ? AppColors.success : AppColors.grey700,
                             ),
                           ),
                         ],
@@ -1377,7 +1369,7 @@ class _StatsScreenState extends State<StatsScreen> {
           children: [
             Row(
               children: [
-                const Icon(Icons.bedtime, color: Colors.indigo, size: 24),
+                const Icon(Icons.bedtime, color: AppColors.sleepDeep, size: 24),
                 const SizedBox(width: 8),
                 const Text(
                   '수면',
@@ -1391,13 +1383,13 @@ class _StatsScreenState extends State<StatsScreen> {
               style: const TextStyle(
                 fontSize: 24,
                 fontWeight: FontWeight.bold,
-                color: Colors.indigo,
+                color: AppColors.sleepDeep,
               ),
             ),
             const SizedBox(height: 8),
             Text(
               '취침 $bedHour:$bedMin  ->  기상 $wakeHour:$wakeMin',
-              style: TextStyle(fontSize: 13, color: Colors.grey[600]),
+              style: TextStyle(fontSize: 13, color: AppColors.grey600),
             ),
             if (totalMin > 0 && (deepMin > 0 || remMin > 0 || lightMin > 0)) ...[
               const SizedBox(height: 12),
@@ -1411,17 +1403,17 @@ class _StatsScreenState extends State<StatsScreen> {
                       if (deepMin > 0)
                         Flexible(
                           flex: deepMin,
-                          child: Container(color: Colors.indigo[700]),
+                          child: Container(color: AppColors.sleepDeep),
                         ),
                       if (remMin > 0)
                         Flexible(
                           flex: remMin,
-                          child: Container(color: Colors.blue[400]),
+                          child: Container(color: AppColors.sleepRem),
                         ),
                       if (lightMin > 0)
                         Flexible(
                           flex: lightMin,
-                          child: Container(color: Colors.lightBlue[200]),
+                          child: Container(color: AppColors.sleepLight),
                         ),
                     ],
                   ),
@@ -1431,11 +1423,11 @@ class _StatsScreenState extends State<StatsScreen> {
               Row(
                 children: [
                   if (deepMin > 0)
-                    _buildSleepLegend(Colors.indigo[700]!, '깊은', _formatSleepDuration(sleep.deep)),
+                    _buildSleepLegend(AppColors.sleepDeep, '깊은', _formatSleepDuration(sleep.deep)),
                   if (remMin > 0)
-                    _buildSleepLegend(Colors.blue[400]!, '렘', _formatSleepDuration(sleep.rem)),
+                    _buildSleepLegend(AppColors.sleepRem, '렘', _formatSleepDuration(sleep.rem)),
                   if (lightMin > 0)
-                    _buildSleepLegend(Colors.lightBlue[200]!, '얕은', _formatSleepDuration(sleep.light)),
+                    _buildSleepLegend(AppColors.sleepLight, '얕은', _formatSleepDuration(sleep.light)),
                 ],
               ),
             ],
@@ -1462,7 +1454,7 @@ class _StatsScreenState extends State<StatsScreen> {
           Flexible(
             child: Text(
               '$label $duration',
-              style: TextStyle(fontSize: 11, color: Colors.grey[600]),
+              style: TextStyle(fontSize: 11, color: AppColors.grey600),
               overflow: TextOverflow.ellipsis,
             ),
           ),
@@ -1480,7 +1472,7 @@ class _StatsScreenState extends State<StatsScreen> {
           children: [
             Row(
               children: [
-                const Icon(Icons.favorite, color: Colors.red, size: 24),
+                const Icon(Icons.favorite, color: AppColors.error, size: 24),
                 const SizedBox(width: 8),
                 const Text(
                   '심박수',
@@ -1498,7 +1490,7 @@ class _StatsScreenState extends State<StatsScreen> {
                     style: const TextStyle(
                       fontSize: 32,
                       fontWeight: FontWeight.bold,
-                      color: Colors.red,
+                      color: AppColors.error,
                     ),
                   ),
                   const SizedBox(width: 4),
@@ -1506,7 +1498,7 @@ class _StatsScreenState extends State<StatsScreen> {
                     padding: EdgeInsets.only(bottom: 4),
                     child: Text(
                       'bpm',
-                      style: TextStyle(fontSize: 14, color: Colors.red),
+                      style: TextStyle(fontSize: 14, color: AppColors.error),
                     ),
                   ),
                 ],
@@ -1515,7 +1507,7 @@ class _StatsScreenState extends State<StatsScreen> {
               const SizedBox(height: 8),
               Text(
                 '오늘 범위: ${_heartRateRange!.min}~${_heartRateRange!.max} bpm (평균 ${_heartRateRange!.avg})',
-                style: TextStyle(fontSize: 13, color: Colors.grey[600]),
+                style: TextStyle(fontSize: 13, color: AppColors.grey600),
               ),
             ],
           ],
@@ -1626,11 +1618,11 @@ class _StatsScreenState extends State<StatsScreen> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.phone_android, size: 64, color: Colors.grey[400]),
+            Icon(Icons.phone_android, size: 64, color: AppColors.grey400),
             const SizedBox(height: 16),
             Text(
               '앱 사용 통계를 사용할 수 없습니다',
-              style: TextStyle(fontSize: 16, color: Colors.grey[500]),
+              style: TextStyle(fontSize: 16, color: AppColors.grey500),
             ),
           ],
         ),
@@ -1648,17 +1640,17 @@ class _StatsScreenState extends State<StatsScreen> {
           child: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(Icons.lock_outline, size: 64, color: Colors.grey[400]),
+              Icon(Icons.lock_outline, size: 64, color: AppColors.grey400),
               const SizedBox(height: 16),
               Text(
                 '앱 사용 통계 권한이 필요합니다',
-                style: TextStyle(fontSize: 16, color: Colors.grey[600]),
+                style: TextStyle(fontSize: 16, color: AppColors.grey600),
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 8),
               Text(
                 '설정에서 사용 정보 접근 권한을 허용해주세요',
-                style: TextStyle(fontSize: 13, color: Colors.grey[500]),
+                style: TextStyle(fontSize: 13, color: AppColors.grey500),
                 textAlign: TextAlign.center,
               ),
               const SizedBox(height: 20),
@@ -1778,7 +1770,7 @@ class _StatsScreenState extends State<StatsScreen> {
             child: Center(
               child: Text(
                 '사용 기록이 없습니다',
-                style: TextStyle(color: Colors.grey[500]),
+                style: TextStyle(color: AppColors.grey500),
               ),
             ),
           )
@@ -1814,7 +1806,7 @@ class _StatsScreenState extends State<StatsScreen> {
           children: [
             Row(
               children: [
-                const Icon(Icons.phone_android, color: Colors.blue, size: 24),
+                const Icon(Icons.phone_android, color: AppColors.info, size: 24),
                 const SizedBox(width: 8),
                 const Text(
                   '이번 주 사용',
@@ -1828,7 +1820,7 @@ class _StatsScreenState extends State<StatsScreen> {
               style: const TextStyle(
                 fontSize: 24,
                 fontWeight: FontWeight.bold,
-                color: Colors.blue,
+                color: AppColors.info,
               ),
             ),
             const SizedBox(height: 8),
@@ -1842,7 +1834,7 @@ class _StatsScreenState extends State<StatsScreen> {
                             ? Icons.arrow_downward
                             : Icons.remove,
                     size: 14,
-                    color: isIncrease ? Colors.red : Colors.green,
+                    color: isIncrease ? AppColors.error : AppColors.success,
                   ),
                   const SizedBox(width: 4),
                   Text(
@@ -1851,7 +1843,7 @@ class _StatsScreenState extends State<StatsScreen> {
                     '${changePercent > 0 ? " ($changePercent%)" : ""}',
                     style: TextStyle(
                       fontSize: 12,
-                      color: isIncrease ? Colors.red : Colors.green,
+                      color: isIncrease ? AppColors.error : AppColors.success,
                     ),
                   ),
                 ],
@@ -1859,7 +1851,7 @@ class _StatsScreenState extends State<StatsScreen> {
             const SizedBox(height: 4),
             Text(
               '하루 평균 ${_formatDuration(avgPerDay)}',
-              style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+              style: TextStyle(fontSize: 12, color: AppColors.grey600),
             ),
           ],
         ),
@@ -1924,7 +1916,7 @@ class _StatsScreenState extends State<StatsScreen> {
                                     fontSize: 9,
                                     color: isSelected
                                         ? Theme.of(context).colorScheme.primary
-                                        : Colors.grey[600],
+                                        : AppColors.grey600,
                                     fontWeight: isSelected
                                         ? FontWeight.bold
                                         : FontWeight.normal,
@@ -1960,7 +1952,7 @@ class _StatsScreenState extends State<StatsScreen> {
                                 Container(
                                   height: 2,
                                   decoration: BoxDecoration(
-                                    color: Colors.grey[300],
+                                    color: AppColors.grey300,
                                     borderRadius: BorderRadius.circular(1),
                                   ),
                                 ),
@@ -1979,15 +1971,15 @@ class _StatsScreenState extends State<StatsScreen> {
                             color: isSelected
                                 ? Theme.of(context).colorScheme.primary
                                 : isFuture
-                                    ? Colors.grey[400]
-                                    : Colors.grey[700],
+                                    ? AppColors.grey400
+                                    : AppColors.grey700,
                           ),
                         ),
                         // Date
                         Text(
                           _shortDate(day.dateStr),
                           style: TextStyle(
-                              fontSize: 9, color: Colors.grey[500]),
+                              fontSize: 9, color: AppColors.grey500),
                         ),
                       ],
                     ),
@@ -2014,7 +2006,7 @@ class _StatsScreenState extends State<StatsScreen> {
         width: double.infinity,
         color: appEntry != null
             ? _getAppColor(appEntry.label)
-            : Colors.grey[300],
+            : AppColors.grey300,
       );
     }
 
@@ -2036,7 +2028,7 @@ class _StatsScreenState extends State<StatsScreen> {
     final otherMs = dayTotal - topMs;
     if (otherMs > 0) {
       segments
-          .add(_BarSegment(flex: otherMs, color: Colors.grey[300]!));
+          .add(_BarSegment(flex: otherMs, color: AppColors.grey300));
     }
 
     if (segments.isEmpty) return const SizedBox.shrink();
@@ -2083,10 +2075,10 @@ class _StatsScreenState extends State<StatsScreen> {
         decoration: BoxDecoration(
           color: isSelected
               ? activeColor.withOpacity(0.15)
-              : Colors.grey[100],
+              : AppColors.grey100,
           borderRadius: BorderRadius.circular(16),
           border: Border.all(
-            color: isSelected ? activeColor : Colors.grey[300]!,
+            color: isSelected ? activeColor : AppColors.grey300,
             width: isSelected ? 1.5 : 1,
           ),
         ),
@@ -2110,7 +2102,7 @@ class _StatsScreenState extends State<StatsScreen> {
                 fontSize: 11,
                 fontWeight:
                     isSelected ? FontWeight.bold : FontWeight.normal,
-                color: isSelected ? activeColor : Colors.grey[700],
+                color: isSelected ? activeColor : AppColors.grey700,
               ),
             ),
           ],
@@ -2157,7 +2149,7 @@ class _StatsScreenState extends State<StatsScreen> {
                     child: LinearProgressIndicator(
                       value: ratio,
                       minHeight: 6,
-                      backgroundColor: Colors.grey[200],
+                      backgroundColor: AppColors.grey200,
                       color: color,
                     ),
                   ),
@@ -2178,7 +2170,7 @@ class _StatsScreenState extends State<StatsScreen> {
                 ),
                 Text(
                   '$percentage%',
-                  style: TextStyle(fontSize: 11, color: Colors.grey[600]),
+                  style: TextStyle(fontSize: 11, color: AppColors.grey600),
                 ),
               ],
             ),

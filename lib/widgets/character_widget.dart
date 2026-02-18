@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../models/character_state.dart';
+import '../theme/app_colors.dart';
 
 /// 2D placeholder character widget.
 /// This will be replaced by flutter_unity_widget when Unity module is ready.
@@ -139,7 +140,7 @@ class _CharacterWidgetState extends State<CharacterWidget>
           width: 14,
           height: 6,
           decoration: BoxDecoration(
-            color: Colors.white,
+            color: AppColors.white,
             borderRadius: BorderRadius.circular(3),
           ),
         ),
@@ -150,7 +151,7 @@ class _CharacterWidgetState extends State<CharacterWidget>
         width: 12,
         height: 3,
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: AppColors.white,
           borderRadius: BorderRadius.circular(2),
         ),
       );
@@ -160,7 +161,7 @@ class _CharacterWidgetState extends State<CharacterWidget>
         width: 10,
         height: 10,
         decoration: const BoxDecoration(
-          color: Colors.white,
+          color: AppColors.white,
           shape: BoxShape.circle,
         ),
         child: Align(
@@ -168,7 +169,7 @@ class _CharacterWidgetState extends State<CharacterWidget>
           child: Container(
             width: 10,
             height: 2,
-            color: Colors.blue.withValues(alpha: 0.3),
+            color: AppColors.info.withValues(alpha: 0.3),
           ),
         ),
       );
@@ -178,7 +179,7 @@ class _CharacterWidgetState extends State<CharacterWidget>
         width: 14,
         height: 14,
         decoration: const BoxDecoration(
-          color: Colors.white,
+          color: AppColors.white,
           shape: BoxShape.circle,
         ),
       );
@@ -188,7 +189,7 @@ class _CharacterWidgetState extends State<CharacterWidget>
       width: 10,
       height: 10,
       decoration: const BoxDecoration(
-        color: Colors.white,
+        color: AppColors.white,
         shape: BoxShape.circle,
       ),
     );
@@ -213,7 +214,7 @@ class _CharacterWidgetState extends State<CharacterWidget>
         width: 16,
         height: 4,
         decoration: BoxDecoration(
-          color: Colors.white,
+          color: AppColors.white,
           borderRadius: BorderRadius.circular(2),
         ),
       );
@@ -223,7 +224,7 @@ class _CharacterWidgetState extends State<CharacterWidget>
         width: 12,
         height: 12,
         decoration: const BoxDecoration(
-          color: Colors.white,
+          color: AppColors.white,
           shape: BoxShape.circle,
         ),
       );
@@ -233,7 +234,7 @@ class _CharacterWidgetState extends State<CharacterWidget>
       width: 14,
       height: 3,
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppColors.white,
         borderRadius: BorderRadius.circular(2),
       ),
     );
@@ -276,11 +277,11 @@ class _CharacterWidgetState extends State<CharacterWidget>
     return Container(
       padding: const EdgeInsets.all(4),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppColors.white,
         shape: BoxShape.circle,
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.2),
+            color: AppColors.black.withValues(alpha: 0.2),
             blurRadius: 4,
           ),
         ],
@@ -294,11 +295,11 @@ class _CharacterWidgetState extends State<CharacterWidget>
       constraints: const BoxConstraints(maxWidth: 250),
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
-        color: Colors.white,
+        color: AppColors.white,
         borderRadius: BorderRadius.circular(12),
         boxShadow: [
           BoxShadow(
-            color: Colors.black.withValues(alpha: 0.1),
+            color: AppColors.black.withValues(alpha: 0.1),
             blurRadius: 8,
           ),
         ],
@@ -306,7 +307,7 @@ class _CharacterWidgetState extends State<CharacterWidget>
       child: Text(
         text,
         textAlign: TextAlign.center,
-        style: const TextStyle(fontSize: 13, color: Colors.black87),
+        style: const TextStyle(fontSize: 13, color: AppColors.black87),
       ),
     );
   }
@@ -314,25 +315,25 @@ class _CharacterWidgetState extends State<CharacterWidget>
   Color _emotionColor(String emotion) {
     switch (emotion) {
       case 'happy':
-        return Colors.amber;
+        return AppColors.emotionHappy;
       case 'angry':
-        return Colors.red.shade400;
+        return AppColors.emotionAngry;
       case 'sad':
-        return Colors.blue.shade300;
+        return AppColors.emotionSad;
       case 'surprised':
-        return Colors.orange;
+        return AppColors.emotionSurprised;
       case 'annoyed':
-        return Colors.deepOrange.shade300;
+        return AppColors.emotionAnnoyed;
       case 'disappointed':
-        return Colors.blueGrey;
+        return AppColors.emotionDisappointed;
       case 'scolding':
-        return Colors.red.shade600;
+        return AppColors.emotionScolding;
       case 'proud':
-        return Colors.green;
+        return AppColors.emotionProud;
       case 'worried':
-        return Colors.purple.shade200;
+        return AppColors.emotionWorried;
       default:
-        return Colors.teal;
+        return AppColors.emotionDefault;
     }
   }
 }
@@ -341,7 +342,7 @@ class _SmilePainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()
-      ..color = Colors.white
+      ..color = AppColors.white
       ..style = PaintingStyle.stroke
       ..strokeWidth = 2.5
       ..strokeCap = StrokeCap.round;
@@ -361,7 +362,7 @@ class _FrownPainter extends CustomPainter {
   @override
   void paint(Canvas canvas, Size size) {
     final paint = Paint()
-      ..color = Colors.white
+      ..color = AppColors.white
       ..style = PaintingStyle.stroke
       ..strokeWidth = 2.5
       ..strokeCap = StrokeCap.round;

@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../models/todo.dart';
 import '../services/todo_service.dart';
+import '../theme/app_colors.dart';
 
 class TodoScreen extends StatefulWidget {
   final TodoService todoService;
@@ -74,11 +75,11 @@ class _TodoScreenState extends State<TodoScreen> {
                       child: Column(
                         mainAxisSize: MainAxisSize.min,
                         children: [
-                          Icon(Icons.check_circle_outline, size: 64, color: Colors.grey[400]),
+                          Icon(Icons.check_circle_outline, size: 64, color: AppColors.grey400),
                           const SizedBox(height: 16),
                           Text(
                             '할 일을 추가해보세요!',
-                            style: TextStyle(fontSize: 18, color: Colors.grey[600]),
+                            style: TextStyle(fontSize: 18, color: AppColors.grey600),
                           ),
                         ],
                       ),
@@ -94,7 +95,7 @@ class _TodoScreenState extends State<TodoScreen> {
                               '완료됨 (${_completed.length})',
                               style: TextStyle(
                                 fontSize: 13,
-                                color: Colors.grey[600],
+                                color: AppColors.grey600,
                                 fontWeight: FontWeight.w600,
                               ),
                             ),
@@ -111,7 +112,7 @@ class _TodoScreenState extends State<TodoScreen> {
                 color: theme.colorScheme.surface,
                 boxShadow: [
                   BoxShadow(
-                    color: Colors.black.withValues(alpha: 0.1),
+                    color: AppColors.black.withValues(alpha: 0.1),
                     blurRadius: 4,
                     offset: const Offset(0, -2),
                   ),
@@ -152,8 +153,8 @@ class _TodoScreenState extends State<TodoScreen> {
       background: Container(
         alignment: Alignment.centerRight,
         padding: const EdgeInsets.only(right: 20),
-        color: Colors.red,
-        child: const Icon(Icons.delete, color: Colors.white),
+        color: AppColors.error,
+        child: const Icon(Icons.delete, color: AppColors.white),
       ),
       onDismissed: (_) => _deleteTodo(todo),
       child: ListTile(
@@ -166,11 +167,11 @@ class _TodoScreenState extends State<TodoScreen> {
           todo.title,
           style: TextStyle(
             decoration: todo.isCompleted ? TextDecoration.lineThrough : null,
-            color: todo.isCompleted ? Colors.grey : null,
+            color: todo.isCompleted ? AppColors.grey500 : null,
           ),
         ),
         trailing: IconButton(
-          icon: Icon(Icons.close, size: 18, color: Colors.grey[400]),
+          icon: Icon(Icons.close, size: 18, color: AppColors.grey400),
           onPressed: () => _deleteTodo(todo),
         ),
       ),

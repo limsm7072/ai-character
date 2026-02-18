@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:spine_flutter/spine_flutter.dart';
 import '../models/character_config.dart';
 import '../models/character_state.dart';
+import '../theme/app_colors.dart';
 
 /// Spine 2D character widget driven by CharacterConfig.
 class SpineCharacterWidget extends StatefulWidget {
@@ -404,7 +405,7 @@ class _SpineCharacterWidgetState extends State<SpineCharacterWidget> {
           padding: const EdgeInsets.all(12),
           child: Text(
             'Error: $_error\n\n$_debugInfo',
-            style: const TextStyle(color: Colors.red, fontSize: 10),
+            style: const TextStyle(color: AppColors.error, fontSize: 10),
             textAlign: TextAlign.center,
           ),
         ),
@@ -419,7 +420,7 @@ class _SpineCharacterWidgetState extends State<SpineCharacterWidget> {
       return Center(
         child: Text(
           'Failed to load: ${widget.config.id}',
-          style: const TextStyle(color: Colors.orange, fontSize: 12),
+          style: const TextStyle(color: AppColors.warning, fontSize: 12),
         ),
       );
     }
@@ -459,11 +460,11 @@ class _SpineCharacterWidgetState extends State<SpineCharacterWidget> {
                 padding: const EdgeInsets.symmetric(
                     horizontal: 14, vertical: 10),
                 decoration: BoxDecoration(
-                  color: Colors.white.withValues(alpha: 0.95),
+                  color: AppColors.white.withValues(alpha: 0.95),
                   borderRadius: BorderRadius.circular(16),
                   boxShadow: [
                     BoxShadow(
-                      color: Colors.black.withValues(alpha: 0.15),
+                      color: AppColors.black.withValues(alpha: 0.15),
                       blurRadius: 8,
                       offset: const Offset(0, 2),
                     ),
@@ -476,7 +477,7 @@ class _SpineCharacterWidgetState extends State<SpineCharacterWidget> {
                   overflow: TextOverflow.ellipsis,
                   style: const TextStyle(
                     fontSize: 13,
-                    color: Colors.black87,
+                    color: AppColors.black87,
                   ),
                 ),
               ),

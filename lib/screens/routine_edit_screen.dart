@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../models/routine.dart' as model;
 import '../services/routine_service.dart';
+import '../theme/app_colors.dart';
 
 class RoutineEditScreen extends StatefulWidget {
   final RoutineService routineService;
@@ -121,7 +122,7 @@ class _RoutineEditScreenState extends State<RoutineEditScreen> {
             const SizedBox(height: 4),
             Text(
               '이 날짜부터 루틴이 활성화됩니다',
-              style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+              style: TextStyle(fontSize: 12, color: AppColors.grey600),
             ),
             const SizedBox(height: 8),
             InkWell(
@@ -178,7 +179,7 @@ class _RoutineEditScreenState extends State<RoutineEditScreen> {
               title: const Text('시작 알림'),
               subtitle: Text(
                 '루틴 시작 시간에 알림을 보냅니다',
-                style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+                style: TextStyle(fontSize: 12, color: AppColors.grey600),
               ),
               value: _notifyOnStart,
               onChanged: (v) => setState(() => _notifyOnStart = v),
@@ -199,7 +200,7 @@ class _RoutineEditScreenState extends State<RoutineEditScreen> {
             const SizedBox(height: 4),
             Text(
               '선택하지 않으면 모든 앱에서 잔소리합니다',
-              style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+              style: TextStyle(fontSize: 12, color: AppColors.grey600),
             ),
             const SizedBox(height: 8),
             _buildAppSelector(),
@@ -326,7 +327,7 @@ class _RoutineEditScreenState extends State<RoutineEditScreen> {
           ),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
-            child: const Text('삭제', style: TextStyle(color: Colors.red)),
+            child: const Text('삭제', style: TextStyle(color: AppColors.error)),
           ),
         ],
       ),

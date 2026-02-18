@@ -64,28 +64,47 @@ class HealthService {
 
   bool get isAuthorized => _authorized;
 
-  /// Check if we already have permissions (no UI prompt).
-  /// Call this at app startup to restore authorized state.
+  /// Check if we already have permissions by trying to read data.
+  /// hasPermissions() is unreliable (often returns null even when granted),
+  /// so we attempt a lightweight read instead.
   Future<bool> checkExistingPermissions() async {
     try {
+      // First try the API method
       final hasPermissions = await _health.hasPermissions(_types, permissions: _permissions);
-      _authorized = hasPermissions == true;
-      return _authorized;
+      if (hasPermissions == true) {
+        _authorized = true;
+        return true;
+      }
+      // hasPermissions often returns null even when granted.
+      // Try an actual read to confirm.
+      final now = DateTime.now();
+      final midnight = DateTime(now.year, now.month, now.day);
+      await _health.getTotalStepsInInterval(midnight, now);
+      // If no exception, we have access
+      _authorized = true;
+      return true;
     } catch (e) {
-      print('[HealthService] checkExistingPermissions error: $e');
+      print('[HealthService] checkExistingPermissions: $e');
+      _authorized = false;
       return false;
     }
   }
 
   Future<bool> requestAuthorization() async {
     try {
-      final hasPermissions = await _health.hasPermissions(_types, permissions: _permissions);
-      if (hasPermissions == true) {
+      if (_authorized) return true;
+      final granted = await _health.requestAuthorization(_types, permissions: _permissions);
+      if (granted) {
         _authorized = true;
         return true;
       }
-      _authorized = await _health.requestAuthorization(_types, permissions: _permissions);
-      return _authorized;
+      // requestAuthorization can also return false even when granted.
+      // Verify with an actual read.
+      final now = DateTime.now();
+      final midnight = DateTime(now.year, now.month, now.day);
+      await _health.getTotalStepsInInterval(midnight, now);
+      _authorized = true;
+      return true;
     } catch (e) {
       print('[HealthService] Authorization error: $e');
       _authorized = false;

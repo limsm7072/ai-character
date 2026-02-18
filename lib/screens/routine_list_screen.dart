@@ -4,6 +4,7 @@ import '../services/routine_service.dart';
 import '../services/routine_completion_service.dart';
 import '../services/settings_service.dart';
 import 'routine_edit_screen.dart';
+import '../theme/app_colors.dart';
 
 class RoutineListScreen extends StatefulWidget {
   final RoutineService routineService;
@@ -143,7 +144,7 @@ class _RoutineListScreenState extends State<RoutineListScreen> {
                             fontSize: 11,
                             color: isSelected
                                 ? theme.colorScheme.onPrimary
-                                : isToday ? theme.colorScheme.primary : Colors.grey[600],
+                                : isToday ? theme.colorScheme.primary : AppColors.grey600,
                           ),
                         ),
                         const SizedBox(height: 2),
@@ -177,18 +178,18 @@ class _RoutineListScreenState extends State<RoutineListScreen> {
         child: Column(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.event_note, size: 64, color: Colors.grey[400]),
+            Icon(Icons.event_note, size: 64, color: AppColors.grey400),
             const SizedBox(height: 16),
             Text(
               _routines.isEmpty ? '루틴을 추가해보세요!' : '이 날에 활성화된 루틴이 없어요',
-              style: TextStyle(fontSize: 18, color: Colors.grey[600]),
+              style: TextStyle(fontSize: 18, color: AppColors.grey600),
             ),
             if (_routines.isEmpty) ...[
               const SizedBox(height: 8),
               Text(
                 '루틴 시간에 딴짓하면\n${widget.settingsService.characterName}가 잔소리해줄 거예요',
                 textAlign: TextAlign.center,
-                style: TextStyle(color: Colors.grey[500]),
+                style: TextStyle(color: AppColors.grey500),
               ),
             ],
           ],
@@ -232,7 +233,7 @@ class _RoutineListScreenState extends State<RoutineListScreen> {
             ),
             Text(
               activeDays.length == 7 ? '매일' : activeDays.join(' '),
-              style: TextStyle(fontSize: 12, color: Colors.grey[600]),
+              style: TextStyle(fontSize: 12, color: AppColors.grey600),
             ),
           ],
         ),
@@ -252,7 +253,7 @@ class _RoutineListScreenState extends State<RoutineListScreen> {
 
   Widget _buildCheckCircle(String routineId, bool isCompleted, bool isSkipped) {
     final hasCheck = isCompleted || isSkipped;
-    final color = isCompleted ? Colors.green : isSkipped ? Colors.orange : Colors.transparent;
+    final color = isCompleted ? AppColors.success : isSkipped ? AppColors.warning : Colors.transparent;
 
     return GestureDetector(
       onTap: () async {
@@ -272,10 +273,10 @@ class _RoutineListScreenState extends State<RoutineListScreen> {
         decoration: BoxDecoration(
           shape: BoxShape.circle,
           color: hasCheck ? color : Colors.transparent,
-          border: Border.all(color: hasCheck ? color : Colors.grey[400]!, width: 2),
+          border: Border.all(color: hasCheck ? color : AppColors.grey400, width: 2),
         ),
         child: hasCheck
-            ? Icon(isSkipped ? Icons.close : Icons.check, color: Colors.white, size: 20)
+            ? Icon(isSkipped ? Icons.close : Icons.check, color: AppColors.white, size: 20)
             : null,
       ),
     );

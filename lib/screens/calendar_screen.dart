@@ -7,6 +7,7 @@ import '../services/routine_service.dart';
 import '../services/routine_completion_service.dart';
 import '../services/settings_service.dart';
 import '../utils/lunar_calendar.dart';
+import '../theme/app_colors.dart';
 
 class CalendarScreen extends StatefulWidget {
   final CalendarService calendarService;
@@ -58,7 +59,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
           IconButton(
             icon: Icon(
               Icons.dark_mode_outlined,
-              color: _showLunar ? theme.colorScheme.primary : Colors.grey,
+              color: _showLunar ? theme.colorScheme.primary : AppColors.grey500,
             ),
             tooltip: _showLunar ? '음력 숨기기' : '음력 보기',
             onPressed: () {
@@ -70,7 +71,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
           IconButton(
             icon: Icon(
               Icons.flag_outlined,
-              color: _showDDay ? theme.colorScheme.primary : Colors.grey,
+              color: _showDDay ? theme.colorScheme.primary : AppColors.grey500,
             ),
             tooltip: _showDDay ? 'D-Day 숨기기' : 'D-Day 보기',
             onPressed: () {
@@ -101,9 +102,9 @@ class _CalendarScreenState extends State<CalendarScreen> {
                     return Container(
                       padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
                       decoration: BoxDecoration(
-                        color: Colors.red.withValues(alpha: 0.1),
+                        color: AppColors.error.withValues(alpha: 0.1),
                         borderRadius: BorderRadius.circular(16),
-                        border: Border.all(color: Colors.red.withValues(alpha: 0.3)),
+                        border: Border.all(color: AppColors.error.withValues(alpha: 0.3)),
                       ),
                       child: Row(
                         mainAxisSize: MainAxisSize.min,
@@ -113,7 +114,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
                             style: const TextStyle(
                               fontSize: 12,
                               fontWeight: FontWeight.bold,
-                              color: Colors.red,
+                              color: AppColors.error,
                             ),
                           ),
                           const SizedBox(width: 6),
@@ -148,19 +149,19 @@ class _CalendarScreenState extends State<CalendarScreen> {
               rowHeight: _showLunar ? 56 : 48,
               calendarStyle: CalendarStyle(
                 todayDecoration: const BoxDecoration(
-                  color: Colors.teal,
+                  color: AppColors.primary,
                   shape: BoxShape.circle,
                 ),
                 selectedDecoration: const BoxDecoration(
-                  color: Colors.deepOrange,
+                  color: AppColors.calendarSelected,
                   shape: BoxShape.circle,
                 ),
                 cellMargin: const EdgeInsets.all(2),
-                todayTextStyle: const TextStyle(color: Colors.white, fontSize: 14),
-                selectedTextStyle: const TextStyle(color: Colors.white, fontSize: 14),
+                todayTextStyle: const TextStyle(color: AppColors.white, fontSize: 14),
+                selectedTextStyle: const TextStyle(color: AppColors.white, fontSize: 14),
                 defaultTextStyle: const TextStyle(fontSize: 14),
-                weekendTextStyle: TextStyle(fontSize: 14, color: Colors.red[300]),
-                outsideTextStyle: TextStyle(fontSize: 14, color: Colors.grey[400]),
+                weekendTextStyle: TextStyle(fontSize: 14, color: AppColors.errorLight),
+                outsideTextStyle: TextStyle(fontSize: 14, color: AppColors.grey400),
               ),
               calendarBuilders: CalendarBuilders(
                 // Custom day cell with lunar date
@@ -176,21 +177,21 @@ class _CalendarScreenState extends State<CalendarScreen> {
                   final rInfo = _getRoutineInfo(dateStr);
                   if (rInfo.total > 0) {
                     if (rInfo.completed == rInfo.total) {
-                      markers.add(_dot(Colors.green));
+                      markers.add(_dot(AppColors.success));
                     } else if (rInfo.completed > 0) {
-                      markers.add(_dot(Colors.orange));
+                      markers.add(_dot(AppColors.warning));
                     }
                   }
 
                   // Event marker
                   if (widget.calendarService.getByDate(dateStr).isNotEmpty) {
-                    markers.add(_dot(Colors.blue));
+                    markers.add(_dot(AppColors.info));
                   }
 
                   // Holiday marker (solar + lunar)
                   final holiday = LunarCalendar.getHoliday(day);
                   if (holiday != null) {
-                    markers.add(_dot(Colors.red));
+                    markers.add(_dot(AppColors.error));
                   }
 
                   if (markers.isEmpty) return null;
@@ -226,15 +227,15 @@ class _CalendarScreenState extends State<CalendarScreen> {
                         child: Container(
                           padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
                           decoration: BoxDecoration(
-                            color: Colors.red.withValues(alpha: 0.05),
+                            color: AppColors.error.withValues(alpha: 0.05),
                             borderRadius: BorderRadius.circular(8),
-                            border: Border.all(color: Colors.red.withValues(alpha: 0.15)),
+                            border: Border.all(color: AppColors.error.withValues(alpha: 0.15)),
                           ),
                           child: Row(
                             children: [
-                              Icon(Icons.celebration, size: 16, color: Colors.red[300]),
+                              Icon(Icons.celebration, size: 16, color: AppColors.errorLight),
                               const SizedBox(width: 8),
-                              Text(holiday, style: TextStyle(fontSize: 13, color: Colors.red[700])),
+                              Text(holiday, style: TextStyle(fontSize: 13, color: AppColors.errorDark)),
                             ],
                           ),
                         ),
@@ -247,7 +248,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
                     const SizedBox(height: 4),
                     Text(
                       '${routineInfo.completed}/${routineInfo.total} 완료',
-                      style: TextStyle(fontSize: 13, color: Colors.grey[600]),
+                      style: TextStyle(fontSize: 13, color: AppColors.grey600),
                     ),
                     if (routineInfo.names.isNotEmpty)
                       ...routineInfo.names.map((info) => Padding(
@@ -257,7 +258,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
                                 Icon(
                                   info.done ? Icons.check_circle : Icons.radio_button_unchecked,
                                   size: 16,
-                                  color: info.done ? Colors.green : Colors.grey,
+                                  color: info.done ? AppColors.success : AppColors.grey500,
                                 ),
                                 const SizedBox(width: 8),
                                 Expanded(
@@ -274,7 +275,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
                   if (events.isEmpty)
                     Padding(
                       padding: const EdgeInsets.symmetric(vertical: 8),
-                      child: Text('일정이 없습니다', style: TextStyle(color: Colors.grey[500], fontSize: 13)),
+                      child: Text('일정이 없습니다', style: TextStyle(color: AppColors.grey500, fontSize: 13)),
                     ),
                   ...events.map((e) => Dismissible(
                         key: Key(e.id),
@@ -282,8 +283,8 @@ class _CalendarScreenState extends State<CalendarScreen> {
                         background: Container(
                           alignment: Alignment.centerRight,
                           padding: const EdgeInsets.only(right: 20),
-                          color: Colors.red,
-                          child: const Icon(Icons.delete, color: Colors.white),
+                          color: AppColors.error,
+                          child: const Icon(Icons.delete, color: AppColors.white),
                         ),
                         onDismissed: (_) async {
                           await widget.calendarService.delete(e.id);
@@ -303,12 +304,12 @@ class _CalendarScreenState extends State<CalendarScreen> {
                                 Container(
                                   padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
                                   decoration: BoxDecoration(
-                                    color: Colors.red.withValues(alpha: 0.1),
+                                    color: AppColors.error.withValues(alpha: 0.1),
                                     borderRadius: BorderRadius.circular(8),
                                   ),
                                   child: Text(
                                     e.dDayString(),
-                                    style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.red),
+                                    style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.error),
                                   ),
                                 ),
                               ],
@@ -346,13 +347,13 @@ class _CalendarScreenState extends State<CalendarScreen> {
 
     Color textColor;
     if (isOutside) {
-      textColor = Colors.grey[400]!;
+      textColor = AppColors.grey400;
     } else if (isToday || isSelected) {
-      textColor = Colors.white;
+      textColor = AppColors.white;
     } else if (isHoliday || isWeekend) {
-      textColor = Colors.red[400]!;
+      textColor = AppColors.errorMid;
     } else {
-      textColor = Theme.of(context).textTheme.bodyMedium?.color ?? Colors.black;
+      textColor = Theme.of(context).textTheme.bodyMedium?.color ?? AppColors.black;
     }
 
     // Subtitle text: holiday name > lunar month start > lunar day
@@ -369,20 +370,20 @@ class _CalendarScreenState extends State<CalendarScreen> {
 
     Color lunarColor;
     if (isToday || isSelected) {
-      lunarColor = Colors.white70;
+      lunarColor = AppColors.white.withOpacity(0.7);
     } else if (isHoliday) {
-      lunarColor = Colors.red[300]!;
+      lunarColor = AppColors.errorLight;
     } else if (isOutside) {
-      lunarColor = Colors.grey[400]!;
+      lunarColor = AppColors.grey400;
     } else {
-      lunarColor = Colors.grey[500]!;
+      lunarColor = AppColors.grey500;
     }
 
     return Container(
       margin: const EdgeInsets.all(2),
       decoration: isToday || isSelected
           ? BoxDecoration(
-              color: isSelected ? Colors.deepOrange : Colors.teal,
+              color: isSelected ? AppColors.calendarSelected : AppColors.primary,
               shape: BoxShape.circle,
             )
           : null,
@@ -415,29 +416,29 @@ class _CalendarScreenState extends State<CalendarScreen> {
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
       decoration: BoxDecoration(
-        color: Colors.purple.withValues(alpha: 0.05),
+        color: AppColors.calendarLunar.withValues(alpha: 0.05),
         borderRadius: BorderRadius.circular(8),
-        border: Border.all(color: Colors.purple.withValues(alpha: 0.15)),
+        border: Border.all(color: AppColors.calendarLunar.withValues(alpha: 0.15)),
       ),
       child: Row(
         children: [
-          Icon(Icons.dark_mode_outlined, size: 16, color: Colors.purple[300]),
+          Icon(Icons.dark_mode_outlined, size: 16, color: AppColors.calendarLunar.withOpacity(0.5)),
           const SizedBox(width: 8),
           Text(
             lunar.shortString,
-            style: TextStyle(fontSize: 13, color: Colors.purple[700]),
+            style: TextStyle(fontSize: 13, color: AppColors.calendarLunar),
           ),
           if (holiday != null) ...[
             const SizedBox(width: 8),
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
               decoration: BoxDecoration(
-                color: Colors.purple.withValues(alpha: 0.15),
+                color: AppColors.calendarLunar.withValues(alpha: 0.15),
                 borderRadius: BorderRadius.circular(8),
               ),
               child: Text(
                 holiday,
-                style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: Colors.purple[700]),
+                style: TextStyle(fontSize: 11, fontWeight: FontWeight.bold, color: AppColors.calendarLunar),
               ),
             ),
           ],
@@ -459,7 +460,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
     try {
       return Color(int.parse(hex.replaceFirst('#', '0xFF')));
     } catch (_) {
-      return Colors.blue;
+      return AppColors.info;
     }
   }
 
@@ -611,7 +612,7 @@ class _EventEditSheetState extends State<_EventEditSheet> {
                   avatar: Icon(
                     Icons.flag,
                     size: 16,
-                    color: _isDDay ? Colors.red : Colors.grey,
+                    color: _isDDay ? AppColors.error : AppColors.grey500,
                   ),
                 ),
               ],
@@ -663,10 +664,10 @@ class _EventEditSheetState extends State<_EventEditSheet> {
                       color: Color(int.parse(c.replaceFirst('#', '0xFF'))),
                       shape: BoxShape.circle,
                       border: isSelected
-                          ? Border.all(color: Colors.white, width: 3)
+                          ? Border.all(color: AppColors.white, width: 3)
                           : null,
                       boxShadow: isSelected
-                          ? [const BoxShadow(color: Colors.black26, blurRadius: 4)]
+                          ? [BoxShadow(color: AppColors.black.withOpacity(0.26), blurRadius: 4)]
                           : null,
                     ),
                   ),

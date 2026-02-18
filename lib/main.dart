@@ -22,9 +22,11 @@ import 'services/notification_service.dart';
 import 'services/alarm_service.dart';
 import 'services/timer_service.dart';
 import 'services/calendar_service.dart';
-import 'services/weather_service.dart';
 import 'services/news_service.dart';
+import 'services/card_service.dart';
+import 'services/weather_service.dart';
 import 'widgets/overlay_character.dart';
+import 'theme/app_theme.dart';
 
 /// Entry point for the overlay window (displayed on top of other apps).
 @pragma('vm:entry-point')
@@ -68,8 +70,9 @@ void main() async {
   final alarmService = AlarmService(prefs, notificationService);
   final timerService = TimerService(prefs, notificationService);
   final calendarService = CalendarService(prefs);
-  final weatherService = WeatherService(prefs, settingsService);
   final newsService = NewsService(prefs);
+  final cardService = CardService(prefs);
+  final weatherService = WeatherService(prefs);
   try {
     await alarmService.rescheduleAll();
   } catch (e) {
@@ -121,8 +124,9 @@ void main() async {
     alarmService: alarmService,
     timerService: timerService,
     calendarService: calendarService,
-    weatherService: weatherService,
     newsService: newsService,
+    cardService: cardService,
+    weatherService: weatherService,
   ));
 }
 
@@ -141,8 +145,9 @@ class AiCharacterApp extends StatefulWidget {
   final AlarmService alarmService;
   final TimerService timerService;
   final CalendarService calendarService;
-  final WeatherService weatherService;
   final NewsService newsService;
+  final CardService cardService;
+  final WeatherService weatherService;
 
   const AiCharacterApp({
     super.key,
@@ -160,8 +165,9 @@ class AiCharacterApp extends StatefulWidget {
     required this.alarmService,
     required this.timerService,
     required this.calendarService,
-    required this.weatherService,
     required this.newsService,
+    required this.cardService,
+    required this.weatherService,
   });
 
   @override
@@ -218,16 +224,8 @@ class _AiCharacterAppState extends State<AiCharacterApp>
     return MaterialApp(
       title: 'AI 루틴 잔소리',
       debugShowCheckedModeBanner: false,
-      theme: ThemeData(
-        colorSchemeSeed: Colors.teal,
-        useMaterial3: true,
-        brightness: Brightness.light,
-      ),
-      darkTheme: ThemeData(
-        colorSchemeSeed: Colors.teal,
-        useMaterial3: true,
-        brightness: Brightness.dark,
-      ),
+      theme: AppTheme.light,
+      darkTheme: AppTheme.dark,
       home: HomeScreen(
         routineService: widget.routineService,
         settingsService: widget.settingsService,
@@ -242,8 +240,9 @@ class _AiCharacterAppState extends State<AiCharacterApp>
         alarmService: widget.alarmService,
         timerService: widget.timerService,
         calendarService: widget.calendarService,
-        weatherService: widget.weatherService,
         newsService: widget.newsService,
+        cardService: widget.cardService,
+        weatherService: widget.weatherService,
         onCompletionUnchecked: widget.routineMonitor.forceCheck,
       ),
     );

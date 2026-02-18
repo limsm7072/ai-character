@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../models/memo.dart';
 import '../services/memo_service.dart';
+import '../theme/app_colors.dart';
 
 class MemoListScreen extends StatefulWidget {
   final MemoService memoService;
@@ -140,11 +141,11 @@ class _MemoListScreenState extends State<MemoListScreen> {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(Icons.note_alt_outlined, size: 64, color: Colors.grey[400]),
+                  Icon(Icons.note_alt_outlined, size: 64, color: AppColors.grey400),
                   const SizedBox(height: 16),
                   Text(
                     '메모를 작성해보세요!',
-                    style: TextStyle(fontSize: 18, color: Colors.grey[600]),
+                    style: TextStyle(fontSize: 18, color: AppColors.grey600),
                   ),
                 ],
               ),
@@ -176,20 +177,20 @@ class _MemoListScreenState extends State<MemoListScreen> {
                   memo.content,
                   maxLines: 2,
                   overflow: TextOverflow.ellipsis,
-                  style: TextStyle(color: Colors.grey[600]),
+                  style: TextStyle(color: AppColors.grey600),
                 ),
               ),
             Padding(
               padding: const EdgeInsets.only(top: 4),
               child: Text(
                 _formatDate(memo.updatedAt),
-                style: TextStyle(fontSize: 11, color: Colors.grey[500]),
+                style: TextStyle(fontSize: 11, color: AppColors.grey500),
               ),
             ),
           ],
         ),
         trailing: IconButton(
-          icon: Icon(Icons.delete_outline, color: Colors.grey[400]),
+          icon: Icon(Icons.delete_outline, color: AppColors.grey400),
           onPressed: () => _deleteMemo(memo),
         ),
         onTap: () => _editMemo(memo),

@@ -149,6 +149,16 @@ class MonitorService : Service() {
         }
 
         if (isBlocked) {
+            // App lock: force user to home screen
+            val lockEnabled = prefs.getBoolean("flutter.app_lock_enabled", false)
+            if (lockEnabled) {
+                val homeIntent = Intent(Intent.ACTION_MAIN).apply {
+                    addCategory(Intent.CATEGORY_HOME)
+                    flags = Intent.FLAG_ACTIVITY_NEW_TASK
+                }
+                startActivity(homeIntent)
+            }
+
             val appLabel = getAppLabel(foregroundApp)
 
             // Distraction tracking

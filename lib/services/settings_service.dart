@@ -1,3 +1,4 @@
+import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 
 /// Manages app settings persistence.
@@ -56,26 +57,6 @@ class SettingsService {
   Future<void> setCharacterName(String name) =>
       _prefs.setString(_characterNameKey, name);
 
-  // Weather settings
-  static const _weatherApiKeyKey = 'weather_api_key';
-  static const _weatherNxKey = 'weather_nx';
-  static const _weatherNyKey = 'weather_ny';
-  static const _weatherEnabledKey = 'weather_enabled';
-
-  String get weatherApiKey => _prefs.getString(_weatherApiKeyKey) ?? '';
-  Future<void> setWeatherApiKey(String key) =>
-      _prefs.setString(_weatherApiKeyKey, key);
-
-  int get weatherNx => _prefs.getInt(_weatherNxKey) ?? 60;
-  Future<void> setWeatherNx(int nx) => _prefs.setInt(_weatherNxKey, nx);
-
-  int get weatherNy => _prefs.getInt(_weatherNyKey) ?? 127;
-  Future<void> setWeatherNy(int ny) => _prefs.setInt(_weatherNyKey, ny);
-
-  bool get weatherEnabled => _prefs.getBool(_weatherEnabledKey) ?? false;
-  Future<void> setWeatherEnabled(bool v) =>
-      _prefs.setBool(_weatherEnabledKey, v);
-
   // Calendar: lunar & D-Day toggles
   static const _showLunarKey = 'show_lunar';
   static const _showDDayKey = 'show_dday';
@@ -85,4 +66,137 @@ class SettingsService {
 
   bool get showDDay => _prefs.getBool(_showDDayKey) ?? true;
   Future<void> setShowDDay(bool v) => _prefs.setBool(_showDDayKey, v);
+
+  // Weather location
+  static const _weatherLatKey = 'weather_lat';
+  static const _weatherLonKey = 'weather_lon';
+  static const _weatherLocationNameKey = 'weather_location_name';
+
+  double get weatherLat => _prefs.getDouble(_weatherLatKey) ?? 37.5665;
+  double get weatherLon => _prefs.getDouble(_weatherLonKey) ?? 126.978;
+  String get weatherLocationName => _prefs.getString(_weatherLocationNameKey) ?? '';
+
+  Future<void> setWeatherLocation(double lat, double lon) async {
+    await _prefs.setDouble(_weatherLatKey, lat);
+    await _prefs.setDouble(_weatherLonKey, lon);
+  }
+
+  Future<void> setWeatherLocationName(String name) =>
+      _prefs.setString(_weatherLocationNameKey, name);
+
+  // Dashboard order
+  static const _dashboardOrderKey = 'dashboard_order';
+  static const defaultDashboardOrder = ['news', 'weather', 'routine', 'todo', 'card', 'calendar', 'stats', 'alarm', 'timer', 'memo', 'dday'];
+
+  List<String> get dashboardOrder {
+    final raw = _prefs.getString(_dashboardOrderKey);
+    if (raw == null) return List.from(defaultDashboardOrder);
+    try {
+      final list = (jsonDecode(raw) as List).cast<String>();
+      // Migrate old 'grid' to individual sections
+      final gridIdx = list.indexOf('grid');
+      if (gridIdx >= 0) {
+        list.removeAt(gridIdx);
+        for (final s in ['calendar', 'stats', 'alarm', 'timer', 'memo'].reversed) {
+          if (!list.contains(s)) list.insert(gridIdx, s);
+        }
+      }
+      // Ensure all sections present
+      for (final s in defaultDashboardOrder) {
+        if (!list.contains(s)) list.add(s);
+      }
+      list.removeWhere((s) => !defaultDashboardOrder.contains(s));
+      return list;
+    } catch (_) {
+      return List.from(defaultDashboardOrder);
+    }
+  }
+
+  Future<void> setDashboardOrder(List<String> order) =>
+      _prefs.setString(_dashboardOrderKey, jsonEncode(order));
+
+  // Dashboard section sizes (true=large, false=small)
+  static const _dashboardSizesKey = 'dashboard_sizes';
+  // All sections default to large
+  static const _defaultLargeSections = {'news', 'weather', 'routine', 'todo', 'card', 'calendar', 'stats', 'alarm', 'timer', 'memo', 'dday'};
+
+  bool isDashboardSectionLarge(String id) {
+    final raw = _prefs.getString(_dashboardSizesKey);
+    if (raw == null) return _defaultLargeSections.contains(id);
+    try {
+      final map = (jsonDecode(raw) as Map).cast<String, dynamic>();
+      if (map.containsKey(id)) return map[id] == true;
+      return _defaultLargeSections.contains(id);
+    } catch (_) {
+      return _defaultLargeSections.contains(id);
+    }
+  }
+
+  Future<void> toggleDashboardSectionSize(String id) async {
+    final raw = _prefs.getString(_dashboardSizesKey);
+    Map<String, dynamic> map = {};
+    if (raw != null) {
+      try { map = (jsonDecode(raw) as Map).cast<String, dynamic>(); } catch (_) {}
+    }
+    final current = isDashboardSectionLarge(id);
+    map[id] = !current;
+    await _prefs.setString(_dashboardSizesKey, jsonEncode(map));
+  }
+
+  // Dashboard section widths (half=true means 50% width)
+  static const _dashboardWidthsKey = 'dashboard_widths';
+
+  bool isDashboardSectionHalf(String id) {
+    final raw = _prefs.getString(_dashboardWidthsKey);
+    if (raw == null) return false;
+    try {
+      final map = (jsonDecode(raw) as Map).cast<String, dynamic>();
+      return map[id] == true;
+    } catch (_) {
+      return false;
+    }
+  }
+
+  Future<void> setDashboardSectionHalf(String id, bool half) async {
+    final raw = _prefs.getString(_dashboardWidthsKey);
+    Map<String, dynamic> map = {};
+    if (raw != null) {
+      try { map = (jsonDecode(raw) as Map).cast<String, dynamic>(); } catch (_) {}
+    }
+    map[id] = half;
+    await _prefs.setString(_dashboardWidthsKey, jsonEncode(map));
+  }
+
+  // Dashboard hidden sections
+  static const _dashboardHiddenKey = 'dashboard_hidden';
+
+  Set<String> get dashboardHidden {
+    final raw = _prefs.getString(_dashboardHiddenKey);
+    if (raw == null) return {};
+    try {
+      return (jsonDecode(raw) as List).cast<String>().toSet();
+    } catch (_) {
+      return {};
+    }
+  }
+
+  bool isDashboardSectionHidden(String id) => dashboardHidden.contains(id);
+
+  Future<void> setDashboardSectionHidden(String id, bool hidden) async {
+    final set = dashboardHidden;
+    if (hidden) {
+      set.add(id);
+    } else {
+      set.remove(id);
+    }
+    await _prefs.setString(_dashboardHiddenKey, jsonEncode(set.toList()));
+  }
+
+  // App lock
+  static const _appLockEnabledKey = 'app_lock_enabled';
+
+  bool get appLockEnabled => _prefs.getBool(_appLockEnabledKey) ?? false;
+  Future<void> setAppLockEnabled(bool v) =>
+      _prefs.setBool(_appLockEnabledKey, v);
+
 }

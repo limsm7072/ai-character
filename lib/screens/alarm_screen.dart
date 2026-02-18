@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../models/alarm.dart';
 import '../services/alarm_service.dart';
 import '../services/notification_service.dart';
+import '../theme/app_colors.dart';
 
 class AlarmScreen extends StatefulWidget {
   final AlarmService alarmService;
@@ -53,7 +54,7 @@ class _AlarmScreenState extends State<AlarmScreen> {
           TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('취소')),
           TextButton(
             onPressed: () => Navigator.pop(context, true),
-            style: TextButton.styleFrom(foregroundColor: Colors.red),
+            style: TextButton.styleFrom(foregroundColor: AppColors.error),
             child: const Text('삭제'),
           ),
         ],
@@ -107,16 +108,16 @@ class _AlarmScreenState extends State<AlarmScreen> {
               child: Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
-                  Icon(Icons.alarm_off, size: 64, color: Colors.grey[400]),
+                  Icon(Icons.alarm_off, size: 64, color: AppColors.grey400),
                   const SizedBox(height: 16),
                   Text(
                     '알람을 추가해보세요!',
-                    style: TextStyle(fontSize: 18, color: Colors.grey[600]),
+                    style: TextStyle(fontSize: 18, color: AppColors.grey600),
                   ),
                   const SizedBox(height: 8),
                   Text(
                     '+ 버튼을 눌러 새 알람을 만드세요',
-                    style: TextStyle(fontSize: 13, color: Colors.grey[500]),
+                    style: TextStyle(fontSize: 13, color: AppColors.grey500),
                   ),
                 ],
               ),
@@ -132,7 +133,7 @@ class _AlarmScreenState extends State<AlarmScreen> {
                       '비활성 (${disabled.length})',
                       style: TextStyle(
                         fontSize: 13,
-                        color: Colors.grey[600],
+                        color: AppColors.grey600,
                         fontWeight: FontWeight.w600,
                       ),
                     ),
@@ -174,7 +175,7 @@ class _AlarmScreenState extends State<AlarmScreen> {
                     alarm.hour < 12 ? '오전' : '오후',
                     style: TextStyle(
                       fontSize: 14,
-                      color: isOn ? theme.colorScheme.primary : Colors.grey,
+                      color: isOn ? theme.colorScheme.primary : AppColors.grey500,
                       fontWeight: FontWeight.w500,
                     ),
                   ),
@@ -186,7 +187,7 @@ class _AlarmScreenState extends State<AlarmScreen> {
                       style: TextStyle(
                         fontSize: 32,
                         fontWeight: FontWeight.w300,
-                        color: isOn ? null : Colors.grey,
+                        color: isOn ? null : AppColors.grey500,
                         letterSpacing: -1,
                       ),
                       overflow: TextOverflow.ellipsis,
@@ -199,7 +200,7 @@ class _AlarmScreenState extends State<AlarmScreen> {
                     height: 36,
                     child: IconButton(
                       padding: EdgeInsets.zero,
-                      icon: Icon(Icons.delete_outline, color: Colors.grey[400], size: 20),
+                      icon: Icon(Icons.delete_outline, color: AppColors.grey400, size: 20),
                       onPressed: () => _deleteAlarm(alarm),
                       tooltip: '삭제',
                     ),
@@ -219,7 +220,7 @@ class _AlarmScreenState extends State<AlarmScreen> {
                       alarm.label,
                       style: TextStyle(
                         fontSize: 15,
-                        color: isOn ? null : Colors.grey,
+                        color: isOn ? null : AppColors.grey500,
                         fontWeight: FontWeight.w500,
                       ),
                       overflow: TextOverflow.ellipsis,
@@ -242,14 +243,14 @@ class _AlarmScreenState extends State<AlarmScreen> {
       return Container(
         padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
         decoration: BoxDecoration(
-          color: alarm.isEnabled ? Colors.orange.withValues(alpha: 0.15) : Colors.grey.withValues(alpha: 0.1),
+          color: alarm.isEnabled ? AppColors.accent.withValues(alpha: 0.15) : AppColors.grey500.withValues(alpha: 0.1),
           borderRadius: BorderRadius.circular(8),
         ),
         child: Text(
           '한 번',
           style: TextStyle(
             fontSize: 12,
-            color: alarm.isEnabled ? Colors.orange[700] : Colors.grey,
+            color: alarm.isEnabled ? AppColors.accentDark : AppColors.grey500,
           ),
         ),
       );
@@ -267,7 +268,7 @@ class _AlarmScreenState extends State<AlarmScreen> {
           alignment: Alignment.center,
           decoration: BoxDecoration(
             color: active
-                ? (alarm.isEnabled ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.15) : Colors.grey.withValues(alpha: 0.1))
+                ? (alarm.isEnabled ? Theme.of(context).colorScheme.primary.withValues(alpha: 0.15) : AppColors.grey500.withValues(alpha: 0.1))
                 : null,
             shape: BoxShape.circle,
           ),
@@ -277,8 +278,8 @@ class _AlarmScreenState extends State<AlarmScreen> {
               fontSize: 9,
               fontWeight: active ? FontWeight.bold : FontWeight.normal,
               color: active
-                  ? (alarm.isEnabled ? Theme.of(context).colorScheme.primary : Colors.grey)
-                  : Colors.grey[400],
+                  ? (alarm.isEnabled ? Theme.of(context).colorScheme.primary : AppColors.grey500)
+                  : AppColors.grey400,
             ),
           ),
         );
@@ -347,7 +348,7 @@ class _AlarmEditSheetState extends State<_AlarmEditSheet> {
               width: 40,
               height: 4,
               decoration: BoxDecoration(
-                color: Colors.grey[300],
+                color: AppColors.grey300,
                 borderRadius: BorderRadius.circular(2),
               ),
             ),
@@ -401,7 +402,7 @@ class _AlarmEditSheetState extends State<_AlarmEditSheet> {
                         ),
                       ),
                       const SizedBox(width: 8),
-                      Icon(Icons.edit, size: 18, color: Colors.grey[500]),
+                      Icon(Icons.edit, size: 18, color: AppColors.grey500),
                     ],
                   ),
                 ),
@@ -428,13 +429,13 @@ class _AlarmEditSheetState extends State<_AlarmEditSheet> {
                   children: [
                     Text(
                       '반복 요일',
-                      style: TextStyle(fontSize: 14, color: Colors.grey[700], fontWeight: FontWeight.w500),
+                      style: TextStyle(fontSize: 14, color: AppColors.grey700, fontWeight: FontWeight.w500),
                     ),
                     const SizedBox(width: 8),
                     if (_activeDays.every((d) => !d))
                       Text(
                         '(선택 안 하면 한 번만 울림)',
-                        style: TextStyle(fontSize: 12, color: Colors.grey[500]),
+                        style: TextStyle(fontSize: 12, color: AppColors.grey500),
                       ),
                   ],
                 ),
@@ -463,7 +464,7 @@ class _AlarmEditSheetState extends State<_AlarmEditSheet> {
                               style: TextStyle(
                                 fontSize: btnSize * 0.35,
                                 fontWeight: selected ? FontWeight.bold : FontWeight.normal,
-                                color: selected ? theme.colorScheme.onPrimary : Colors.grey[600],
+                                color: selected ? theme.colorScheme.onPrimary : AppColors.grey600,
                               ),
                             ),
                           ),
@@ -556,10 +557,10 @@ class _QuickSelectChip extends StatelessWidget {
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
         decoration: BoxDecoration(
-          border: Border.all(color: Colors.grey[300]!),
+          border: Border.all(color: AppColors.grey300),
           borderRadius: BorderRadius.circular(16),
         ),
-        child: Text(label, style: TextStyle(fontSize: 12, color: Colors.grey[600])),
+        child: Text(label, style: TextStyle(fontSize: 12, color: AppColors.grey600)),
       ),
     );
   }
