@@ -8,6 +8,8 @@ import 'todo_service.dart';
 import 'memo_service.dart';
 import 'alarm_service.dart';
 import 'calendar_service.dart';
+import 'settings_service.dart';
+import 'tts_service.dart';
 
 class ToolAction {
   final String name;
@@ -24,6 +26,8 @@ class AgentTools {
   final MemoService? memoService;
   final AlarmService? alarmService;
   final CalendarService? calendarService;
+  final SettingsService? settingsService;
+  final TtsService? ttsService;
 
   AgentTools({
     required this.routineService,
@@ -32,6 +36,8 @@ class AgentTools {
     this.memoService,
     this.alarmService,
     this.calendarService,
+    this.settingsService,
+    this.ttsService,
   });
 
   List<Tool> get tools => [
@@ -276,6 +282,102 @@ class AgentTools {
           requiredProperties: ['event_id'],
         ),
       ),
+      // ─── Settings tools ─────────────────────────────────────
+      FunctionDeclaration(
+        'get_settings',
+        '현재 앱 설정을 조회합니다 (목소리, 잔소리 빈도/강도, 음성출력, 오버레이, 앱잠금, 캐릭터 이름 등)',
+        Schema(SchemaType.object, properties: {}),
+      ),
+      FunctionDeclaration(
+        'set_voice',
+        '목소리를 변경합니다. 가능한 voice_id: sunhi(선희-밝고친근), sunhi_gentle(선희차분), sunhi_bright(선희활발), injoon(인준-차분), injoon_energetic(인준활발), hyunsu(현수-중후), hyunsu_deep(현수중저음)',
+        Schema(SchemaType.object,
+          properties: {
+            'voice_id': Schema(SchemaType.string, description: '목소리 ID (sunhi, sunhi_gentle, sunhi_bright, injoon, injoon_energetic, hyunsu, hyunsu_deep)'),
+          },
+          requiredProperties: ['voice_id'],
+        ),
+      ),
+      FunctionDeclaration(
+        'set_tts_enabled',
+        '음성 출력을 켜거나 끕니다',
+        Schema(SchemaType.object,
+          properties: {
+            'enabled': Schema(SchemaType.boolean, description: 'true=켜기, false=끄기'),
+          },
+          requiredProperties: ['enabled'],
+        ),
+      ),
+      FunctionDeclaration(
+        'set_nag_frequency',
+        '잔소리 빈도를 변경합니다',
+        Schema(SchemaType.object,
+          properties: {
+            'seconds': Schema(SchemaType.integer, description: '잔소리 간격 (초). 가능한 값: 1, 5, 15, 30, 60, 120, 300'),
+          },
+          requiredProperties: ['seconds'],
+        ),
+      ),
+      FunctionDeclaration(
+        'set_nag_intensity',
+        '잔소리 강도를 변경합니다',
+        Schema(SchemaType.object,
+          properties: {
+            'level': Schema(SchemaType.integer, description: '0=부드럽게, 1=보통, 2=엄격하게'),
+          },
+          requiredProperties: ['level'],
+        ),
+      ),
+      FunctionDeclaration(
+        'set_overlay_enabled',
+        '오버레이(딴짓할 때 캐릭터 표시)를 켜거나 끕니다',
+        Schema(SchemaType.object,
+          properties: {
+            'enabled': Schema(SchemaType.boolean, description: 'true=켜기, false=끄기'),
+          },
+          requiredProperties: ['enabled'],
+        ),
+      ),
+      FunctionDeclaration(
+        'set_app_lock_enabled',
+        '앱 잠금(루틴 시간에 차단된 앱 강제 종료)을 켜거나 끕니다',
+        Schema(SchemaType.object,
+          properties: {
+            'enabled': Schema(SchemaType.boolean, description: 'true=켜기, false=끄기'),
+          },
+          requiredProperties: ['enabled'],
+        ),
+      ),
+      FunctionDeclaration(
+        'set_overlay_character_visible',
+        '잔소리할 때 캐릭터 화면 표시 여부를 설정합니다. 끄면 목소리만 나옵니다',
+        Schema(SchemaType.object,
+          properties: {
+            'visible': Schema(SchemaType.boolean, description: 'true=캐릭터 표시, false=목소리만'),
+          },
+          requiredProperties: ['visible'],
+        ),
+      ),
+      FunctionDeclaration(
+        'set_character_name',
+        '캐릭터 이름을 변경합니다',
+        Schema(SchemaType.object,
+          properties: {
+            'name': Schema(SchemaType.string, description: '새 캐릭터 이름'),
+          },
+          requiredProperties: ['name'],
+        ),
+      ),
+      FunctionDeclaration(
+        'set_routine_check_interval',
+        '미완료 루틴 확인 간격을 변경합니다',
+        Schema(SchemaType.object,
+          properties: {
+            'seconds': Schema(SchemaType.integer, description: '확인 간격 (초). 가능한 값: 5, 60, 300, 1800, 3600'),
+          },
+          requiredProperties: ['seconds'],
+        ),
+      ),
     ]),
   ];
 
@@ -325,6 +427,26 @@ class AgentTools {
         return await _createEvent(call.args);
       case 'delete_event':
         return await _deleteEvent(call.args);
+      case 'get_settings':
+        return _getSettings();
+      case 'set_voice':
+        return await _setVoice(call.args);
+      case 'set_tts_enabled':
+        return await _setTtsEnabled(call.args);
+      case 'set_nag_frequency':
+        return await _setNagFrequency(call.args);
+      case 'set_nag_intensity':
+        return await _setNagIntensity(call.args);
+      case 'set_overlay_enabled':
+        return await _setOverlayEnabled(call.args);
+      case 'set_app_lock_enabled':
+        return await _setAppLockEnabled(call.args);
+      case 'set_overlay_character_visible':
+        return await _setOverlayCharacterVisible(call.args);
+      case 'set_character_name':
+        return await _setCharacterName(call.args);
+      case 'set_routine_check_interval':
+        return await _setRoutineCheckInterval(call.args);
       default:
         return {'error': '알 수 없는 함수: ${call.name}'};
     }
@@ -746,6 +868,151 @@ class AgentTools {
       final title = match.isNotEmpty ? match.first.title : '';
       await calendarService!.delete(eventId);
       return {'success': true, 'deleted_title': title};
+    } catch (e) {
+      return {'success': false, 'error': e.toString()};
+    }
+  }
+
+  // ─── Settings handlers ──────────────────────────────────────
+
+  Map<String, Object?> _getSettings() {
+    if (settingsService == null) return {'error': 'SettingsService not available'};
+    final s = settingsService!;
+    final preset = voicePresets.firstWhere(
+      (p) => p.id == s.voicePreset,
+      orElse: () => voicePresets.first,
+    );
+    return {
+      'voice': {'id': s.voicePreset, 'label': preset.label, 'description': preset.description},
+      'tts_enabled': s.ttsEnabled,
+      'nag_frequency_seconds': s.nagFrequency,
+      'nag_intensity': s.nagIntensity,
+      'nag_intensity_label': s.nagIntensity == 0 ? '부드럽게' : s.nagIntensity == 1 ? '보통' : '엄격하게',
+      'overlay_enabled': s.overlayEnabled,
+      'app_lock_enabled': s.appLockEnabled,
+      'overlay_character_visible': s.overlayCharacterVisible,
+      'character_name': s.characterName,
+      'routine_check_interval_seconds': s.routineCheckInterval,
+    };
+  }
+
+  Future<Map<String, Object?>> _setVoice(Map<String, Object?> args) async {
+    if (settingsService == null) return {'error': 'SettingsService not available'};
+    try {
+      final voiceId = args['voice_id'] as String;
+      final validIds = voicePresets.map((p) => p.id).toSet();
+      if (!validIds.contains(voiceId)) {
+        return {'success': false, 'error': '유효하지 않은 목소리 ID: $voiceId', 'available': validIds.toList()};
+      }
+      await settingsService!.setVoicePreset(voiceId);
+      if (ttsService != null) {
+        await ttsService!.applyPreset(voiceId);
+      }
+      final preset = voicePresets.firstWhere((p) => p.id == voiceId);
+      return {'success': true, 'voice_id': voiceId, 'label': preset.label, 'description': preset.description};
+    } catch (e) {
+      return {'success': false, 'error': e.toString()};
+    }
+  }
+
+  Future<Map<String, Object?>> _setTtsEnabled(Map<String, Object?> args) async {
+    if (settingsService == null) return {'error': 'SettingsService not available'};
+    try {
+      final enabled = args['enabled'] as bool;
+      await settingsService!.setTtsEnabled(enabled);
+      return {'success': true, 'tts_enabled': enabled};
+    } catch (e) {
+      return {'success': false, 'error': e.toString()};
+    }
+  }
+
+  Future<Map<String, Object?>> _setNagFrequency(Map<String, Object?> args) async {
+    if (settingsService == null) return {'error': 'SettingsService not available'};
+    try {
+      final seconds = (args['seconds'] as num).toInt();
+      const valid = [1, 5, 15, 30, 60, 120, 300];
+      if (!valid.contains(seconds)) {
+        return {'success': false, 'error': '유효하지 않은 값: $seconds초', 'available': valid};
+      }
+      await settingsService!.setNagFrequency(seconds);
+      return {'success': true, 'nag_frequency_seconds': seconds};
+    } catch (e) {
+      return {'success': false, 'error': e.toString()};
+    }
+  }
+
+  Future<Map<String, Object?>> _setNagIntensity(Map<String, Object?> args) async {
+    if (settingsService == null) return {'error': 'SettingsService not available'};
+    try {
+      final level = (args['level'] as num).toInt();
+      if (level < 0 || level > 2) {
+        return {'success': false, 'error': '유효하지 않은 강도: $level (0~2)'};
+      }
+      await settingsService!.setNagIntensity(level);
+      final label = level == 0 ? '부드럽게' : level == 1 ? '보통' : '엄격하게';
+      return {'success': true, 'nag_intensity': level, 'label': label};
+    } catch (e) {
+      return {'success': false, 'error': e.toString()};
+    }
+  }
+
+  Future<Map<String, Object?>> _setOverlayEnabled(Map<String, Object?> args) async {
+    if (settingsService == null) return {'error': 'SettingsService not available'};
+    try {
+      final enabled = args['enabled'] as bool;
+      await settingsService!.setOverlayEnabled(enabled);
+      return {'success': true, 'overlay_enabled': enabled};
+    } catch (e) {
+      return {'success': false, 'error': e.toString()};
+    }
+  }
+
+  Future<Map<String, Object?>> _setAppLockEnabled(Map<String, Object?> args) async {
+    if (settingsService == null) return {'error': 'SettingsService not available'};
+    try {
+      final enabled = args['enabled'] as bool;
+      await settingsService!.setAppLockEnabled(enabled);
+      return {'success': true, 'app_lock_enabled': enabled};
+    } catch (e) {
+      return {'success': false, 'error': e.toString()};
+    }
+  }
+
+  Future<Map<String, Object?>> _setOverlayCharacterVisible(Map<String, Object?> args) async {
+    if (settingsService == null) return {'error': 'SettingsService not available'};
+    try {
+      final visible = args['visible'] as bool;
+      await settingsService!.setOverlayCharacterVisible(visible);
+      return {'success': true, 'overlay_character_visible': visible};
+    } catch (e) {
+      return {'success': false, 'error': e.toString()};
+    }
+  }
+
+  Future<Map<String, Object?>> _setCharacterName(Map<String, Object?> args) async {
+    if (settingsService == null) return {'error': 'SettingsService not available'};
+    try {
+      final name = args['name'] as String;
+      if (name.trim().isEmpty) {
+        return {'success': false, 'error': '이름이 비어있습니다'};
+      }
+      await settingsService!.setCharacterName(name.trim());
+      return {'success': true, 'character_name': name.trim()};
+    } catch (e) {
+      return {'success': false, 'error': e.toString()};
+    }
+  }
+
+  Future<Map<String, Object?>> _setRoutineCheckInterval(Map<String, Object?> args) async {
+    if (settingsService == null) return {'error': 'SettingsService not available'};
+    try {
+      final seconds = (args['seconds'] as num).toInt();
+      const valid = [5, 60, 300, 1800, 3600];
+      if (!valid.contains(seconds)) {
+        return {'success': false, 'error': '유효하지 않은 값: $seconds초', 'available': valid};
+      }
+      await settingsService!.setRoutineCheckInterval(seconds);
+      return {'success': true, 'routine_check_interval_seconds': seconds};
     } catch (e) {
       return {'success': false, 'error': e.toString()};
     }

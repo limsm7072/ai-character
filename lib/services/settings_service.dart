@@ -199,4 +199,11 @@ class SettingsService {
   Future<void> setAppLockEnabled(bool v) =>
       _prefs.setBool(_appLockEnabledKey, v);
 
+  // Overlay character visibility (false = voice only, no character on screen)
+  static const _overlayCharacterVisibleKey = 'overlay_character_visible';
+
+  bool get overlayCharacterVisible => _prefs.getBool(_overlayCharacterVisibleKey) ?? true;
+  Future<void> setOverlayCharacterVisible(bool v) =>
+      _prefs.setBool(_overlayCharacterVisibleKey, v);
+
 }

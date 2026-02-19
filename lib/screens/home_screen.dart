@@ -107,6 +107,10 @@ class _HomeScreenState extends State<HomeScreen> {
             memoService: widget.memoService,
             alarmService: widget.alarmService,
             calendarService: widget.calendarService,
+            weatherService: widget.weatherService,
+            newsService: widget.newsService,
+            cardService: widget.cardService,
+            timerService: widget.timerService,
             onRoutinesChanged: () => _dashboardKey.currentState?.refresh(),
           ),
           SettingsScreen(

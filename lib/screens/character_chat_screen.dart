@@ -14,6 +14,10 @@ import '../services/todo_service.dart';
 import '../services/memo_service.dart';
 import '../services/alarm_service.dart';
 import '../services/calendar_service.dart';
+import '../services/weather_service.dart';
+import '../services/news_service.dart';
+import '../services/card_service.dart';
+import '../services/timer_service.dart';
 import '../widgets/spine_character_widget.dart';
 import '../theme/app_colors.dart';
 import 'dress_up_screen.dart';
@@ -28,6 +32,10 @@ class CharacterChatScreen extends StatefulWidget {
   final MemoService? memoService;
   final AlarmService? alarmService;
   final CalendarService? calendarService;
+  final WeatherService? weatherService;
+  final NewsService? newsService;
+  final CardService? cardService;
+  final TimerService? timerService;
   final VoidCallback? onRoutinesChanged;
 
   const CharacterChatScreen({
@@ -41,6 +49,10 @@ class CharacterChatScreen extends StatefulWidget {
     this.memoService,
     this.alarmService,
     this.calendarService,
+    this.weatherService,
+    this.newsService,
+    this.cardService,
+    this.timerService,
     this.onRoutinesChanged,
   });
 
@@ -83,6 +95,8 @@ class _CharacterChatScreenState extends State<CharacterChatScreen> {
         memoService: widget.memoService,
         alarmService: widget.alarmService,
         calendarService: widget.calendarService,
+        settingsService: widget.settingsService,
+        ttsService: _tts,
       );
       _gemini.initializeAgent(apiKey, agentTools: agentTools, characterName: _charName);
     }
@@ -94,6 +108,23 @@ class _CharacterChatScreenState extends State<CharacterChatScreen> {
     final todayStr = '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
     const weekdays = ['월', '화', '수', '목', '금', '토', '일'];
     parts.add('현재: ${now.year}년 ${now.month}월 ${now.day}일 ${weekdays[now.weekday - 1]}요일 ${now.hour}시 ${now.minute}분');
+
+    // 설정 정보
+    final s = widget.settingsService;
+    final voicePreset = voicePresets.firstWhere(
+      (p) => p.id == s.voicePreset,
+      orElse: () => voicePresets.first,
+    );
+    parts.add('현재 설정: 캐릭터이름=${s.characterName}, 목소리=${voicePreset.label}, 음성출력=${s.ttsEnabled ? "켜짐" : "꺼짐"}, 잔소리빈도=${s.nagFrequency}초, 잔소리강도=${s.nagIntensity == 0 ? "부드럽게" : s.nagIntensity == 1 ? "보통" : "엄격하게"}, 오버레이=${s.overlayEnabled ? "켜짐" : "꺼짐"}, 캐릭터표시=${s.overlayCharacterVisible ? "켜짐" : "꺼짐(목소리만)"}, 앱잠금=${s.appLockEnabled ? "켜짐" : "꺼짐"}');
+
+    // 날씨
+    if (widget.weatherService != null) {
+      final weather = widget.weatherService!.getCached();
+      if (weather != null) {
+        final loc = s.weatherLocationName.isNotEmpty ? s.weatherLocationName : '현재위치';
+        parts.add('날씨($loc): ${weather.temperature.toStringAsFixed(1)}°C, ${weather.description}, 습도 ${weather.humidity}%, UV ${weather.uvIndex.toStringAsFixed(1)}');
+      }
+    }
 
     // 루틴
     if (widget.routineService != null && widget.completionService != null) {
@@ -107,7 +138,7 @@ class _CharacterChatScreenState extends State<CharacterChatScreen> {
         final names = active.map((r) {
           final isDone = widget.completionService!.isCompleted(r.id, todayStr) ||
               widget.completionService!.isSkipped(r.id, todayStr);
-          return '${r.name}(${isDone ? "완료" : "미완료"})';
+          return '${r.name}(${r.startTime.format()}~${r.endTime.format()}, ${isDone ? "완료" : "미완료"})';
         }).join(', ');
         parts.add('  - $names');
       }
@@ -128,7 +159,8 @@ class _CharacterChatScreenState extends State<CharacterChatScreen> {
     if (widget.memoService != null) {
       final memos = widget.memoService!.getAll();
       if (memos.isNotEmpty) {
-        parts.add('메모: ${memos.length}개');
+        final titles = memos.take(5).map((m) => m.title).join(', ');
+        parts.add('메모: ${memos.length}개 ($titles)');
       }
     }
 
@@ -137,15 +169,26 @@ class _CharacterChatScreenState extends State<CharacterChatScreen> {
       final alarms = widget.alarmService!.getAll();
       final enabled = alarms.where((a) => a.isEnabled).toList();
       if (enabled.isNotEmpty) {
-        parts.add('활성 알람: ${enabled.length}개');
+        final alarmList = enabled.take(5).map((a) => '${a.label}(${a.timeString})').join(', ');
+        parts.add('활성 알람: ${enabled.length}개 ($alarmList)');
+      }
+    }
+
+    // 타이머 프리셋
+    if (widget.timerService != null) {
+      final presets = widget.timerService!.getAll();
+      if (presets.isNotEmpty) {
+        final presetList = presets.take(5).map((p) => '${p.label}(${p.durationSeconds ~/ 60}분)').join(', ');
+        parts.add('타이머 프리셋: ${presets.length}개 ($presetList)');
       }
     }
 
     // 캘린더
     if (widget.calendarService != null) {
-      final todayEvents = widget.calendarService!.countByDate(todayStr);
-      if (todayEvents > 0) {
-        parts.add('오늘 일정: ${todayEvents}건');
+      final todayEvents = widget.calendarService!.getByDate(todayStr);
+      if (todayEvents.isNotEmpty) {
+        final eventList = todayEvents.take(5).map((e) => '${e.title}${e.timeString.isNotEmpty ? "(${e.timeString})" : ""}').join(', ');
+        parts.add('오늘 일정: ${todayEvents.length}건 ($eventList)');
       }
       final ddayEvents = widget.calendarService!.getDDayEvents();
       final upcoming = ddayEvents.where((e) {
@@ -155,6 +198,32 @@ class _CharacterChatScreenState extends State<CharacterChatScreen> {
       if (upcoming.isNotEmpty) {
         final ddayStr = upcoming.map((e) => '${e.title}(${e.dDayString()})').join(', ');
         parts.add('D-Day: $ddayStr');
+      }
+    }
+
+    // 명함 (개인정보 요약 - 외부 전송 없음, 앱 내부 컨텍스트용)
+    if (widget.cardService != null) {
+      final card = widget.cardService!.get();
+      if (card != null && card.name.isNotEmpty) {
+        final cardParts = <String>[];
+        cardParts.add('이름=${card.name}');
+        if (card.company.isNotEmpty) cardParts.add('회사=${card.company}');
+        if (card.position.isNotEmpty) cardParts.add('직책=${card.position}');
+        if (card.city.isNotEmpty || card.province.isNotEmpty) {
+          cardParts.add('지역=${card.province} ${card.city}'.trim());
+        }
+        final interests = [card.interest1, card.interest2, card.interest3]
+            .where((i) => i.isNotEmpty).toList();
+        if (interests.isNotEmpty) cardParts.add('관심사=${interests.join(",")}');
+        parts.add('사용자 명함: ${cardParts.join(", ")}');
+      }
+    }
+
+    // 뉴스 헤드라인
+    if (widget.newsService != null) {
+      final headlines = widget.newsService!.getCached();
+      if (headlines.isNotEmpty) {
+        parts.add('주요 뉴스: ${headlines.take(3).join(" / ")}');
       }
     }
 
@@ -654,6 +723,31 @@ class _CharacterChatScreenState extends State<CharacterChatScreen> {
       case 'delete_event':
         final evTitle = action.result['deleted_title'];
         return evTitle != null ? '일정을 삭제했어요: $evTitle' : '일정을 삭제했어요';
+      case 'get_settings':
+        return '현재 설정을 조회했어요';
+      case 'set_voice':
+        final vLabel = action.result['label'];
+        return vLabel != null ? '목소리를 변경했어요: $vLabel' : '목소리를 변경했어요';
+      case 'set_tts_enabled':
+        final ttsOn = action.result['tts_enabled'];
+        return ttsOn == true ? '음성 출력을 켰어요' : '음성 출력을 껐어요';
+      case 'set_nag_frequency':
+        return '잔소리 빈도를 변경했어요: ${action.result['nag_frequency_seconds']}초';
+      case 'set_nag_intensity':
+        return '잔소리 강도를 변경했어요: ${action.result['label'] ?? ''}';
+      case 'set_overlay_enabled':
+        final ovOn = action.result['overlay_enabled'];
+        return ovOn == true ? '오버레이를 켰어요' : '오버레이를 껐어요';
+      case 'set_app_lock_enabled':
+        final lockOn = action.result['app_lock_enabled'];
+        return lockOn == true ? '앱 잠금을 켰어요' : '앱 잠금을 껐어요';
+      case 'set_overlay_character_visible':
+        final charVis = action.result['overlay_character_visible'];
+        return charVis == true ? '캐릭터 표시를 켰어요' : '캐릭터를 숨기고 목소리만 나와요';
+      case 'set_character_name':
+        return '캐릭터 이름을 변경했어요: ${action.result['character_name'] ?? ''}';
+      case 'set_routine_check_interval':
+        return '루틴 확인 간격을 변경했어요';
       default:
         return '${action.name} 실행';
     }
@@ -666,6 +760,10 @@ class _CharacterChatScreenState extends State<CharacterChatScreen> {
     'create_memo', 'update_memo', 'delete_memo',
     'create_alarm', 'delete_alarm', 'toggle_alarm',
     'create_event', 'delete_event',
+    'set_voice', 'set_tts_enabled', 'set_nag_frequency', 'set_nag_intensity',
+    'set_overlay_enabled', 'set_app_lock_enabled', 'set_overlay_character_visible',
+    'set_character_name',
+    'set_routine_check_interval',
   };
 
   Future<void> _sendMessage({bool isVoice = false}) async {

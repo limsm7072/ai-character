@@ -302,6 +302,19 @@ class _SettingsScreenState extends State<SettingsScreen> {
             },
           ),
           SwitchListTile(
+            title: const Text('캐릭터 표시'),
+            subtitle: Text(
+              widget.settingsService.overlayCharacterVisible
+                  ? '잔소리할 때 캐릭터가 화면에 나타납니다'
+                  : '목소리만 나오고 캐릭터는 안 나타납니다',
+            ),
+            value: widget.settingsService.overlayCharacterVisible,
+            onChanged: widget.settingsService.overlayEnabled ? (v) async {
+              await widget.settingsService.setOverlayCharacterVisible(v);
+              setState(() {});
+            } : null,
+          ),
+          SwitchListTile(
             title: const Text('앱 잠금'),
             subtitle: const Text('루틴 시간에 차단된 앱을 강제로 닫습니다'),
             value: widget.settingsService.appLockEnabled,

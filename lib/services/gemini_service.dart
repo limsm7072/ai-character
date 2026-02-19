@@ -213,7 +213,7 @@ class GeminiService {
 ''';
 
   static String _buildAgentSystemPrompt(String name) => '''
-너는 "$name"라는 이름의 AI 캐릭터야. 사용자의 친한 친구이자 루틴 관리 도우미야.
+너는 "$name"라는 이름의 AI 캐릭터야. 사용자의 친한 친구이자 만능 비서야.
 
 성격:
 - 다정하고 밝고 유쾌한 성격
@@ -237,6 +237,16 @@ class GeminiService {
 - 일정(캘린더) 추가/조회/삭제 요청 시 event 함수를 사용해
 - 사용자가 일정 제목으로 말하면 list_events로 먼저 ID를 확인해
 
+설정 변경:
+- 목소리 변경 요청 시 set_voice 함수 사용 (선희/인준/현수 등)
+- "현재 설정 알려줘" 시 get_settings 함수 사용
+- 음성 출력 켜기/끄기 → set_tts_enabled
+- 잔소리 빈도/강도 변경 → set_nag_frequency / set_nag_intensity
+- 오버레이 켜기/끄기 → set_overlay_enabled
+- 앱 잠금 켜기/끄기 → set_app_lock_enabled
+- 캐릭터 이름 변경 → set_character_name
+- 루틴 확인 간격 변경 → set_routine_check_interval
+
 응답 형식 (반드시 JSON):
 {"text": "대사 내용", "emotion": "감정", "gesture": "동작"}
 
@@ -248,6 +258,7 @@ class GeminiService {
 - 루틴 조회 후: {"text": "네 루틴 3개 있어! 운동은 아직 안 했네~", "emotion": "happy", "gesture": "pointing"}
 - 루틴 생성 후: {"text": "운동 루틴 만들었어! 매일 7시부터 8시까지~ 화이팅!", "emotion": "proud", "gesture": "clapping"}
 - 루틴 삭제 후: {"text": "운동 루틴 삭제했어! 다른 거 필요하면 말해~", "emotion": "neutral", "gesture": "idle"}
+- 목소리 변경 후: {"text": "목소리 바꿨어! 이제 이 목소리로 말할게~", "emotion": "happy", "gesture": "thumbs_up"}
 - 칭찬: {"text": "와 대박! 진짜 잘했어!", "emotion": "proud", "gesture": "thumbs_up"}
 ''';
 
@@ -319,6 +330,35 @@ class GeminiService {
       }
     }
     throw Exception('All models quota exceeded');
+  }
+
+  /// Generate a standalone recommendation (no chat history).
+  /// Uses a fresh model instance so the chat session is unaffected.
+  Future<String?> generateRecommendation(String prompt) async {
+    if (_apiKey == null) return null;
+
+    for (int i = 0; i < _chatModels.length; i++) {
+      final model = GenerativeModel(
+        model: _chatModels[i],
+        apiKey: _apiKey!,
+        generationConfig: GenerationConfig(
+          temperature: 0.7,
+          maxOutputTokens: 1024,
+        ),
+      );
+      try {
+        final response = await model.generateContent([Content.text(prompt)]);
+        return response.text;
+      } catch (e) {
+        if (_isQuotaError(e) && i < _chatModels.length - 1) {
+          print('[GeminiService] Recommendation quota exceeded on ${_chatModels[i]}, trying ${_chatModels[i + 1]}');
+          continue;
+        }
+        print('[GeminiService] Recommendation error: $e');
+        return null;
+      }
+    }
+    return null;
   }
 
   /// Reset the conversation context.
