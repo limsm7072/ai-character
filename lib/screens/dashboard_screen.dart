@@ -416,6 +416,7 @@ class DashboardScreenState extends State<DashboardScreen> {
         routineService: widget.routineService,
         completionService: widget.completionService,
         settingsService: widget.settingsService,
+        timerService: widget.timerService,
         onCompletionUnchecked: widget.onCompletionUnchecked,
       )),
       child: Container(
@@ -452,6 +453,7 @@ class DashboardScreenState extends State<DashboardScreen> {
         routineService: widget.routineService,
         completionService: widget.completionService,
         settingsService: widget.settingsService,
+        timerService: widget.timerService,
         onCompletionUnchecked: widget.onCompletionUnchecked,
       )),
       child: Container(

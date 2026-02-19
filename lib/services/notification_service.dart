@@ -135,6 +135,7 @@ class NotificationService {
             playSound: true,
             enableVibration: true,
             fullScreenIntent: true,
+            audioAttributesUsage: AudioAttributesUsage.alarm,
           ),
         ),
         androidScheduleMode: _scheduleMode,
@@ -181,6 +182,7 @@ class NotificationService {
             playSound: true,
             enableVibration: true,
             fullScreenIntent: true,
+            audioAttributesUsage: AudioAttributesUsage.alarm,
           ),
         ),
         androidScheduleMode: _scheduleMode,
@@ -227,6 +229,7 @@ class NotificationService {
             priority: Priority.max,
             playSound: true,
             enableVibration: true,
+            audioAttributesUsage: AudioAttributesUsage.alarm,
           ),
         ),
       );

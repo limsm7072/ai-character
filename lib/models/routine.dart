@@ -9,6 +9,7 @@ class Routine {
   List<bool> activeDays; // Mon-Sun (7 elements)
   bool isEnabled;
   bool notifyOnStart;
+  int? timerMinutes; // optional linked timer duration
 
   Routine({
     required this.id,
@@ -21,6 +22,7 @@ class Routine {
     List<bool>? activeDays,
     this.isEnabled = true,
     this.notifyOnStart = false,
+    this.timerMinutes,
   }) : activeDays = activeDays ?? List.filled(7, true);
 
   /// Check if this routine is active on a specific date (considering startDate and activeDays).
@@ -69,6 +71,7 @@ class Routine {
         'activeDays': activeDays,
         'isEnabled': isEnabled,
         'notifyOnStart': notifyOnStart,
+        'timerMinutes': timerMinutes,
       };
 
   factory Routine.fromJson(Map<String, dynamic> json) => Routine(
@@ -88,6 +91,7 @@ class Routine {
         activeDays: List<bool>.from(json['activeDays'] ?? List.filled(7, true)),
         isEnabled: json['isEnabled'] ?? true,
         notifyOnStart: json['notifyOnStart'] ?? false,
+        timerMinutes: json['timerMinutes'],
       );
 }
 

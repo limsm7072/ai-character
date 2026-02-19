@@ -11,7 +11,9 @@ import android.os.Process
 import android.provider.Settings
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
+import android.media.AudioAttributes
 import android.media.MediaPlayer
+import android.media.RingtoneManager
 import io.flutter.embedding.android.FlutterFragmentActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.EventChannel
@@ -24,6 +26,10 @@ class MainActivity : FlutterFragmentActivity() {
     private val EVENT_CHANNEL = "com.aicharacter.ai_character/distraction_events"
     private var eventSink: EventChannel.EventSink? = null
     private var mediaPlayer: MediaPlayer? = null
+    private var alarmPlayer: MediaPlayer? = null
+    private var alarmRingtone: android.media.Ringtone? = null
+    private var fallbackTone: android.media.ToneGenerator? = null
+    private var ambientGenerator: AmbientSoundGenerator? = null
     private var speechResult: MethodChannel.Result? = null
     private var pickImageResult: MethodChannel.Result? = null
     private val PICK_IMAGE_REQUEST = 2001
@@ -173,6 +179,37 @@ class MainActivity : FlutterFragmentActivity() {
                     stopAudio()
                     result.success(null)
                 }
+                "playAlarm" -> {
+                    playAlarmSound()
+                    result.success(null)
+                }
+                "stopAlarm" -> {
+                    stopAlarmSound()
+                    result.success(null)
+                }
+                "startAmbient" -> {
+                    val type = call.argument<String>("type") ?: "white"
+                    val vol = call.argument<Double>("volume") ?: 0.5
+                    if (ambientGenerator == null) {
+                        ambientGenerator = AmbientSoundGenerator()
+                    }
+                    ambientGenerator?.start(type, vol)
+                    result.success(null)
+                }
+                "stopAmbient" -> {
+                    ambientGenerator?.stop()
+                    result.success(null)
+                }
+                "setAmbientVolume" -> {
+                    val vol = call.argument<Double>("volume") ?: 0.5
+                    ambientGenerator?.setVolume(vol)
+                    result.success(null)
+                }
+                "setAmbientType" -> {
+                    val type = call.argument<String>("type") ?: "white"
+                    ambientGenerator?.setType(type)
+                    result.success(null)
+                }
                 else -> result.notImplemented()
             }
         }
@@ -225,6 +262,8 @@ class MainActivity : FlutterFragmentActivity() {
     }
 
     override fun onDestroy() {
+        ambientGenerator?.stop()
+        ambientGenerator = null
         try { unregisterReceiver(distractionReceiver) } catch (_: Exception) {}
         super.onDestroy()
     }
@@ -444,6 +483,93 @@ class MainActivity : FlutterFragmentActivity() {
         } catch (e: Exception) {
             result.error("PLAY_ERROR", e.message, null)
         }
+    }
+
+    private fun playAlarmSound() {
+        stopAlarmSound()
+
+        // 1차: Ringtone API (가장 안정적)
+        try {
+            val uri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)
+                ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
+                ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_RINGTONE)
+            if (uri != null) {
+                val rt = RingtoneManager.getRingtone(this, uri)
+                if (rt != null) {
+                    rt.audioAttributes = AudioAttributes.Builder()
+                        .setUsage(AudioAttributes.USAGE_ALARM)
+                        .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                        .build()
+                    if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.P) {
+                        rt.isLooping = true
+                    }
+                    rt.play()
+                    alarmRingtone = rt
+                    println("[MainActivity] playAlarmSound: Ringtone OK")
+                    return
+                }
+            }
+        } catch (e: Exception) {
+            println("[MainActivity] Ringtone failed: ${e.message}")
+        }
+
+        // 2차: MediaPlayer
+        try {
+            val uri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_ALARM)
+                ?: RingtoneManager.getDefaultUri(RingtoneManager.TYPE_NOTIFICATION)
+            if (uri != null) {
+                alarmPlayer = MediaPlayer().apply {
+                    setDataSource(this@MainActivity, uri)
+                    setAudioAttributes(
+                        AudioAttributes.Builder()
+                            .setUsage(AudioAttributes.USAGE_ALARM)
+                            .setContentType(AudioAttributes.CONTENT_TYPE_SONIFICATION)
+                            .build()
+                    )
+                    isLooping = true
+                    prepare()
+                    start()
+                }
+                println("[MainActivity] playAlarmSound: MediaPlayer OK")
+                return
+            }
+        } catch (e: Exception) {
+            println("[MainActivity] MediaPlayer failed: ${e.message}")
+        }
+
+        // 3차: ToneGenerator (최후 수단)
+        playFallbackTone()
+    }
+
+    private fun playFallbackTone() {
+        try {
+            val toneGen = android.media.ToneGenerator(
+                android.media.AudioManager.STREAM_ALARM, 100
+            )
+            toneGen.startTone(android.media.ToneGenerator.TONE_CDMA_ALERT_CALL_GUARD, 5000)
+            fallbackTone = toneGen
+            println("[MainActivity] playAlarmSound: ToneGenerator fallback")
+        } catch (e: Exception) {
+            println("[MainActivity] fallbackTone error: ${e.message}")
+        }
+    }
+
+    private fun stopAlarmSound() {
+        try {
+            alarmRingtone?.stop()
+        } catch (_: Exception) {}
+        alarmRingtone = null
+        try {
+            alarmPlayer?.let {
+                if (it.isPlaying) it.stop()
+                it.release()
+            }
+        } catch (_: Exception) {}
+        alarmPlayer = null
+        try {
+            fallbackTone?.release()
+        } catch (_: Exception) {}
+        fallbackTone = null
     }
 
     private fun stopAudio() {

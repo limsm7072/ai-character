@@ -4,6 +4,7 @@ import 'notification_service.dart';
 
 class TimerService {
   static const _key = 'timer_presets_data';
+  static const int _timerAlarmId = NotificationService.timerBase + 100;
   final SharedPreferences _prefs;
   final NotificationService _notification;
   List<TimerPreset> _presets = [];
@@ -37,6 +38,25 @@ class TimerService {
   Future<void> delete(String id) async {
     _presets.removeWhere((p) => p.id == id);
     await _save();
+  }
+
+  /// 타이머 시작 시 백그라운드 알림 예약 (앱이 꺼져도 소리남)
+  Future<void> scheduleTimerAlarm(int delaySeconds, String label) async {
+    await cancelTimerAlarm();
+    final fireTime = DateTime.now().add(Duration(seconds: delaySeconds));
+    await _notification.scheduleExact(
+      id: _timerAlarmId,
+      title: '타이머 완료',
+      body: '$label 타이머가 끝났습니다!',
+      dateTime: fireTime,
+      channelId: NotificationService.timerChannelId,
+      channelName: '타이머',
+    );
+  }
+
+  /// 타이머 일시정지/리셋 시 예약 취소
+  Future<void> cancelTimerAlarm() async {
+    await _notification.cancel(_timerAlarmId);
   }
 
   Future<void> notifyTimerComplete(String label) async {

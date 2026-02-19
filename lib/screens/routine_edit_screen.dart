@@ -28,6 +28,9 @@ class _RoutineEditScreenState extends State<RoutineEditScreen> {
   DateTime _startDate = DateTime.now();
   bool _isEditing = false;
   bool _notifyOnStart = false;
+  bool _timerEnabled = false;
+  int _timerMinutes = 25;
+  bool _blockAppsEnabled = false;
 
   // Common app packages for selection
   static const _commonApps = <String, String>{
@@ -57,6 +60,9 @@ class _RoutineEditScreenState extends State<RoutineEditScreen> {
     _activeDays = r?.activeDays.toList() ?? List.filled(7, true);
     _blockedApps = r?.blockedApps.toList() ?? [];
     _notifyOnStart = r?.notifyOnStart ?? false;
+    _timerEnabled = r?.timerMinutes != null;
+    _timerMinutes = r?.timerMinutes ?? 25;
+    _blockAppsEnabled = _blockedApps.isNotEmpty;
     if (r?.startDate != null) {
       final parts = r!.startDate!.split('-');
       if (parts.length == 3) {
@@ -185,6 +191,65 @@ class _RoutineEditScreenState extends State<RoutineEditScreen> {
               onChanged: (v) => setState(() => _notifyOnStart = v),
               contentPadding: EdgeInsets.zero,
             ),
+            const SizedBox(height: 8),
+
+            // Focus timer
+            SwitchListTile(
+              title: const Text('집중 타이머'),
+              subtitle: Text(
+                '루틴 목록에서 타이머를 빠르게 실행합니다',
+                style: TextStyle(fontSize: 12, color: AppColors.grey600),
+              ),
+              value: _timerEnabled,
+              onChanged: (v) => setState(() => _timerEnabled = v),
+              contentPadding: EdgeInsets.zero,
+            ),
+            if (_timerEnabled) ...[
+              const SizedBox(height: 8),
+              Row(
+                children: [
+                  const Text('시간: ', style: TextStyle(fontSize: 15)),
+                  const SizedBox(width: 8),
+                  SizedBox(
+                    width: 28, height: 28,
+                    child: IconButton(
+                      padding: EdgeInsets.zero, iconSize: 18,
+                      icon: const Icon(Icons.remove),
+                      onPressed: _timerMinutes > 1
+                          ? () => setState(() => _timerMinutes--)
+                          : null,
+                    ),
+                  ),
+                  SizedBox(
+                    width: 48,
+                    child: Text(
+                      '$_timerMinutes분',
+                      textAlign: TextAlign.center,
+                      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                  SizedBox(
+                    width: 28, height: 28,
+                    child: IconButton(
+                      padding: EdgeInsets.zero, iconSize: 18,
+                      icon: const Icon(Icons.add),
+                      onPressed: _timerMinutes < 120
+                          ? () => setState(() => _timerMinutes++)
+                          : null,
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 8),
+              Wrap(
+                spacing: 8,
+                children: [15, 25, 30, 45, 60].map((m) => ChoiceChip(
+                  label: Text('$m분'),
+                  selected: _timerMinutes == m,
+                  onSelected: (_) => setState(() => _timerMinutes = m),
+                )).toList(),
+              ),
+            ],
             const SizedBox(height: 16),
 
             // Active days
@@ -195,15 +260,22 @@ class _RoutineEditScreenState extends State<RoutineEditScreen> {
             const SizedBox(height: 24),
 
             // Blocked apps
-            const Text('차단할 앱',
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-            const SizedBox(height: 4),
-            Text(
-              '선택하지 않으면 모든 앱에서 잔소리합니다',
-              style: TextStyle(fontSize: 12, color: AppColors.grey600),
+            SwitchListTile(
+              title: const Text('앱 차단'),
+              subtitle: Text(
+                _blockAppsEnabled
+                    ? '선택한 앱만 잔소리합니다'
+                    : '끄면 모든 앱에서 잔소리합니다',
+                style: TextStyle(fontSize: 12, color: AppColors.grey600),
+              ),
+              value: _blockAppsEnabled,
+              onChanged: (v) => setState(() => _blockAppsEnabled = v),
+              contentPadding: EdgeInsets.zero,
             ),
-            const SizedBox(height: 8),
-            _buildAppSelector(),
+            if (_blockAppsEnabled) ...[
+              const SizedBox(height: 8),
+              _buildAppSelector(),
+            ],
             const SizedBox(height: 32),
 
             // Save button
@@ -300,9 +372,10 @@ class _RoutineEditScreenState extends State<RoutineEditScreen> {
       startDate: startDateStr,
       startTime: _startTime,
       endTime: _endTime,
-      blockedApps: _blockedApps,
+      blockedApps: _blockAppsEnabled ? _blockedApps : [],
       activeDays: _activeDays,
       notifyOnStart: _notifyOnStart,
+      timerMinutes: _timerEnabled ? _timerMinutes : null,
     );
 
     if (_isEditing) {

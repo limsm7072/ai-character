@@ -3,13 +3,16 @@ import '../models/routine.dart' as model;
 import '../services/routine_service.dart';
 import '../services/routine_completion_service.dart';
 import '../services/settings_service.dart';
+import '../services/timer_service.dart';
 import 'routine_edit_screen.dart';
+import 'timer_screen.dart';
 import '../theme/app_colors.dart';
 
 class RoutineListScreen extends StatefulWidget {
   final RoutineService routineService;
   final RoutineCompletionService completionService;
   final SettingsService settingsService;
+  final TimerService? timerService;
   final VoidCallback? onCompletionUnchecked;
 
   const RoutineListScreen({
@@ -17,6 +20,7 @@ class RoutineListScreen extends StatefulWidget {
     required this.routineService,
     required this.completionService,
     required this.settingsService,
+    this.timerService,
     this.onCompletionUnchecked,
   });
 
@@ -237,13 +241,27 @@ class _RoutineListScreenState extends State<RoutineListScreen> {
             ),
           ],
         ),
-        trailing: Switch(
-          value: routine.isEnabled,
-          onChanged: (val) async {
-            routine.isEnabled = val;
-            await widget.routineService.update(routine);
-            _loadRoutines();
-          },
+        trailing: Row(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            if (routine.timerMinutes != null && widget.timerService != null)
+              IconButton(
+                icon: Icon(Icons.timer, size: 20, color: Theme.of(context).colorScheme.primary),
+                tooltip: '${routine.timerMinutes}분 타이머',
+                onPressed: () => _launchTimer(routine),
+                visualDensity: VisualDensity.compact,
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+              ),
+            Switch(
+              value: routine.isEnabled,
+              onChanged: (val) async {
+                routine.isEnabled = val;
+                await widget.routineService.update(routine);
+                _loadRoutines();
+              },
+            ),
+          ],
         ),
         onTap: () => _editRoutine(routine),
         isThreeLine: true,
@@ -283,6 +301,19 @@ class _RoutineListScreenState extends State<RoutineListScreen> {
   }
 
   // ─── Navigation ─────────────────────────────────────────
+
+  void _launchTimer(model.Routine routine) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => TimerScreen(
+          timerService: widget.timerService!,
+          initialDurationSeconds: routine.timerMinutes! * 60,
+          initialLabel: routine.name,
+        ),
+      ),
+    );
+  }
 
   Future<void> _addRoutine() async {
     final result = await Navigator.push<bool>(

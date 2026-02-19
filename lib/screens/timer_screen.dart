@@ -5,10 +5,36 @@ import '../models/timer_preset.dart';
 import '../services/timer_service.dart';
 import '../theme/app_colors.dart';
 
+// ─── Ambient Sound Types ──────────────────────────────
+
+enum AmbientSound {
+  none('없음', Icons.volume_off),
+  white('백색소음', Icons.graphic_eq),
+  pink('핑크노이즈', Icons.graphic_eq),
+  brown('브라운노이즈', Icons.graphic_eq),
+  rain('빗소리', Icons.water_drop),
+  ocean('파도소리', Icons.waves);
+
+  final String label;
+  final IconData icon;
+  const AmbientSound(this.label, this.icon);
+
+  String get typeKey => name; // white, pink, brown, rain, ocean
+}
+
+// ─── Timer Screen ─────────────────────────────────────
+
 class TimerScreen extends StatefulWidget {
   final TimerService timerService;
+  final int? initialDurationSeconds;
+  final String? initialLabel;
 
-  const TimerScreen({super.key, required this.timerService});
+  const TimerScreen({
+    super.key,
+    required this.timerService,
+    this.initialDurationSeconds,
+    this.initialLabel,
+  });
 
   @override
   State<TimerScreen> createState() => _TimerScreenState();
@@ -46,7 +72,11 @@ class _TimerScreenState extends State<TimerScreen> with SingleTickerProviderStat
         child: TabBarView(
           controller: _tabController,
           children: [
-            _CountdownTab(timerService: widget.timerService),
+            _CountdownTab(
+              timerService: widget.timerService,
+              initialDurationSeconds: widget.initialDurationSeconds,
+              initialLabel: widget.initialLabel,
+            ),
             _PomodoroTab(timerService: widget.timerService),
           ],
         ),
@@ -55,27 +85,260 @@ class _TimerScreenState extends State<TimerScreen> with SingleTickerProviderStat
   }
 }
 
+// ─── Ambient Sound Controls Widget ────────────────────
+
+class _AmbientSoundControls extends StatelessWidget {
+  final AmbientSound selectedSound;
+  final double volume;
+  final ValueChanged<AmbientSound> onSoundChanged;
+  final ValueChanged<double> onVolumeChanged;
+  final bool darkMode;
+
+  const _AmbientSoundControls({
+    required this.selectedSound,
+    required this.volume,
+    required this.onSoundChanged,
+    required this.onVolumeChanged,
+    this.darkMode = false,
+  });
+
+  void _showPicker(BuildContext context) {
+    showModalBottomSheet(
+      context: context,
+      backgroundColor: darkMode ? const Color(0xFF1E1E1E) : null,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (_) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 24),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Center(
+                child: Container(
+                  width: 40, height: 4,
+                  decoration: BoxDecoration(
+                    color: darkMode ? AppColors.grey600 : AppColors.grey300,
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              const SizedBox(height: 16),
+              Text(
+                '배경음 선택',
+                style: TextStyle(
+                  fontSize: 16, fontWeight: FontWeight.bold,
+                  color: darkMode ? AppColors.white : null,
+                ),
+              ),
+              const SizedBox(height: 12),
+              ...AmbientSound.values.map((s) {
+                final isSelected = selectedSound == s;
+                return ListTile(
+                  leading: Icon(s.icon, color: isSelected
+                      ? Theme.of(context).colorScheme.primary
+                      : darkMode ? AppColors.grey400 : AppColors.grey600),
+                  title: Text(s.label, style: TextStyle(
+                    color: darkMode ? AppColors.white : null,
+                    fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                  )),
+                  trailing: isSelected
+                      ? Icon(Icons.check, color: Theme.of(context).colorScheme.primary)
+                      : null,
+                  onTap: () {
+                    onSoundChanged(s);
+                    Navigator.pop(context);
+                  },
+                  dense: true,
+                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+                );
+              }),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final hasSound = selectedSound != AmbientSound.none;
+    final iconColor = darkMode
+        ? AppColors.white.withValues(alpha: 0.5)
+        : AppColors.grey600;
+
+    return Column(
+      children: [
+        // Single button
+        GestureDetector(
+          onTap: () => _showPicker(context),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+            decoration: BoxDecoration(
+              color: darkMode
+                  ? AppColors.white.withValues(alpha: hasSound ? 0.12 : 0.05)
+                  : hasSound
+                      ? Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.4)
+                      : Theme.of(context).colorScheme.surfaceContainerHighest,
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                Icon(
+                  hasSound ? selectedSound.icon : Icons.music_note,
+                  size: 16,
+                  color: darkMode
+                      ? AppColors.white.withValues(alpha: 0.7)
+                      : hasSound
+                          ? Theme.of(context).colorScheme.primary
+                          : AppColors.grey600,
+                ),
+                const SizedBox(width: 6),
+                Text(
+                  hasSound ? selectedSound.label : '배경음',
+                  style: TextStyle(
+                    fontSize: 13,
+                    color: darkMode
+                        ? AppColors.white.withValues(alpha: 0.7)
+                        : hasSound
+                            ? Theme.of(context).colorScheme.primary
+                            : AppColors.grey600,
+                  ),
+                ),
+                const SizedBox(width: 4),
+                Icon(Icons.expand_more, size: 16, color: iconColor),
+              ],
+            ),
+          ),
+        ),
+        // Volume slider (only when sound selected)
+        if (hasSound) ...[
+          const SizedBox(height: 6),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.volume_down, size: 16, color: iconColor),
+              SizedBox(
+                width: 160,
+                child: SliderTheme(
+                  data: darkMode
+                      ? SliderThemeData(
+                          activeTrackColor: AppColors.white.withValues(alpha: 0.4),
+                          inactiveTrackColor: AppColors.white.withValues(alpha: 0.1),
+                          thumbColor: AppColors.white.withValues(alpha: 0.7),
+                          overlayColor: AppColors.white.withValues(alpha: 0.1),
+                        )
+                      : const SliderThemeData(),
+                  child: Slider(
+                    value: volume,
+                    min: 0.0,
+                    max: 1.0,
+                    onChanged: onVolumeChanged,
+                  ),
+                ),
+              ),
+              Icon(Icons.volume_up, size: 16, color: iconColor),
+            ],
+          ),
+        ],
+      ],
+    );
+  }
+}
+
 // ─── Countdown Tab ─────────────────────────────────────
 
 class _CountdownTab extends StatefulWidget {
   final TimerService timerService;
-  const _CountdownTab({required this.timerService});
+  final int? initialDurationSeconds;
+  final String? initialLabel;
+
+  const _CountdownTab({
+    required this.timerService,
+    this.initialDurationSeconds,
+    this.initialLabel,
+  });
 
   @override
   State<_CountdownTab> createState() => _CountdownTabState();
 }
 
 class _CountdownTabState extends State<_CountdownTab> {
+  static const _audioChannel = MethodChannel('com.aicharacter.ai_character/audio');
+
   Timer? _timer;
   int _totalSeconds = 300;
   int _remaining = 0;
   bool _isRunning = false;
+  bool _isAlarmPlaying = false;
   String _selectedPresetId = '';
+
+  // Ambient sound
+  AmbientSound _ambientSound = AmbientSound.none;
+  double _ambientVolume = 0.5;
+
+  @override
+  void initState() {
+    super.initState();
+    if (widget.initialDurationSeconds != null) {
+      _totalSeconds = widget.initialDurationSeconds!;
+      _remaining = _totalSeconds;
+    }
+  }
 
   @override
   void dispose() {
     _timer?.cancel();
+    _stopAlarm();
+    _stopAmbient();
     super.dispose();
+  }
+
+  void _playAlarm() {
+    _isAlarmPlaying = true;
+    _audioChannel.invokeMethod('playAlarm');
+  }
+
+  void _stopAlarm() {
+    if (_isAlarmPlaying) {
+      _isAlarmPlaying = false;
+      _audioChannel.invokeMethod('stopAlarm');
+    }
+  }
+
+  void _startAmbient() {
+    if (_ambientSound != AmbientSound.none) {
+      _audioChannel.invokeMethod('startAmbient', {
+        'type': _ambientSound.typeKey,
+        'volume': _ambientVolume,
+      });
+    }
+  }
+
+  void _stopAmbient() {
+    _audioChannel.invokeMethod('stopAmbient');
+  }
+
+  void _onAmbientChanged(AmbientSound sound) {
+    setState(() => _ambientSound = sound);
+    if (sound == AmbientSound.none) {
+      _stopAmbient();
+    } else if (_isRunning) {
+      _audioChannel.invokeMethod('startAmbient', {
+        'type': sound.typeKey,
+        'volume': _ambientVolume,
+      });
+    }
+  }
+
+  void _onAmbientVolumeChanged(double vol) {
+    setState(() => _ambientVolume = vol);
+    if (_ambientSound != AmbientSound.none && _isRunning) {
+      _audioChannel.invokeMethod('setAmbientVolume', {'volume': vol});
+    }
   }
 
   void _selectPreset(TimerPreset preset) {
@@ -90,11 +353,20 @@ class _CountdownTabState extends State<_CountdownTab> {
   }
 
   void _startPause() {
+    if (_isAlarmPlaying) {
+      _stopAlarm();
+      setState(() {});
+      return;
+    }
     if (_isRunning) {
       _timer?.cancel();
+      _stopAmbient();
+      widget.timerService.cancelTimerAlarm();
       setState(() => _isRunning = false);
     } else {
       if (_remaining <= 0) _remaining = _totalSeconds;
+      widget.timerService.scheduleTimerAlarm(_remaining, '카운트다운');
+      _startAmbient();
       _timer = Timer.periodic(const Duration(seconds: 1), (_) {
         setState(() {
           _remaining--;
@@ -102,6 +374,9 @@ class _CountdownTabState extends State<_CountdownTab> {
             _remaining = 0;
             _isRunning = false;
             _timer?.cancel();
+            _stopAmbient();
+            widget.timerService.cancelTimerAlarm();
+            _playAlarm();
             widget.timerService.notifyTimerComplete('카운트다운');
           }
         });
@@ -112,6 +387,9 @@ class _CountdownTabState extends State<_CountdownTab> {
 
   void _reset() {
     _timer?.cancel();
+    _stopAlarm();
+    _stopAmbient();
+    widget.timerService.cancelTimerAlarm();
     setState(() {
       _remaining = _totalSeconds;
       _isRunning = false;
@@ -182,7 +460,18 @@ class _CountdownTabState extends State<_CountdownTab> {
                     ),
                   ],
                 ),
-                const SizedBox(height: 28),
+                const SizedBox(height: 20),
+                // Ambient sound controls
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: _AmbientSoundControls(
+                    selectedSound: _ambientSound,
+                    volume: _ambientVolume,
+                    onSoundChanged: _onAmbientChanged,
+                    onVolumeChanged: _onAmbientVolumeChanged,
+                  ),
+                ),
+                const SizedBox(height: 20),
                 // Presets
                 Padding(
                   padding: const EdgeInsets.symmetric(horizontal: 16),
@@ -281,6 +570,8 @@ class _PomodoroTab extends StatefulWidget {
 }
 
 class _PomodoroTabState extends State<_PomodoroTab> {
+  static const _audioChannel = MethodChannel('com.aicharacter.ai_character/audio');
+
   Timer? _timer;
   int _focusMinutes = 25;
   int _breakMinutes = 5;
@@ -289,6 +580,11 @@ class _PomodoroTabState extends State<_PomodoroTab> {
   bool _isFocusPhase = true;
   int _remaining = 0;
   bool _isRunning = false;
+  bool _isAlarmPlaying = false;
+
+  // Ambient sound
+  AmbientSound _ambientSound = AmbientSound.none;
+  double _ambientVolume = 0.5;
 
   @override
   void initState() {
@@ -299,17 +595,73 @@ class _PomodoroTabState extends State<_PomodoroTab> {
   @override
   void dispose() {
     _timer?.cancel();
+    _stopAlarm();
+    _stopAmbient();
     super.dispose();
+  }
+
+  void _playAlarm() {
+    _isAlarmPlaying = true;
+    _audioChannel.invokeMethod('playAlarm');
+  }
+
+  void _stopAlarm() {
+    if (_isAlarmPlaying) {
+      _isAlarmPlaying = false;
+      _audioChannel.invokeMethod('stopAlarm');
+    }
+  }
+
+  void _startAmbient() {
+    if (_ambientSound != AmbientSound.none) {
+      _audioChannel.invokeMethod('startAmbient', {
+        'type': _ambientSound.typeKey,
+        'volume': _ambientVolume,
+      });
+    }
+  }
+
+  void _stopAmbient() {
+    _audioChannel.invokeMethod('stopAmbient');
+  }
+
+  void _onAmbientChanged(AmbientSound sound) {
+    setState(() => _ambientSound = sound);
+    if (sound == AmbientSound.none) {
+      _stopAmbient();
+    } else if (_isRunning) {
+      _audioChannel.invokeMethod('startAmbient', {
+        'type': sound.typeKey,
+        'volume': _ambientVolume,
+      });
+    }
+  }
+
+  void _onAmbientVolumeChanged(double vol) {
+    setState(() => _ambientVolume = vol);
+    if (_ambientSound != AmbientSound.none && _isRunning) {
+      _audioChannel.invokeMethod('setAmbientVolume', {'volume': vol});
+    }
   }
 
   int get _totalPhaseSeconds => (_isFocusPhase ? _focusMinutes : _breakMinutes) * 60;
 
   void _startPause() {
+    if (_isAlarmPlaying) {
+      _stopAlarm();
+      setState(() {});
+      return;
+    }
     if (_isRunning) {
       _timer?.cancel();
+      _stopAmbient();
+      widget.timerService.cancelTimerAlarm();
       setState(() => _isRunning = false);
     } else {
       if (_remaining <= 0) _remaining = _totalPhaseSeconds;
+      final phaseLabel = _isFocusPhase ? '뽀모도로 집중' : '뽀모도로 휴식';
+      widget.timerService.scheduleTimerAlarm(_remaining, phaseLabel);
+      _startAmbient();
       _timer = Timer.periodic(const Duration(seconds: 1), (_) {
         setState(() {
           _remaining--;
@@ -317,6 +669,8 @@ class _PomodoroTabState extends State<_PomodoroTab> {
             _remaining = 0;
             _timer?.cancel();
             _isRunning = false;
+            _stopAmbient();
+            widget.timerService.cancelTimerAlarm();
             _onPhaseComplete();
           }
         });
@@ -326,6 +680,7 @@ class _PomodoroTabState extends State<_PomodoroTab> {
   }
 
   void _onPhaseComplete() {
+    _playAlarm();
     if (_isFocusPhase) {
       if (_currentSession >= _targetSessions) {
         widget.timerService.notifyTimerComplete('뽀모도로 $_targetSessions세션 완료!');
@@ -353,6 +708,9 @@ class _PomodoroTabState extends State<_PomodoroTab> {
 
   void _reset() {
     _timer?.cancel();
+    _stopAlarm();
+    _stopAmbient();
+    widget.timerService.cancelTimerAlarm();
     setState(() {
       _currentSession = 1;
       _isFocusPhase = true;
@@ -362,8 +720,8 @@ class _PomodoroTabState extends State<_PomodoroTab> {
   }
 
   Future<void> _enterFocusMode() async {
-    // Pause timer, transfer state to focus screen
     _timer?.cancel();
+    _stopAmbient();
     final wasRunning = _isRunning;
     setState(() => _isRunning = false);
 
@@ -380,12 +738,13 @@ class _PomodoroTabState extends State<_PomodoroTab> {
             isFocusPhase: _isFocusPhase,
             remaining: _remaining,
             wasRunning: wasRunning,
+            ambientSound: _ambientSound,
+            ambientVolume: _ambientVolume,
           ),
         ),
       ),
     );
 
-    // Restore state from focus mode
     if (result != null && mounted) {
       setState(() {
         _focusMinutes = result.focusMinutes;
@@ -394,6 +753,8 @@ class _PomodoroTabState extends State<_PomodoroTab> {
         _currentSession = result.currentSession;
         _isFocusPhase = result.isFocusPhase;
         _remaining = result.remaining;
+        _ambientSound = result.ambientSound;
+        _ambientVolume = result.ambientVolume;
         _isRunning = false;
       });
     }
@@ -486,6 +847,17 @@ class _PomodoroTabState extends State<_PomodoroTab> {
                   icon: const Icon(Icons.fullscreen, size: 20),
                   label: const Text('집중모드'),
                 ),
+                const SizedBox(height: 8),
+                // Ambient sound controls
+                Padding(
+                  padding: const EdgeInsets.symmetric(horizontal: 16),
+                  child: _AmbientSoundControls(
+                    selectedSound: _ambientSound,
+                    volume: _ambientVolume,
+                    onSoundChanged: _onAmbientChanged,
+                    onVolumeChanged: _onAmbientVolumeChanged,
+                  ),
+                ),
                 const SizedBox(height: 12),
                 // Settings - compact layout
                 Card(
@@ -550,6 +922,8 @@ class _PomodoroState {
   bool isFocusPhase;
   int remaining;
   final bool wasRunning;
+  AmbientSound ambientSound;
+  double ambientVolume;
 
   _PomodoroState({
     required this.focusMinutes,
@@ -559,6 +933,8 @@ class _PomodoroState {
     required this.isFocusPhase,
     required this.remaining,
     this.wasRunning = false,
+    this.ambientSound = AmbientSound.none,
+    this.ambientVolume = 0.5,
   });
 }
 
@@ -575,17 +951,19 @@ class _FocusModeScreen extends StatefulWidget {
 }
 
 class _FocusModeScreenState extends State<_FocusModeScreen> {
+  static const _audioChannel = MethodChannel('com.aicharacter.ai_character/audio');
+
   late _PomodoroState _s;
   Timer? _timer;
   bool _isRunning = false;
+  bool _isAlarmPlaying = false;
+  bool _showControls = false;
 
   @override
   void initState() {
     super.initState();
     _s = widget.state;
-    // Hide system UI for immersive mode
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.immersiveSticky);
-    // Auto-resume if was running
     if (_s.wasRunning) {
       WidgetsBinding.instance.addPostFrameCallback((_) => _startPause());
     }
@@ -594,19 +972,74 @@ class _FocusModeScreenState extends State<_FocusModeScreen> {
   @override
   void dispose() {
     _timer?.cancel();
-    // Restore system UI
+    _stopAlarm();
+    _stopAmbient();
     SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
     super.dispose();
+  }
+
+  void _playAlarm() {
+    _isAlarmPlaying = true;
+    _audioChannel.invokeMethod('playAlarm');
+  }
+
+  void _stopAlarm() {
+    if (_isAlarmPlaying) {
+      _isAlarmPlaying = false;
+      _audioChannel.invokeMethod('stopAlarm');
+    }
+  }
+
+  void _startAmbient() {
+    if (_s.ambientSound != AmbientSound.none) {
+      _audioChannel.invokeMethod('startAmbient', {
+        'type': _s.ambientSound.typeKey,
+        'volume': _s.ambientVolume,
+      });
+    }
+  }
+
+  void _stopAmbient() {
+    _audioChannel.invokeMethod('stopAmbient');
+  }
+
+  void _onAmbientChanged(AmbientSound sound) {
+    setState(() => _s.ambientSound = sound);
+    if (sound == AmbientSound.none) {
+      _stopAmbient();
+    } else if (_isRunning) {
+      _audioChannel.invokeMethod('startAmbient', {
+        'type': sound.typeKey,
+        'volume': _s.ambientVolume,
+      });
+    }
+  }
+
+  void _onAmbientVolumeChanged(double vol) {
+    setState(() => _s.ambientVolume = vol);
+    if (_s.ambientSound != AmbientSound.none && _isRunning) {
+      _audioChannel.invokeMethod('setAmbientVolume', {'volume': vol});
+    }
   }
 
   int get _totalPhaseSeconds => (_s.isFocusPhase ? _s.focusMinutes : _s.breakMinutes) * 60;
 
   void _startPause() {
+    if (_isAlarmPlaying) {
+      _stopAlarm();
+      setState(() {});
+      return;
+    }
     if (_isRunning) {
       _timer?.cancel();
+      _stopAmbient();
+      widget.timerService.cancelTimerAlarm();
       setState(() => _isRunning = false);
     } else {
       if (_s.remaining <= 0) _s.remaining = _totalPhaseSeconds;
+      final phaseLabel = _s.isFocusPhase ? '뽀모도로 집중' : '뽀모도로 휴식';
+      widget.timerService.scheduleTimerAlarm(_s.remaining, phaseLabel);
+      _startAmbient();
       _timer = Timer.periodic(const Duration(seconds: 1), (_) {
         setState(() {
           _s.remaining--;
@@ -614,6 +1047,8 @@ class _FocusModeScreenState extends State<_FocusModeScreen> {
             _s.remaining = 0;
             _timer?.cancel();
             _isRunning = false;
+            _stopAmbient();
+            widget.timerService.cancelTimerAlarm();
             _onPhaseComplete();
           }
         });
@@ -623,6 +1058,7 @@ class _FocusModeScreenState extends State<_FocusModeScreen> {
   }
 
   void _onPhaseComplete() {
+    _playAlarm();
     if (_s.isFocusPhase) {
       if (_s.currentSession >= _s.targetSessions) {
         widget.timerService.notifyTimerComplete('뽀모도로 ${_s.targetSessions}세션 완료!');
@@ -650,6 +1086,10 @@ class _FocusModeScreenState extends State<_FocusModeScreen> {
 
   void _exit() {
     _timer?.cancel();
+    _stopAmbient();
+    if (!_isRunning) {
+      widget.timerService.cancelTimerAlarm();
+    }
     _isRunning = false;
     Navigator.pop(context, _s);
   }
@@ -676,9 +1116,10 @@ class _FocusModeScreenState extends State<_FocusModeScreen> {
         backgroundColor: AppColors.black,
         body: GestureDetector(
           onTap: _startPause,
+          onDoubleTap: () => setState(() => _showControls = !_showControls),
           child: Stack(
             children: [
-              // Main content — centered
+              // Main content
               Center(
                 child: Column(
                   mainAxisSize: MainAxisSize.min,
@@ -732,25 +1173,50 @@ class _FocusModeScreenState extends State<_FocusModeScreen> {
                         color: AppColors.white.withValues(alpha: 0.4),
                       ),
                     ),
-                    const SizedBox(height: 40),
-                    // Play/Pause hint
-                    Icon(
-                      _isRunning ? Icons.pause_rounded : Icons.play_arrow_rounded,
-                      size: 36,
-                      color: AppColors.white.withValues(alpha: 0.3),
-                    ),
-                    const SizedBox(height: 8),
-                    Text(
-                      _isRunning ? '탭하여 일시정지' : '탭하여 시작',
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: AppColors.white.withValues(alpha: 0.25),
+                    const SizedBox(height: 24),
+                    // Ambient sound controls (toggle with double tap)
+                    if (_showControls)
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 24),
+                        child: _AmbientSoundControls(
+                          selectedSound: _s.ambientSound,
+                          volume: _s.ambientVolume,
+                          onSoundChanged: _onAmbientChanged,
+                          onVolumeChanged: _onAmbientVolumeChanged,
+                          darkMode: true,
+                        ),
+                      )
+                    else ...[
+                      // Play/Pause hint
+                      Icon(
+                        _isRunning ? Icons.pause_rounded : Icons.play_arrow_rounded,
+                        size: 36,
+                        color: AppColors.white.withValues(alpha: 0.3),
                       ),
-                    ),
+                      const SizedBox(height: 8),
+                      Text(
+                        _isRunning ? '탭하여 일시정지' : '탭하여 시작',
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: AppColors.white.withValues(alpha: 0.25),
+                        ),
+                      ),
+                      if (_s.ambientSound != AmbientSound.none)
+                        Padding(
+                          padding: const EdgeInsets.only(top: 8),
+                          child: Text(
+                            _s.ambientSound.label,
+                            style: TextStyle(
+                              fontSize: 11,
+                              color: AppColors.white.withValues(alpha: 0.2),
+                            ),
+                          ),
+                        ),
+                    ],
                   ],
                 ),
               ),
-              // Exit button — top right
+              // Exit button
               Positioned(
                 top: MediaQuery.of(context).viewPadding.top + 12,
                 right: 12,
@@ -763,6 +1229,21 @@ class _FocusModeScreenState extends State<_FocusModeScreen> {
                   ),
                 ),
               ),
+              // Sound toggle hint
+              if (!_showControls)
+                Positioned(
+                  bottom: MediaQuery.of(context).viewPadding.bottom + 16,
+                  left: 0,
+                  right: 0,
+                  child: Text(
+                    '더블탭으로 배경음 설정',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(
+                      fontSize: 10,
+                      color: AppColors.white.withValues(alpha: 0.15),
+                    ),
+                  ),
+                ),
             ],
           ),
         ),
