@@ -69,152 +69,88 @@ class _SettingsScreenState extends State<SettingsScreen> {
       appBar: AppBar(title: const Text('설정')),
       body: ListView(
         children: [
-          // Permissions Section
-          _buildSectionHeader('권한'),
-          _buildPermissionTile(
-            title: '사용 정보 접근',
-            subtitle: '현재 사용 중인 앱을 감지합니다',
-            granted: _hasUsagePermission,
-            onTap: () async {
-              await _appDetection.requestPermission();
-              await Future.delayed(const Duration(seconds: 1));
-              _checkPermissions();
-            },
-          ),
-          _buildPermissionTile(
-            title: '다른 앱 위에 표시',
-            subtitle: '캐릭터를 오버레이로 표시합니다',
-            granted: _hasOverlayPermission,
-            onTap: () async {
-              await _overlayService.requestPermission();
-              await Future.delayed(const Duration(seconds: 1));
-              _checkPermissions();
-            },
-          ),
-          const Divider(),
-
-          // Test Section
-          _buildSectionHeader('진단'),
-          ListTile(
-            title: const Text('감지 테스트'),
-            subtitle: const Text('현재 앱 감지가 작동하는지 확인'),
-            trailing: const Icon(Icons.bug_report),
-            onTap: _testDetection,
-          ),
-          ListTile(
-            title: const Text('모니터링 서비스 시작'),
-            subtitle: const Text('백그라운드 감시 수동 시작'),
-            trailing: const Icon(Icons.play_arrow),
-            onTap: () async {
-              try {
-                await _channel.invokeMethod('requestNotificationPermission');
-                await Future.delayed(const Duration(seconds: 1));
-                await _channel.invokeMethod('startMonitorService');
-                if (mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('모니터링 서비스 시작됨! 알림바를 확인하세요')),
-                  );
-                }
-              } catch (e) {
-                if (mounted) {
-                  ScaffoldMessenger.of(context).showSnackBar(
-                    SnackBar(content: Text('서비스 시작 실패: $e')),
-                  );
-                }
-              }
-            },
-          ),
-          const Divider(),
-
-          // API Key Section
-          _buildSectionHeader('AI 설정'),
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            child: TextField(
-              controller: _apiKeyController,
-              decoration: InputDecoration(
-                labelText: 'Gemini API 키',
-                hintText: 'Google AI Studio에서 발급받은 키',
-                border: const OutlineInputBorder(),
-                suffixIcon: IconButton(
-                  icon: const Icon(Icons.save),
-                  onPressed: () async {
-                    await widget.settingsService
-                        .setApiKey(_apiKeyController.text.trim());
+          // Permissions + Diagnostics (collapsible, starts collapsed)
+          ExpansionTile(
+            title: const Text('권한 / 진단 / AI'),
+            leading: Icon(Icons.settings, color: Theme.of(context).colorScheme.primary, size: 20),
+            initiallyExpanded: false,
+            children: [
+              _buildPermissionTile(
+                title: '사용 정보 접근',
+                subtitle: '현재 사용 중인 앱을 감지합니다',
+                granted: _hasUsagePermission,
+                onTap: () async {
+                  await _appDetection.requestPermission();
+                  await Future.delayed(const Duration(seconds: 1));
+                  _checkPermissions();
+                },
+              ),
+              _buildPermissionTile(
+                title: '다른 앱 위에 표시',
+                subtitle: '캐릭터를 오버레이로 표시합니다',
+                granted: _hasOverlayPermission,
+                onTap: () async {
+                  await _overlayService.requestPermission();
+                  await Future.delayed(const Duration(seconds: 1));
+                  _checkPermissions();
+                },
+              ),
+              const Divider(indent: 16, endIndent: 16),
+              ListTile(
+                title: const Text('감지 테스트'),
+                subtitle: const Text('현재 앱 감지가 작동하는지 확인'),
+                trailing: const Icon(Icons.bug_report),
+                onTap: _testDetection,
+              ),
+              ListTile(
+                title: const Text('모니터링 서비스 시작'),
+                subtitle: const Text('백그라운드 감시 수동 시작'),
+                trailing: const Icon(Icons.play_arrow),
+                onTap: () async {
+                  try {
+                    await _channel.invokeMethod('requestNotificationPermission');
+                    await Future.delayed(const Duration(seconds: 1));
+                    await _channel.invokeMethod('startMonitorService');
                     if (mounted) {
                       ScaffoldMessenger.of(context).showSnackBar(
-                        const SnackBar(content: Text('API 키가 저장되었습니다')),
+                        const SnackBar(content: Text('모니터링 서비스 시작됨! 알림바를 확인하세요')),
                       );
                     }
-                  },
+                  } catch (e) {
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text('서비스 시작 실패: $e')),
+                      );
+                    }
+                  }
+                },
+              ),
+              const Divider(indent: 16, endIndent: 16),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                child: TextField(
+                  controller: _apiKeyController,
+                  decoration: InputDecoration(
+                    labelText: 'Gemini API 키',
+                    hintText: 'Google AI Studio에서 발급받은 키',
+                    border: const OutlineInputBorder(),
+                    suffixIcon: IconButton(
+                      icon: const Icon(Icons.save),
+                      onPressed: () async {
+                        await widget.settingsService
+                            .setApiKey(_apiKeyController.text.trim());
+                        if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            const SnackBar(content: Text('API 키가 저장되었습니다')),
+                          );
+                        }
+                      },
+                    ),
+                  ),
+                  obscureText: true,
                 ),
               ),
-              obscureText: true,
-            ),
-          ),
-          const Divider(),
-
-          // Nag Settings
-          _buildSectionHeader('잔소리 설정'),
-          ListTile(
-            title: const Text('잔소리 빈도'),
-            subtitle: Text('${widget.settingsService.nagFrequency}초마다'),
-            trailing: DropdownButton<int>(
-              value: widget.settingsService.nagFrequency,
-              items: const [
-                DropdownMenuItem(value: 1, child: Text('1초')),
-                DropdownMenuItem(value: 5, child: Text('5초')),
-                DropdownMenuItem(value: 15, child: Text('15초')),
-                DropdownMenuItem(value: 30, child: Text('30초')),
-                DropdownMenuItem(value: 60, child: Text('1분')),
-                DropdownMenuItem(value: 120, child: Text('2분')),
-                DropdownMenuItem(value: 300, child: Text('5분')),
-              ],
-              onChanged: (v) async {
-                if (v != null) {
-                  await widget.settingsService.setNagFrequency(v);
-                  setState(() {});
-                }
-              },
-            ),
-          ),
-          ListTile(
-            title: const Text('잔소리 강도'),
-            subtitle: Text(_intensityLabel(widget.settingsService.nagIntensity)),
-            trailing: DropdownButton<int>(
-              value: widget.settingsService.nagIntensity,
-              items: const [
-                DropdownMenuItem(value: 0, child: Text('부드럽게')),
-                DropdownMenuItem(value: 1, child: Text('보통')),
-                DropdownMenuItem(value: 2, child: Text('엄격하게')),
-              ],
-              onChanged: (v) async {
-                if (v != null) {
-                  await widget.settingsService.setNagIntensity(v);
-                  setState(() {});
-                }
-              },
-            ),
-          ),
-          ListTile(
-            title: const Text('완료 확인 간격'),
-            subtitle: Text(_intervalLabel(widget.settingsService.routineCheckInterval)),
-            trailing: DropdownButton<int>(
-              value: widget.settingsService.routineCheckInterval,
-              items: const [
-                DropdownMenuItem(value: 5, child: Text('5초')),
-                DropdownMenuItem(value: 60, child: Text('1분')),
-                DropdownMenuItem(value: 300, child: Text('5분')),
-                DropdownMenuItem(value: 1800, child: Text('30분')),
-                DropdownMenuItem(value: 3600, child: Text('1시간')),
-              ],
-              onChanged: (v) async {
-                if (v != null) {
-                  await widget.settingsService.setRoutineCheckInterval(v);
-                  setState(() {});
-                }
-              },
-            ),
+            ],
           ),
           const Divider(),
 
@@ -290,39 +226,42 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ),
           const Divider(),
 
-          // Overlay Settings
-          _buildSectionHeader('오버레이'),
+          // Routine Section
+          _buildSectionHeader('루틴'),
           SwitchListTile(
-            title: const Text('오버레이 활성화'),
-            subtitle: const Text('딴짓할 때 캐릭터가 화면에 나타납니다'),
-            value: widget.settingsService.overlayEnabled,
+            title: const Text('지난 루틴 확인'),
+            subtitle: const Text('끝난 루틴의 완료 여부를 자동으로 물어봅니다'),
+            value: widget.settingsService.pastRoutineCheckEnabled,
             onChanged: (v) async {
-              await widget.settingsService.setOverlayEnabled(v);
+              await widget.settingsService.setPastRoutineCheckEnabled(v);
               setState(() {});
             },
           ),
-          SwitchListTile(
-            title: const Text('캐릭터 표시'),
-            subtitle: Text(
-              widget.settingsService.overlayCharacterVisible
-                  ? '잔소리할 때 캐릭터가 화면에 나타납니다'
-                  : '목소리만 나오고 캐릭터는 안 나타납니다',
+          if (widget.settingsService.pastRoutineCheckEnabled)
+            ListTile(
+              title: const Text('확인 간격'),
+              subtitle: const Text('얼마나 자주 확인할지 설정합니다'),
+              trailing: DropdownButton<int>(
+                value: widget.settingsService.routineCheckInterval,
+                items: const [
+                  DropdownMenuItem(value: 1, child: Text('1초')),
+                  DropdownMenuItem(value: 5, child: Text('5초')),
+                  DropdownMenuItem(value: 10, child: Text('10초')),
+                  DropdownMenuItem(value: 60, child: Text('1분')),
+                  DropdownMenuItem(value: 300, child: Text('5분')),
+                  DropdownMenuItem(value: 600, child: Text('10분')),
+                  DropdownMenuItem(value: 1800, child: Text('30분')),
+                  DropdownMenuItem(value: 3600, child: Text('1시간')),
+                  DropdownMenuItem(value: 21600, child: Text('6시간')),
+                ],
+                onChanged: (v) async {
+                  if (v != null) {
+                    await widget.settingsService.setRoutineCheckInterval(v);
+                    setState(() {});
+                  }
+                },
+              ),
             ),
-            value: widget.settingsService.overlayCharacterVisible,
-            onChanged: widget.settingsService.overlayEnabled ? (v) async {
-              await widget.settingsService.setOverlayCharacterVisible(v);
-              setState(() {});
-            } : null,
-          ),
-          SwitchListTile(
-            title: const Text('앱 잠금'),
-            subtitle: const Text('루틴 시간에 차단된 앱을 강제로 닫습니다'),
-            value: widget.settingsService.appLockEnabled,
-            onChanged: (v) async {
-              await widget.settingsService.setAppLockEnabled(v);
-              setState(() {});
-            },
-          ),
           const Divider(),
 
           // Weather Section
@@ -438,7 +377,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
       subtitle: current != null
           ? Text(current.label, style: TextStyle(color: Theme.of(context).colorScheme.primary, fontSize: 13))
           : null,
-      initiallyExpanded: selected,
+      initiallyExpanded: false,
       children: presets.map((p) => _buildVoiceTile(p)).toList(),
     );
   }
@@ -477,13 +416,6 @@ class _SettingsScreenState extends State<SettingsScreen> {
         }
       },
     );
-  }
-
-  String _intervalLabel(int seconds) {
-    if (seconds < 60) return '$seconds초마다 미완료 루틴 확인';
-    final minutes = seconds ~/ 60;
-    if (minutes < 60) return '$minutes분마다 미완료 루틴 확인';
-    return '${minutes ~/ 60}시간마다 미완료 루틴 확인';
   }
 
   Future<void> _updateWeatherLocation() async {
@@ -527,16 +459,4 @@ class _SettingsScreenState extends State<SettingsScreen> {
     }
   }
 
-  String _intensityLabel(int level) {
-    switch (level) {
-      case 0:
-        return '부드럽게 격려합니다';
-      case 1:
-        return '보통 강도로 잔소리합니다';
-      case 2:
-        return '엄격하게 혼냅니다';
-      default:
-        return '';
-    }
-  }
 }

@@ -87,36 +87,14 @@ class MonitorService : Service() {
         super.onDestroy()
     }
 
-    private fun getNagCooldownMs(): Long {
-        val prefs = getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE)
-        val seconds = try { prefs.getLong("flutter.nag_frequency", 30L) } catch (_: Exception) { 30L }
-        return seconds * 1000L
-    }
-
-    private fun getNagIntensity(): Int {
-        val prefs = getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE)
-        val intensity = try { prefs.getLong("flutter.nag_intensity", 1L).toInt() } catch (e: Exception) {
-            android.util.Log.w("MonitorService", "getNagIntensity getLong failed: $e, trying getInt")
-            try { prefs.getInt("flutter.nag_intensity", 1) } catch (_: Exception) { 1 }
-        }
-        android.util.Log.d("MonitorService", "getNagIntensity=$intensity")
-        return intensity
-    }
-
-    private fun getCheckInterval(): Long {
-        val cooldown = getNagCooldownMs()
-        return if (cooldown < 3000) 1500L else 3000L
-    }
+    private fun getCheckInterval(): Long = 3000L
 
     private fun getApiKey(): String {
         val prefs = getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE)
         return prefs.getString("flutter.gemini_api_key", "") ?: ""
     }
 
-    private fun isOverlayEnabled(): Boolean {
-        val prefs = getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE)
-        return prefs.getBoolean("flutter.overlay_enabled", true)
-    }
+    // Removed: global isOverlayEnabled() — now using per-routine nagEnabled/overlayEnabled
 
     private fun isLauncher(pkg: String): Boolean {
         return try {
@@ -130,9 +108,6 @@ class MonitorService : Service() {
         // If overlay is showing (voice conversation active), skip detection
         // Speech recognizer changes foreground app to Google, which would falsely dismiss
         if (nagOverlay?.isShowing == true) return
-
-        // Check if overlay is enabled in app settings
-        if (!isOverlayEnabled()) return
 
         val foregroundApp = getForegroundApp()
         if (foregroundApp.isEmpty() || foregroundApp == packageName || isLauncher(foregroundApp)) {
@@ -154,8 +129,19 @@ class MonitorService : Service() {
             return
         }
 
+        // Per-routine settings
+        val nagEnabled = activeRoutine.optBoolean("nagEnabled", true)
+        if (!nagEnabled) {
+            endCurrentDistraction()
+            return
+        }
+
         val routineId = activeRoutine.optString("id", "")
         val routineName = activeRoutine.optString("name", "루틴")
+        val overlayEnabled = activeRoutine.optBoolean("overlayEnabled", true)
+        val appLockEnabled = activeRoutine.optBoolean("appLockEnabled", false)
+        val nagFrequency = activeRoutine.optInt("nagFrequency", 30)
+        val nagIntensity = activeRoutine.optInt("nagIntensity", 1)
 
         val blockedApps = activeRoutine.optJSONArray("blockedApps") ?: JSONArray()
         val isBlocked = if (blockedApps.length() == 0) {
@@ -165,9 +151,8 @@ class MonitorService : Service() {
         }
 
         if (isBlocked) {
-            // App lock: force user to home screen
-            val lockEnabled = prefs.getBoolean("flutter.app_lock_enabled", false)
-            if (lockEnabled) {
+            // App lock: force user to home screen (per-routine setting)
+            if (appLockEnabled) {
                 val homeIntent = Intent(Intent.ACTION_MAIN).apply {
                     addCategory(Intent.CATEGORY_HOME)
                     flags = Intent.FLAG_ACTIVITY_NEW_TASK
@@ -191,21 +176,18 @@ class MonitorService : Service() {
                 }
             }
 
-            // Show nag with cooldown
-            if (foregroundApp != lastDetectedApp) {
-                val now = System.currentTimeMillis()
-                val cooldown = getNagCooldownMs()
-                if (now - lastNagTime >= cooldown) {
-                    lastNagTime = now
-                    lastDetectedApp = foregroundApp
+            // Show nag with per-routine cooldown (repeats while blocked app stays open)
+            val now = System.currentTimeMillis()
+            val cooldown = nagFrequency * 1000L
+            if (now - lastNagTime >= cooldown) {
+                lastNagTime = now
+                lastDetectedApp = foregroundApp
 
-                    val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-                    nm.notify(NOTIFICATION_ID, buildNotification("$appLabel 감지! 잔소리 중..."))
+                val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+                nm.notify(NOTIFICATION_ID, buildNotification("$appLabel 감지! 잔소리 중..."))
 
-                    val apiKey = getApiKey()
-                    val intensity = getNagIntensity()
-                    nagOverlay?.show(appLabel, routineName, apiKey, intensity)
-                }
+                val apiKey = getApiKey()
+                nagOverlay?.show(appLabel, routineName, apiKey, nagIntensity, overlayEnabled)
             }
         } else {
             endCurrentDistraction()

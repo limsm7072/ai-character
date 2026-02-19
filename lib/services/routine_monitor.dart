@@ -4,6 +4,7 @@ import 'app_detection_service.dart';
 import 'character_controller.dart';
 import 'routine_service.dart';
 import 'routine_completion_service.dart';
+import 'settings_service.dart';
 
 /// Monitors active routines and triggers character responses
 /// when the user is distracted (using blocked apps).
@@ -13,9 +14,11 @@ class RoutineMonitor {
   final AppDetectionService _appDetection;
   final CharacterController _characterController;
   final RoutineCompletionService _completionService;
+  final SettingsService _settingsService;
 
   StreamSubscription? _distractionSub;
   Timer? _routineCheckTimer;
+  Timer? _pastRoutineTimer;
   bool _wasInRoutine = false;
   Routine? _activeRoutine;
 
@@ -24,10 +27,12 @@ class RoutineMonitor {
     required AppDetectionService appDetection,
     required CharacterController characterController,
     required RoutineCompletionService completionService,
+    required SettingsService settingsService,
   })  : _routineService = routineService,
         _appDetection = appDetection,
         _characterController = characterController,
-        _completionService = completionService;
+        _completionService = completionService,
+        _settingsService = settingsService;
 
   // ─── Lifecycle ──────────────────────────────────────────
 
@@ -38,11 +43,22 @@ class RoutineMonitor {
       const Duration(seconds: 10),
       (_) => _checkRoutineStatus(),
     );
+    _startPastRoutineTimer();
+  }
+
+  void _startPastRoutineTimer() {
+    _pastRoutineTimer?.cancel();
+    final interval = _settingsService.routineCheckInterval;
+    _pastRoutineTimer = Timer.periodic(
+      Duration(seconds: interval),
+      (_) => _checkUncheckedPastRoutines(),
+    );
   }
 
   void stop() {
     _distractionSub?.cancel();
     _routineCheckTimer?.cancel();
+    _pastRoutineTimer?.cancel();
     _appDetection.stopMonitorService();
   }
 
@@ -57,15 +73,17 @@ class RoutineMonitor {
 
   void _onDistraction(Map<String, String> event) async {
     try {
-      if (_routineService.getActiveRoutine() == null) return;
+      final routine = _routineService.getActiveRoutine();
+      if (routine == null) return;
+      if (!routine.nagEnabled) return;
 
       await _characterController.onDistraction(
         appPackageName: event['app_package'] ?? '',
         appLabel: event['app_label'] ?? '',
-        routineName: event['routine_name'] ?? '루틴',
+        routineName: routine.name,
+        nagIntensity: routine.nagIntensity,
+        showOverlay: routine.overlayEnabled,
       );
-
-      await _checkUncheckedPastRoutines();
     } catch (e) {
       print('RoutineMonitor distraction error: $e');
     }
@@ -107,9 +125,8 @@ class RoutineMonitor {
         return;
       }
 
-      // Idle — check for unchecked past routines
+      // Idle — just track active routine
       _activeRoutine = routine;
-      await _checkUncheckedPastRoutines();
     } catch (e) {
       print('RoutineMonitor check error: $e');
     }
@@ -120,6 +137,7 @@ class RoutineMonitor {
   /// Scans routines from today to 6 days ago. If a routine's time has passed
   /// and no completion record exists, prompts the user. Only one prompt per tick.
   Future<void> _checkUncheckedPastRoutines() async {
+    if (!_settingsService.pastRoutineCheckEnabled) return;
     final now = DateTime.now();
     final nowMinutes = now.hour * 60 + now.minute;
     final routines = _routineService.getAll();

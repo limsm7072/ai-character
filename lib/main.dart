@@ -1,9 +1,11 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:spine_flutter/spine_flutter.dart';
 import 'screens/home_screen.dart';
+import 'screens/alarm_ring_screen.dart';
 import 'services/routine_service.dart';
 import 'services/settings_service.dart';
 import 'services/gemini_service.dart';
@@ -26,6 +28,8 @@ import 'services/news_service.dart';
 import 'services/card_service.dart';
 import 'services/weather_service.dart';
 import 'services/recommendation_service.dart';
+import 'services/routine_group_service.dart';
+import 'services/diary_service.dart';
 import 'widgets/overlay_character.dart';
 import 'theme/app_theme.dart';
 
@@ -87,6 +91,9 @@ void main() async {
   final healthService = HealthService();
   await healthService.checkExistingPermissions();
 
+  final routineGroupService = RoutineGroupService(prefs);
+  final diaryService = DiaryService(prefs);
+
   final recommendationService = RecommendationService(
     prefs: prefs,
     cardService: cardService,
@@ -121,6 +128,7 @@ void main() async {
     appDetection: appDetectionService,
     characterController: characterController,
     completionService: completionService,
+    settingsService: settingsService,
   );
 
   runApp(AiCharacterApp(
@@ -142,6 +150,8 @@ void main() async {
     cardService: cardService,
     weatherService: weatherService,
     recommendationService: recommendationService,
+    routineGroupService: routineGroupService,
+    diaryService: diaryService,
   ));
 }
 
@@ -164,6 +174,8 @@ class AiCharacterApp extends StatefulWidget {
   final CardService cardService;
   final WeatherService weatherService;
   final RecommendationService recommendationService;
+  final RoutineGroupService routineGroupService;
+  final DiaryService diaryService;
 
   const AiCharacterApp({
     super.key,
@@ -185,6 +197,8 @@ class AiCharacterApp extends StatefulWidget {
     required this.cardService,
     required this.weatherService,
     required this.recommendationService,
+    required this.routineGroupService,
+    required this.diaryService,
   });
 
   @override
@@ -193,12 +207,35 @@ class AiCharacterApp extends StatefulWidget {
 
 class _AiCharacterAppState extends State<AiCharacterApp>
     with WidgetsBindingObserver {
+  static final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
+  StreamSubscription<String>? _notifSub;
 
   @override
   void initState() {
     super.initState();
     WidgetsBinding.instance.addObserver(this);
     _requestPermissionsAndStart();
+    _listenNotificationTaps();
+  }
+
+  void _listenNotificationTaps() {
+    _notifSub = NotificationService.onNotificationTap.stream.listen((payload) {
+      if (payload.startsWith('alarm:')) {
+        final alarmId = payload.substring(6);
+        final alarm = widget.alarmService.getById(alarmId);
+        final ctx = navigatorKey.currentContext;
+        if (ctx != null) {
+          Navigator.of(ctx).push(
+            MaterialPageRoute(
+              builder: (_) => AlarmRingScreen(
+                alarmLabel: alarm?.label ?? '알람',
+                settingsService: widget.settingsService,
+              ),
+            ),
+          );
+        }
+      }
+    });
   }
 
   Future<void> _requestPermissionsAndStart() async {
@@ -231,6 +268,7 @@ class _AiCharacterAppState extends State<AiCharacterApp>
 
   @override
   void dispose() {
+    _notifSub?.cancel();
     WidgetsBinding.instance.removeObserver(this);
     widget.routineMonitor.dispose();
     super.dispose();
@@ -239,10 +277,12 @@ class _AiCharacterAppState extends State<AiCharacterApp>
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      navigatorKey: navigatorKey,
       title: 'AI 루틴 잔소리',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light,
       darkTheme: AppTheme.dark,
+      themeMode: ThemeMode.light,
       home: HomeScreen(
         routineService: widget.routineService,
         settingsService: widget.settingsService,
@@ -261,6 +301,8 @@ class _AiCharacterAppState extends State<AiCharacterApp>
         cardService: widget.cardService,
         weatherService: widget.weatherService,
         recommendationService: widget.recommendationService,
+        routineGroupService: widget.routineGroupService,
+        diaryService: widget.diaryService,
         onCompletionUnchecked: widget.routineMonitor.forceCheck,
       ),
     );

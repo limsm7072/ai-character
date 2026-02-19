@@ -321,20 +321,15 @@ class NagOverlay(private val context: Context) {
     // ── Check if overlay character should be visible ──
     private var voiceOnlyMode = false
 
-    private fun isCharacterVisible(): Boolean {
-        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        return prefs.getBoolean("flutter.overlay_character_visible", true)
-    }
-
     // ── Show / Dismiss ──
-    fun show(appLabel: String, routineName: String, key: String, intensity: Int = 1) {
+    fun show(appLabel: String, routineName: String, key: String, intensity: Int = 1, showOverlay: Boolean = true) {
         if (isShowing) return
-        Log.d(TAG, "show() called: intensity=$intensity, appLabel=$appLabel")
+        Log.d(TAG, "show() called: intensity=$intensity, showOverlay=$showOverlay, appLabel=$appLabel")
         apiKey = key; nagIntensity = intensity; noSpeechCount = 0; history.clear()
         history.add("user" to getSystemPromptForIntensity())
         history.add("model" to getInitialModelReply())
 
-        voiceOnlyMode = !isCharacterVisible()
+        voiceOnlyMode = !showOverlay
 
         handler.post {
             try {

@@ -101,6 +101,7 @@ class _StatsScreenState extends State<StatsScreen> {
       child: NestedScrollView(
         headerSliverBuilder: (context, innerBoxIsScrolled) => [
           SliverAppBar(
+            automaticallyImplyLeading: false,
             title: const Text('통계'),
             pinned: true,
             forceElevated: innerBoxIsScrolled,

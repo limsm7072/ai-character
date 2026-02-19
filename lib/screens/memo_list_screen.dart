@@ -135,7 +135,7 @@ class _MemoListScreenState extends State<MemoListScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(title: const Text('메모')),
+      appBar: AppBar(automaticallyImplyLeading: false, title: const Text('메모')),
       body: _memos.isEmpty
           ? Center(
               child: Column(

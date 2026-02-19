@@ -181,6 +181,7 @@ class _CardScreenState extends State<CardScreen> {
 
     return Scaffold(
       appBar: AppBar(
+        automaticallyImplyLeading: false,
         title: const Text('내 명함'),
         actions: _editing
             ? []

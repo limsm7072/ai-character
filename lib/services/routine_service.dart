@@ -40,11 +40,36 @@ class RoutineService {
     }
   }
 
+  Future<void> reorder(int oldIndex, int newIndex) async {
+    final routines = getAll();
+    if (newIndex > oldIndex) newIndex--;
+    final item = routines.removeAt(oldIndex);
+    routines.insert(newIndex, item);
+    await saveAll(routines);
+  }
+
   Future<void> delete(String id) async {
     final routines = getAll();
     final routine = routines.firstWhere((r) => r.id == id, orElse: () => routines.first);
     await _cancelNotification(routine);
     routines.removeWhere((r) => r.id == id);
+    await saveAll(routines);
+  }
+
+  /// Rearranges routines so that the given IDs appear contiguously,
+  /// placed at the position of the first selected routine.
+  Future<void> makeContiguous(List<String> ids) async {
+    final routines = getAll();
+    final idSet = ids.toSet();
+    // Find the index of the first selected routine
+    final firstIdx = routines.indexWhere((r) => idSet.contains(r.id));
+    if (firstIdx < 0) return;
+
+    final selected = routines.where((r) => idSet.contains(r.id)).toList();
+    routines.removeWhere((r) => idSet.contains(r.id));
+    // Clamp in case removals shifted things
+    final insertAt = firstIdx.clamp(0, routines.length);
+    routines.insertAll(insertAt, selected);
     await saveAll(routines);
   }
 
@@ -73,7 +98,7 @@ class RoutineService {
   Future<void> _syncNotification(Routine routine) async {
     if (_notification == null) return;
     await _cancelNotification(routine);
-    if (!routine.notifyOnStart || !routine.isEnabled) return;
+    if (routine.linkedAlarmId == null || !routine.isEnabled) return;
 
     final baseId = _notificationBaseId(routine.id);
     final hasActiveDays = routine.activeDays.any((d) => d);

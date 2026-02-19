@@ -4,6 +4,7 @@ import 'notification_service.dart';
 
 class AlarmService {
   static const _key = 'alarms_data';
+  static const _counterKey = 'alarm_notif_counter';
   final SharedPreferences _prefs;
   final NotificationService _notification;
   List<Alarm> _alarms = [];
@@ -16,7 +17,32 @@ class AlarmService {
     final raw = _prefs.getString(_key);
     if (raw != null && raw.isNotEmpty) {
       _alarms = Alarm.decode(raw);
+      _migrateNotifIds();
     }
+  }
+
+  /// Assign notifBaseId to alarms that don't have one (migration).
+  void _migrateNotifIds() {
+    bool changed = false;
+    for (final alarm in _alarms) {
+      if (alarm.notifBaseId == null) {
+        alarm.notifBaseId = _nextNotifBaseId();
+        changed = true;
+      }
+    }
+    if (changed) _save();
+  }
+
+  int _nextNotifBaseId() {
+    // Find max existing notifBaseId across all alarms
+    int maxId = _prefs.getInt(_counterKey) ?? 0;
+    for (final a in _alarms) {
+      if (a.notifBaseId != null && a.notifBaseId! >= maxId) {
+        maxId = a.notifBaseId! + 1;
+      }
+    }
+    _prefs.setInt(_counterKey, maxId + 1);
+    return maxId;
   }
 
   Future<void> _save() async {
@@ -25,9 +51,15 @@ class AlarmService {
 
   List<Alarm> getAll() => List.unmodifiable(_alarms);
 
+  Alarm? getById(String id) {
+    final matches = _alarms.where((a) => a.id == id);
+    return matches.isNotEmpty ? matches.first : null;
+  }
+
   int get enabledCount => _alarms.where((a) => a.isEnabled).length;
 
   Future<Alarm> add(Alarm alarm) async {
+    alarm.notifBaseId ??= _nextNotifBaseId();
     _alarms.add(alarm);
     await _save();
     if (alarm.isEnabled) await _scheduleAlarm(alarm);
@@ -63,13 +95,22 @@ class AlarmService {
   }
 
   Future<void> rescheduleAll() async {
+    print('[AlarmService] rescheduleAll: ${_alarms.length} alarms, ${_alarms.where((a) => a.isEnabled).length} enabled');
     for (final alarm in _alarms) {
       if (alarm.isEnabled) await _scheduleAlarm(alarm);
+    }
+    // Debug: print pending notifications
+    final pending = await _notification.getPendingNotifications();
+    final alarmPending = pending.where((p) => p.id >= 10000 && p.id < 20000).toList();
+    print('[AlarmService] pending alarm notifications: ${alarmPending.length}');
+    for (final p in alarmPending) {
+      print('  - id=${p.id} title=${p.title} body=${p.body}');
     }
   }
 
   Future<void> _scheduleAlarm(Alarm alarm) async {
     final baseId = alarm.notificationId;
+    final payload = 'alarm:${alarm.id}';
 
     if (alarm.isOneTime) {
       // One-time alarm: schedule for the next occurrence
@@ -85,6 +126,7 @@ class AlarmService {
         dateTime: target,
         channelId: NotificationService.alarmChannelId,
         channelName: '알람',
+        payload: payload,
       );
     } else {
       // Weekly repeating: schedule for each active day
@@ -100,6 +142,7 @@ class AlarmService {
             dayOfWeek: dayOfWeek,
             channelId: NotificationService.alarmChannelId,
             channelName: '알람',
+            payload: payload,
           );
         }
       }

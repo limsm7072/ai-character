@@ -66,7 +66,7 @@ class _TodoScreenState extends State<TodoScreen> {
         if (didPop) return;
       },
       child: Scaffold(
-        appBar: AppBar(title: const Text('할 일')),
+        appBar: AppBar(automaticallyImplyLeading: false, title: const Text('할 일')),
         body: Column(
           children: [
             Expanded(

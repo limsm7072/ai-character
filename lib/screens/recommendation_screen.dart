@@ -55,6 +55,7 @@ class _RecommendationScreenState extends State<RecommendationScreen> {
     final theme = Theme.of(context);
     return Scaffold(
       appBar: AppBar(
+        automaticallyImplyLeading: false,
         title: const Text('맞춤 정보'),
         actions: [
           if (_loading)

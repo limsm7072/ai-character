@@ -22,8 +22,12 @@ class TimerPreset {
   }) : createdAt = createdAt ?? DateTime.now();
 
   String get durationString {
-    final m = durationSeconds ~/ 60;
+    if (isPomodoro) return '${focusMinutes}/${breakMinutes}분 ${targetSessions}세션';
+    final h = durationSeconds ~/ 3600;
+    final m = (durationSeconds % 3600) ~/ 60;
     final s = durationSeconds % 60;
+    if (h > 0 && m > 0) return '${h}시간 ${m}분';
+    if (h > 0) return '${h}시간';
     if (s == 0) return '${m}분';
     return '${m}분 ${s}초';
   }

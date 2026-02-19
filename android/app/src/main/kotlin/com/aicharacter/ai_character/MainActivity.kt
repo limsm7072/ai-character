@@ -11,6 +11,10 @@ import android.os.Process
 import android.provider.Settings
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
+import android.hardware.Sensor
+import android.hardware.SensorEvent
+import android.hardware.SensorEventListener
+import android.hardware.SensorManager
 import android.media.AudioAttributes
 import android.media.MediaPlayer
 import android.media.RingtoneManager
@@ -33,6 +37,14 @@ class MainActivity : FlutterFragmentActivity() {
     private var speechResult: MethodChannel.Result? = null
     private var pickImageResult: MethodChannel.Result? = null
     private val PICK_IMAGE_REQUEST = 2001
+
+    // Shake detection
+    private var sensorManager: SensorManager? = null
+    private var shakeListener: SensorEventListener? = null
+    private var audioChannel: MethodChannel? = null
+    private var lastShakeTime: Long = 0
+    private val SHAKE_THRESHOLD = 12.0
+    private val SHAKE_DEBOUNCE_MS = 300L
 
     private val distractionReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
@@ -169,7 +181,8 @@ class MainActivity : FlutterFragmentActivity() {
             }
         }
 
-        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, AUDIO_CHANNEL).setMethodCallHandler { call, result ->
+        audioChannel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, AUDIO_CHANNEL)
+        audioChannel!!.setMethodCallHandler { call, result ->
             when (call.method) {
                 "playFile" -> {
                     val path = call.argument<String>("path") ?: ""
@@ -208,6 +221,14 @@ class MainActivity : FlutterFragmentActivity() {
                 "setAmbientType" -> {
                     val type = call.argument<String>("type") ?: "white"
                     ambientGenerator?.setType(type)
+                    result.success(null)
+                }
+                "startShakeDetection" -> {
+                    startShakeDetection()
+                    result.success(null)
+                }
+                "stopShakeDetection" -> {
+                    stopShakeDetection()
                     result.success(null)
                 }
                 else -> result.notImplemented()
@@ -262,6 +283,7 @@ class MainActivity : FlutterFragmentActivity() {
     }
 
     override fun onDestroy() {
+        stopShakeDetection()
         ambientGenerator?.stop()
         ambientGenerator = null
         try { unregisterReceiver(distractionReceiver) } catch (_: Exception) {}
@@ -580,5 +602,48 @@ class MainActivity : FlutterFragmentActivity() {
             }
         } catch (_: Exception) {}
         mediaPlayer = null
+    }
+
+    private fun startShakeDetection() {
+        stopShakeDetection()
+        sensorManager = getSystemService(Context.SENSOR_SERVICE) as SensorManager
+        val accelerometer = sensorManager?.getDefaultSensor(Sensor.TYPE_ACCELEROMETER) ?: return
+
+        shakeListener = object : SensorEventListener {
+            override fun onSensorChanged(event: SensorEvent?) {
+                if (event == null) return
+                val x = event.values[0]
+                val y = event.values[1]
+                val z = event.values[2]
+                val gX = x / SensorManager.GRAVITY_EARTH
+                val gY = y / SensorManager.GRAVITY_EARTH
+                val gZ = z / SensorManager.GRAVITY_EARTH
+                val gForce = Math.sqrt((gX * gX + gY * gY + gZ * gZ).toDouble())
+
+                if (gForce > SHAKE_THRESHOLD / SensorManager.GRAVITY_EARTH) {
+                    val now = System.currentTimeMillis()
+                    if (now - lastShakeTime > SHAKE_DEBOUNCE_MS) {
+                        lastShakeTime = now
+                        runOnUiThread {
+                            audioChannel?.invokeMethod("onShake", null)
+                        }
+                    }
+                }
+            }
+
+            override fun onAccuracyChanged(sensor: Sensor?, accuracy: Int) {}
+        }
+
+        sensorManager?.registerListener(
+            shakeListener, accelerometer, SensorManager.SENSOR_DELAY_UI
+        )
+        println("[MainActivity] startShakeDetection: registered")
+    }
+
+    private fun stopShakeDetection() {
+        shakeListener?.let { sensorManager?.unregisterListener(it) }
+        shakeListener = null
+        sensorManager = null
+        println("[MainActivity] stopShakeDetection: unregistered")
     }
 }

@@ -1,9 +1,14 @@
 import 'package:flutter/material.dart';
 import '../models/routine.dart' as model;
+import '../models/routine_group.dart';
+import '../models/routine_preset.dart';
 import '../services/routine_service.dart';
 import '../services/routine_completion_service.dart';
 import '../services/settings_service.dart';
+import '../services/alarm_service.dart';
 import '../services/timer_service.dart';
+import '../services/routine_group_service.dart';
+import '../utils/routine_icons.dart';
 import 'routine_edit_screen.dart';
 import 'timer_screen.dart';
 import '../theme/app_colors.dart';
@@ -12,7 +17,9 @@ class RoutineListScreen extends StatefulWidget {
   final RoutineService routineService;
   final RoutineCompletionService completionService;
   final SettingsService settingsService;
+  final AlarmService? alarmService;
   final TimerService? timerService;
+  final RoutineGroupService routineGroupService;
   final VoidCallback? onCompletionUnchecked;
 
   const RoutineListScreen({
@@ -20,7 +27,9 @@ class RoutineListScreen extends StatefulWidget {
     required this.routineService,
     required this.completionService,
     required this.settingsService,
+    this.alarmService,
     this.timerService,
+    required this.routineGroupService,
     this.onCompletionUnchecked,
   });
 
@@ -34,6 +43,10 @@ class _RoutineListScreenState extends State<RoutineListScreen> {
   late String _selectedDateStr;
   int _weekOffset = 0;
 
+  // Group mode
+  bool _isGroupMode = false;
+  final Set<String> _selectedRoutineIds = {};
+
   @override
   void initState() {
     super.initState();
@@ -44,6 +57,20 @@ class _RoutineListScreenState extends State<RoutineListScreen> {
 
   void _loadRoutines() {
     setState(() => _routines = widget.routineService.getAll());
+  }
+
+  Future<void> _onReorder(int oldIndex, int newIndex) async {
+    final filtered = _filteredRoutines;
+    final oldRoutineId = filtered[oldIndex].id;
+    final realOld = _routines.indexWhere((r) => r.id == oldRoutineId);
+
+    final adjustedNew = newIndex > oldIndex ? newIndex - 1 : newIndex;
+    final targetRoutineId = filtered[adjustedNew].id;
+    var realNew = _routines.indexWhere((r) => r.id == targetRoutineId);
+    if (newIndex > oldIndex) realNew++;
+
+    await widget.routineService.reorder(realOld, realNew);
+    _loadRoutines();
   }
 
   void _goToToday() {
@@ -68,12 +95,233 @@ class _RoutineListScreenState extends State<RoutineListScreen> {
       DateTime(date.year, date.month, date.day)
           .subtract(Duration(days: date.weekday - 1));
 
-  // ─── Week/day selector ──────────────────────────────────
+  // ─── Group helpers ────────────────────────────────────────
+
+  void _enterGroupMode() {
+    setState(() {
+      _isGroupMode = true;
+      _selectedRoutineIds.clear();
+    });
+  }
+
+  void _exitGroupMode() {
+    setState(() {
+      _isGroupMode = false;
+      _selectedRoutineIds.clear();
+    });
+  }
+
+  void _toggleSelection(String routineId) {
+    setState(() {
+      if (_selectedRoutineIds.contains(routineId)) {
+        _selectedRoutineIds.remove(routineId);
+      } else {
+        _selectedRoutineIds.add(routineId);
+      }
+    });
+  }
+
+  Future<void> _confirmGroup() async {
+    if (_selectedRoutineIds.length < 2) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('2개 이상 선택해주세요')),
+      );
+      return;
+    }
+    // Make selected routines contiguous in the full list
+    await widget.routineService.makeContiguous(_selectedRoutineIds.toList());
+    await widget.routineGroupService.createGroup(_selectedRoutineIds.toList());
+    _loadRoutines();
+    _exitGroupMode();
+  }
+
+  Future<void> _showUngroupDialog(RoutineGroup group) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('그룹 해제'),
+        content: const Text('이 그룹을 해제하시겠습니까?'),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('취소'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: const Text('해제'),
+          ),
+        ],
+      ),
+    );
+    if (confirm == true) {
+      await widget.routineGroupService.ungroup(group.id);
+      setState(() {});
+    }
+  }
+
+  /// Build a map: routineId → groupId for filtered routines
+  Map<String, String> _buildGroupMap(List<model.Routine> filtered) {
+    final groups = widget.routineGroupService.getAll();
+    final filteredIds = filtered.map((r) => r.id).toSet();
+    final map = <String, String>{};
+    for (final g in groups) {
+      for (final rid in g.routineIds) {
+        if (filteredIds.contains(rid)) {
+          map[rid] = g.id;
+        }
+      }
+    }
+    return map;
+  }
+
+  // ─── Navigation ─────────────────────────────────────────
+
+  void _launchTimer(model.Routine routine) {
+    final presets = widget.timerService!.getAll();
+    final preset = presets.firstWhere(
+      (p) => p.id == routine.linkedTimerId,
+      orElse: () => presets.first,
+    );
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => TimerRunScreen(
+          timerService: widget.timerService!,
+          initialPreset: preset,
+        ),
+      ),
+    );
+  }
+
+  Future<void> _addRoutine() async {
+    final result = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => RoutineEditScreen(
+          routineService: widget.routineService,
+          alarmService: widget.alarmService,
+          timerService: widget.timerService,
+          routineGroupService: widget.routineGroupService,
+        ),
+      ),
+    );
+    if (result == true) _loadRoutines();
+  }
+
+  Future<void> _editRoutine(model.Routine routine) async {
+    final result = await Navigator.push<bool>(
+      context,
+      MaterialPageRoute(
+        builder: (_) => RoutineEditScreen(
+          routineService: widget.routineService,
+          alarmService: widget.alarmService,
+          timerService: widget.timerService,
+          routineGroupService: widget.routineGroupService,
+          routine: routine,
+        ),
+      ),
+    );
+    if (result == true) _loadRoutines();
+  }
+
+  Future<void> _addPreset(RoutinePreset preset) async {
+    final now = DateTime.now();
+    final routine = model.Routine(
+      id: now.millisecondsSinceEpoch.toString(),
+      name: preset.name,
+      startTime: model.TimeOfDay(hour: preset.startH, minute: preset.startM),
+      endTime: model.TimeOfDay(hour: preset.endH, minute: preset.endM),
+      isAllDay: preset.isAllDay,
+      startDate: _formatDate(now),
+    );
+    await widget.routineService.add(routine);
+    _loadRoutines();
+  }
+
+  // ─── Build ──────────────────────────────────────────────
+
+  @override
+  Widget build(BuildContext context) {
+    final filtered = _filteredRoutines;
+    final groupMap = _buildGroupMap(filtered);
+
+    return Scaffold(
+      body: CustomScrollView(
+        slivers: [
+          _isGroupMode ? _buildGroupModeAppBar() : _buildNormalAppBar(),
+          SliverToBoxAdapter(child: _buildDaySelector()),
+          const SliverToBoxAdapter(child: Divider(height: 1)),
+          if (filtered.isEmpty)
+            _buildEmptyState()
+          else
+            SliverReorderableList(
+              itemBuilder: (context, index) =>
+                  _buildRoutineRow(filtered[index], index, filtered, groupMap),
+              itemCount: filtered.length,
+              onReorder: _isGroupMode ? (_, __) {} : _onReorder,
+            ),
+          SliverToBoxAdapter(child: SizedBox(height: 80 + MediaQuery.of(context).viewPadding.bottom)),
+        ],
+      ),
+      floatingActionButton: _isGroupMode
+          ? null
+          : Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                FloatingActionButton.small(
+                  heroTag: 'group',
+                  onPressed: _enterGroupMode,
+                  child: const Icon(Icons.workspaces_outline, size: 20),
+                ),
+                const SizedBox(height: 8),
+                FloatingActionButton(
+                  heroTag: 'add',
+                  onPressed: _addRoutine,
+                  child: const Icon(Icons.add),
+                ),
+              ],
+            ),
+    );
+  }
+
+  SliverAppBar _buildNormalAppBar() {
+    return SliverAppBar(
+      pinned: true,
+      automaticallyImplyLeading: false,
+      title: const Text('루틴 관리'),
+      actions: [
+        if (!_isSelectedToday || _weekOffset != 0)
+          TextButton.icon(
+            onPressed: _goToToday,
+            icon: const Icon(Icons.today, size: 18),
+            label: const Text('오늘'),
+          ),
+      ],
+    );
+  }
+
+  SliverAppBar _buildGroupModeAppBar() {
+    return SliverAppBar(
+      pinned: true,
+      leading: IconButton(
+        icon: const Icon(Icons.close),
+        onPressed: _exitGroupMode,
+      ),
+      title: Text('${_selectedRoutineIds.length}개 선택'),
+      actions: [
+        TextButton(
+          onPressed: _selectedRoutineIds.length >= 2 ? _confirmGroup : null,
+          child: const Text('확인'),
+        ),
+      ],
+    );
+  }
+
+  // ─── Day selector ───────────────────────────────────────
 
   Widget _buildDaySelector() {
     final today = DateTime.now();
     final monday = _mondayOf(today).add(Duration(days: _weekOffset * 7));
-    final sunday = monday.add(const Duration(days: 6));
     final dayNames = ['월', '화', '수', '목', '금', '토', '일'];
     final todayStr = _formatDate(today);
     final theme = Theme.of(context);
@@ -96,7 +344,7 @@ class _RoutineListScreenState extends State<RoutineListScreen> {
                 child: Text(
                   '${weekMonth.month}월',
                   style: TextStyle(
-                    fontSize: 16,
+                    fontSize: 20,
                     fontWeight: FontWeight.w600,
                     color: _weekOffset == 0
                         ? theme.colorScheme.primary
@@ -174,26 +422,81 @@ class _RoutineListScreenState extends State<RoutineListScreen> {
     );
   }
 
-  // ─── Routine list ───────────────────────────────────────
+  // ─── Empty / presets ────────────────────────────────────
 
   Widget _buildEmptyState() {
-    return SliverFillRemaining(
-      child: Center(
+    if (_routines.isNotEmpty) {
+      return SliverFillRemaining(
+        child: Center(
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Icon(Icons.event_note, size: 64, color: AppColors.grey400),
+              const SizedBox(height: 16),
+              Text('이 날에 활성화된 루틴이 없어요',
+                  style: TextStyle(fontSize: 18, color: AppColors.grey600)),
+            ],
+          ),
+        ),
+      );
+    }
+
+    final timed = routinePresets.where((p) => !p.isAllDay).toList();
+    final free = routinePresets.where((p) => p.isAllDay).toList();
+    final theme = Theme.of(context);
+
+    return SliverToBoxAdapter(
+      child: Padding(
+        padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 16),
         child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            const SizedBox(height: 8),
+            Center(child: Text('빠르게 시작하기', style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold))),
+            const SizedBox(height: 4),
+            Center(child: Text('탭하면 바로 추가됩니다', style: TextStyle(fontSize: 13, color: AppColors.grey500))),
+            const SizedBox(height: 20),
+            Text('시간 루틴', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.grey700)),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8, runSpacing: 8,
+              children: timed.map((p) => _presetChip(p, theme)).toList(),
+            ),
+            const SizedBox(height: 20),
+            Text('자유 루틴', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: AppColors.grey700)),
+            const SizedBox(height: 8),
+            Wrap(
+              spacing: 8, runSpacing: 8,
+              children: free.map((p) => _presetChip(p, theme)).toList(),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _presetChip(RoutinePreset p, ThemeData theme) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(20),
+      onTap: () => _addPreset(p),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+        decoration: BoxDecoration(
+          border: Border.all(color: theme.colorScheme.primary.withValues(alpha: 0.3)),
+          borderRadius: BorderRadius.circular(20),
+          color: theme.colorScheme.primary.withValues(alpha: 0.05),
+        ),
+        child: Row(
           mainAxisSize: MainAxisSize.min,
           children: [
-            Icon(Icons.event_note, size: 64, color: AppColors.grey400),
-            const SizedBox(height: 16),
-            Text(
-              _routines.isEmpty ? '루틴을 추가해보세요!' : '이 날에 활성화된 루틴이 없어요',
-              style: TextStyle(fontSize: 18, color: AppColors.grey600),
-            ),
-            if (_routines.isEmpty) ...[
-              const SizedBox(height: 8),
+            Icon(p.icon, size: 16, color: theme.colorScheme.primary),
+            const SizedBox(width: 6),
+            Text(p.name, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: theme.colorScheme.primary)),
+            if (!p.isAllDay) ...[
+              const SizedBox(width: 6),
               Text(
-                '루틴 시간에 딴짓하면\n${widget.settingsService.characterName}가 잔소리해줄 거예요',
-                textAlign: TextAlign.center,
-                style: TextStyle(color: AppColors.grey500),
+                '${p.startH.toString().padLeft(2, '0')}:${p.startM.toString().padLeft(2, '0')}',
+                style: TextStyle(fontSize: 11, color: AppColors.grey500),
               ),
             ],
           ],
@@ -202,178 +505,229 @@ class _RoutineListScreenState extends State<RoutineListScreen> {
     );
   }
 
-  // ─── Routine card ───────────────────────────────────────
+  // ─── Routine row (timeline) ─────────────────────────────
 
-  Widget _buildRoutineCard(model.Routine routine) {
+  Widget _buildRoutineRow(
+    model.Routine routine,
+    int index,
+    List<model.Routine> filtered,
+    Map<String, String> groupMap,
+  ) {
     final isCompleted = widget.completionService.isCompleted(routine.id, _selectedDateStr);
     final isSkipped = widget.completionService.isSkipped(routine.id, _selectedDateStr);
+    final isOn = routine.isEnabled;
+    final theme = Theme.of(context);
+    final isFirst = index == 0;
+    final isLast = index == filtered.length - 1;
+    final lineColor = theme.colorScheme.primary.withValues(alpha: 0.2);
+    final dotColor = isOn ? theme.colorScheme.primary : AppColors.grey400;
 
-    final dayNames = ['월', '화', '수', '목', '금', '토', '일'];
-    final activeDays = [
-      for (int i = 0; i < 7; i++)
-        if (routine.activeDays[i]) dayNames[i],
-    ];
+    // Group detection
+    final myGroupId = groupMap[routine.id];
+    final prevGroupId = index > 0 ? groupMap[filtered[index - 1].id] : null;
+    final nextGroupId = index < filtered.length - 1 ? groupMap[filtered[index + 1].id] : null;
+    final isInGroup = myGroupId != null;
+    final isGroupStart = isInGroup && prevGroupId != myGroupId;
+    final isGroupEnd = isInGroup && nextGroupId != myGroupId;
 
-    return Card(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-      child: ListTile(
-        leading: Column(
-          mainAxisAlignment: MainAxisAlignment.center,
-          children: [_buildCheckCircle(routine.id, isCompleted, isSkipped)],
-        ),
-        title: Text(
-          routine.name,
-          style: TextStyle(
-            fontWeight: FontWeight.bold,
-            decoration: routine.isEnabled ? null : TextDecoration.lineThrough,
+    // Group mode selection
+    final isSelected = _isGroupMode && _selectedRoutineIds.contains(routine.id);
+
+    final topPadding = isGroupStart ? 8.0 : 0.0;
+    final bottomPadding = isGroupEnd ? 8.0 : 0.0;
+
+    final groupBgColor = isInGroup
+        ? theme.colorScheme.primary.withValues(alpha: 0.04)
+        : Colors.transparent;
+
+    final rowContent = IntrinsicHeight(
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          // ── Timeline column (line + dot/check) ──
+          SizedBox(
+            width: 40,
+            child: Column(
+              children: [
+                // Top line
+                Expanded(child: Container(
+                  width: 1.5,
+                  color: isFirst ? Colors.transparent : lineColor,
+                )),
+                // Dot or checkbox
+                _isGroupMode
+                    ? _buildSelectionDot(routine.id, isSelected, theme)
+                    : _buildCompletionDot(
+                        routine, isCompleted, isSkipped, dotColor),
+                // Bottom line
+                Expanded(child: Container(
+                  width: 1.5,
+                  color: isLast ? Colors.transparent : lineColor,
+                )),
+              ],
+            ),
           ),
-        ),
-        subtitle: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Text(
-              '${routine.startTime.format()} - ${routine.endTime.format()}',
-              style: const TextStyle(fontSize: 13),
-            ),
-            Text(
-              activeDays.length == 7 ? '매일' : activeDays.join(' '),
-              style: TextStyle(fontSize: 12, color: AppColors.grey600),
-            ),
-          ],
-        ),
-        trailing: Row(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            if (routine.timerMinutes != null && widget.timerService != null)
-              IconButton(
-                icon: Icon(Icons.timer, size: 20, color: Theme.of(context).colorScheme.primary),
-                tooltip: '${routine.timerMinutes}분 타이머',
-                onPressed: () => _launchTimer(routine),
-                visualDensity: VisualDensity.compact,
-                padding: EdgeInsets.zero,
-                constraints: const BoxConstraints(minWidth: 32, minHeight: 32),
+          // ── Content ──
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.fromLTRB(0, 10, 12, 10),
+              child: Row(
+                children: [
+                  // Time or "자유"
+                  SizedBox(
+                    width: 44,
+                    child: routine.isAllDay
+                        ? Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 2),
+                            decoration: BoxDecoration(
+                              color: AppColors.accent.withValues(alpha: 0.15),
+                              borderRadius: BorderRadius.circular(4),
+                            ),
+                            child: Text('자유', textAlign: TextAlign.center,
+                                style: TextStyle(fontSize: 11, color: AppColors.accentDark, fontWeight: FontWeight.w600)),
+                          )
+                        : Column(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              Text(routine.startTime.format(),
+                                  style: TextStyle(fontSize: 12, color: isOn ? AppColors.grey700 : AppColors.grey500, fontWeight: FontWeight.w600)),
+                              Text(routine.endTime.format(),
+                                  style: TextStyle(fontSize: 11, color: AppColors.grey400)),
+                            ],
+                          ),
+                  ),
+                  const SizedBox(width: 6),
+                  Icon(routineIcon(routine.name), size: 18,
+                      color: isOn ? theme.colorScheme.primary : AppColors.grey400),
+                  const SizedBox(width: 6),
+                  // Title
+                  Expanded(
+                    child: Text(routine.name,
+                        style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600,
+                            color: isOn ? null : AppColors.grey500,
+                            decoration: isOn ? null : TextDecoration.lineThrough),
+                        overflow: TextOverflow.ellipsis),
+                  ),
+                  // Right icons (fixed area, right-aligned)
+                  SizedBox(
+                    width: 56,
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.end,
+                      children: [
+                        if (routine.linkedAlarmId != null && !routine.isAllDay)
+                          Icon(Icons.alarm, size: 18, color: AppColors.grey500),
+                        if (routine.linkedTimerId != null && widget.timerService != null)
+                          Padding(
+                            padding: const EdgeInsets.only(left: 8),
+                            child: GestureDetector(
+                              onTap: () => _launchTimer(routine),
+                              child: Icon(Icons.timer, size: 18, color: theme.colorScheme.primary),
+                            ),
+                          ),
+                      ],
+                    ),
+                  ),
+                ],
               ),
-            Switch(
-              value: routine.isEnabled,
-              onChanged: (val) async {
-                routine.isEnabled = val;
-                await widget.routineService.update(routine);
-                _loadRoutines();
-              },
             ),
-          ],
+          ),
+        ],
+      ),
+    );
+
+    return Material(
+      key: ValueKey(routine.id),
+      child: Padding(
+        padding: EdgeInsets.only(top: topPadding, bottom: bottomPadding),
+        child: Container(
+          decoration: BoxDecoration(
+            color: groupBgColor,
+            borderRadius: BorderRadius.vertical(
+              top: isGroupStart ? const Radius.circular(12) : Radius.zero,
+              bottom: isGroupEnd ? const Radius.circular(12) : Radius.zero,
+            ),
+          ),
+          child: _isGroupMode
+              ? ReorderableDragStartListener(
+                  index: index,
+                  child: InkWell(
+                    onTap: () => _toggleSelection(routine.id),
+                    child: rowContent,
+                  ),
+                )
+              : ReorderableDragStartListener(
+                  index: index,
+                  child: InkWell(
+                    onTap: () => _editRoutine(routine),
+                    onLongPress: isInGroup
+                        ? () {
+                            final group = widget.routineGroupService.groupForRoutine(routine.id);
+                            if (group != null) _showUngroupDialog(group);
+                          }
+                        : null,
+                    child: rowContent,
+                  ),
+                ),
         ),
-        onTap: () => _editRoutine(routine),
-        isThreeLine: true,
       ),
     );
   }
 
-  Widget _buildCheckCircle(String routineId, bool isCompleted, bool isSkipped) {
-    final hasCheck = isCompleted || isSkipped;
-    final color = isCompleted ? AppColors.success : isSkipped ? AppColors.warning : Colors.transparent;
+  Widget _buildSelectionDot(String routineId, bool isSelected, ThemeData theme) {
+    return Container(
+      width: 22, height: 22,
+      decoration: BoxDecoration(
+        shape: BoxShape.circle,
+        color: isSelected
+            ? theme.colorScheme.primary
+            : theme.colorScheme.primary.withValues(alpha: 0.1),
+        border: Border.all(
+          color: theme.colorScheme.primary,
+          width: 1.5,
+        ),
+      ),
+      child: isSelected
+          ? const Icon(Icons.check, color: Colors.white, size: 14)
+          : null,
+    );
+  }
 
+  Widget _buildCompletionDot(
+    model.Routine routine,
+    bool isCompleted,
+    bool isSkipped,
+    Color dotColor,
+  ) {
     return GestureDetector(
+      behavior: HitTestBehavior.opaque,
       onTap: () async {
         if (!isCompleted && !isSkipped) {
-          await widget.completionService.toggleCompletion(routineId, _selectedDateStr);
+          await widget.completionService.toggleCompletion(routine.id, _selectedDateStr);
         } else if (isCompleted) {
-          await widget.completionService.markSkipped(routineId, _selectedDateStr);
+          await widget.completionService.markSkipped(routine.id, _selectedDateStr);
         } else {
-          await widget.completionService.toggleCompletion(routineId, _selectedDateStr);
+          await widget.completionService.toggleCompletion(routine.id, _selectedDateStr);
           widget.onCompletionUnchecked?.call();
         }
         setState(() {});
       },
       child: Container(
-        width: 36,
-        height: 36,
+        width: 22, height: 22,
         decoration: BoxDecoration(
           shape: BoxShape.circle,
-          color: hasCheck ? color : Colors.transparent,
-          border: Border.all(color: hasCheck ? color : AppColors.grey400, width: 2),
-        ),
-        child: hasCheck
-            ? Icon(isSkipped ? Icons.close : Icons.check, color: AppColors.white, size: 20)
-            : null,
-      ),
-    );
-  }
-
-  // ─── Navigation ─────────────────────────────────────────
-
-  void _launchTimer(model.Routine routine) {
-    Navigator.push(
-      context,
-      MaterialPageRoute(
-        builder: (_) => TimerScreen(
-          timerService: widget.timerService!,
-          initialDurationSeconds: routine.timerMinutes! * 60,
-          initialLabel: routine.name,
-        ),
-      ),
-    );
-  }
-
-  Future<void> _addRoutine() async {
-    final result = await Navigator.push<bool>(
-      context,
-      MaterialPageRoute(
-        builder: (_) => RoutineEditScreen(routineService: widget.routineService),
-      ),
-    );
-    if (result == true) _loadRoutines();
-  }
-
-  Future<void> _editRoutine(model.Routine routine) async {
-    final result = await Navigator.push<bool>(
-      context,
-      MaterialPageRoute(
-        builder: (_) => RoutineEditScreen(
-          routineService: widget.routineService,
-          routine: routine,
-        ),
-      ),
-    );
-    if (result == true) _loadRoutines();
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final filtered = _filteredRoutines;
-
-    return Scaffold(
-      body: CustomScrollView(
-        slivers: [
-          SliverAppBar(
-            pinned: true,
-            title: const Text('루틴 관리'),
-            actions: [
-              if (!_isSelectedToday || _weekOffset != 0)
-                TextButton.icon(
-                  onPressed: _goToToday,
-                  icon: const Icon(Icons.today, size: 18),
-                  label: const Text('오늘'),
-                ),
-            ],
+          color: (isCompleted || isSkipped)
+              ? (isCompleted ? AppColors.success : AppColors.warning)
+              : dotColor.withValues(alpha: 0.15),
+          border: Border.all(
+            color: (isCompleted || isSkipped)
+                ? (isCompleted ? AppColors.success : AppColors.warning)
+                : dotColor,
+            width: 1.5,
           ),
-          SliverToBoxAdapter(child: _buildDaySelector()),
-          const SliverToBoxAdapter(child: Divider(height: 1)),
-          if (filtered.isEmpty)
-            _buildEmptyState()
-          else
-            SliverList(
-              delegate: SliverChildBuilderDelegate(
-                (context, index) => _buildRoutineCard(filtered[index]),
-                childCount: filtered.length,
-              ),
-            ),
-          SliverToBoxAdapter(child: SizedBox(height: 80 + MediaQuery.of(context).viewPadding.bottom)),
-        ],
-      ),
-      floatingActionButton: FloatingActionButton(
-        onPressed: _addRoutine,
-        child: const Icon(Icons.add),
+        ),
+        child: (isCompleted || isSkipped)
+            ? Icon(isSkipped ? Icons.close : Icons.check, color: AppColors.white, size: 14)
+            : null,
       ),
     );
   }

@@ -57,6 +57,8 @@ class CharacterController {
     required String appPackageName,
     required String appLabel,
     required String routineName,
+    int? nagIntensity,
+    bool showOverlay = true,
   }) async {
     if (_isBusy) return;
     _isBusy = true;
@@ -75,44 +77,34 @@ class CharacterController {
         currentApp: appLabel,
         routineName: routineName,
         distractionCount: _distractionCount,
-        intensity: _settings.nagIntensity,
+        intensity: nagIntensity ?? _settings.nagIntensity,
       );
 
-      // Prepare initial state
-      _updateState(CharacterState(
-        emotion: response.emotion,
-        gesture: 'crawling_in',
-        text: response.text,
-        characterId: _characterId,
-      ));
+      if (showOverlay) {
+        // Show character overlay + voice
+        _updateState(CharacterState(
+          emotion: response.emotion,
+          gesture: 'crawling_in',
+          text: response.text,
+          characterId: _characterId,
+        ));
+        await _overlay.show(initialData: jsonEncode(_currentState.toJson()));
+        await Future.delayed(const Duration(milliseconds: 800));
 
-      // Show overlay with initial data
-      await _overlay.show(
-        initialData: jsonEncode(_currentState.toJson()),
-      );
-
-      // Wait for entrance animation
-      await Future.delayed(const Duration(milliseconds: 800));
-
-      // Switch to response gesture
-      _updateState(CharacterState(
-        emotion: response.emotion,
-        gesture: response.gesture,
-        text: response.text,
-        characterId: _characterId,
-      ));
-
-      // Send updated state to overlay
-      await _overlay.sendToOverlay(jsonEncode(_currentState.toJson()));
-
-      // Speak the text
-      await _speak(response.text);
-
-      // Stay visible for a moment after speaking
-      await Future.delayed(const Duration(seconds: 2));
-
-      // Hide overlay after distraction nag completes
-      await _overlay.hide();
+        _updateState(CharacterState(
+          emotion: response.emotion,
+          gesture: response.gesture,
+          text: response.text,
+          characterId: _characterId,
+        ));
+        await _overlay.sendToOverlay(jsonEncode(_currentState.toJson()));
+        await _speak(response.text);
+        await Future.delayed(const Duration(seconds: 2));
+        await _overlay.hide();
+      } else {
+        // Voice only — no overlay
+        await _speak(response.text);
+      }
     } catch (e) {
       print('Character controller error: $e');
       // Ensure overlay is hidden on error

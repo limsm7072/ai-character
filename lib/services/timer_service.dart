@@ -35,6 +35,14 @@ class TimerService {
     return preset;
   }
 
+  Future<void> update(TimerPreset preset) async {
+    final idx = _presets.indexWhere((p) => p.id == preset.id);
+    if (idx >= 0) {
+      _presets[idx] = preset;
+      await _save();
+    }
+  }
+
   Future<void> delete(String id) async {
     _presets.removeWhere((p) => p.id == id);
     await _save();

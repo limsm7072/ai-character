@@ -8,6 +8,9 @@ class Alarm {
   List<bool> activeDays; // [Mon, Tue, Wed, Thu, Fri, Sat, Sun]
   bool isEnabled;
   DateTime createdAt;
+  int? notifBaseId; // Persistent sequential ID for notifications (assigned by AlarmService)
+  bool shakeToDisable;
+  int shakeCount; // number of shakes to dismiss
 
   Alarm({
     required this.id,
@@ -17,12 +20,16 @@ class Alarm {
     List<bool>? activeDays,
     this.isEnabled = true,
     DateTime? createdAt,
+    this.notifBaseId,
+    this.shakeToDisable = false,
+    this.shakeCount = 10,
   })  : activeDays = activeDays ?? List.filled(7, false),
         createdAt = createdAt ?? DateTime.now();
 
   bool get isOneTime => activeDays.every((d) => !d);
 
-  int get notificationId => 10000 + (id.hashCode.abs() % 9000);
+  /// Notification ID in range 10000-19999. Each alarm uses 8 consecutive IDs.
+  int get notificationId => 10000 + (notifBaseId ?? 0) * 8;
 
   String get timeString =>
       '${hour.toString().padLeft(2, '0')}:${minute.toString().padLeft(2, '0')}';
@@ -50,6 +57,9 @@ class Alarm {
         'activeDays': activeDays,
         'isEnabled': isEnabled,
         'createdAt': createdAt.toIso8601String(),
+        if (notifBaseId != null) 'notifBaseId': notifBaseId,
+        'shakeToDisable': shakeToDisable,
+        'shakeCount': shakeCount,
       };
 
   factory Alarm.fromJson(Map<String, dynamic> json) => Alarm(
@@ -60,6 +70,9 @@ class Alarm {
         activeDays: (json['activeDays'] as List).cast<bool>(),
         isEnabled: json['isEnabled'] ?? true,
         createdAt: DateTime.parse(json['createdAt']),
+        notifBaseId: json['notifBaseId'] as int?,
+        shakeToDisable: json['shakeToDisable'] ?? false,
+        shakeCount: json['shakeCount'] ?? 10,
       );
 
   static String encode(List<Alarm> alarms) =>

@@ -8,8 +8,18 @@ class Routine {
   List<String> blockedApps; // package names to block
   List<bool> activeDays; // Mon-Sun (7 elements)
   bool isEnabled;
-  bool notifyOnStart;
-  int? timerMinutes; // optional linked timer duration
+  bool isAllDay; // true = no specific time (free routine)
+  String? linkedAlarmId; // alarm ID for start notification
+  String? linkedTimerId; // timer preset ID for focus timer
+
+  // Per-routine overlay settings
+  bool overlayEnabled;
+  bool appLockEnabled;
+
+  // Per-routine nag settings
+  bool nagEnabled;
+  int nagFrequency; // seconds between nags
+  int nagIntensity; // 0=soft, 1=normal, 2=strict
 
   Routine({
     required this.id,
@@ -21,8 +31,14 @@ class Routine {
     this.blockedApps = const [],
     List<bool>? activeDays,
     this.isEnabled = true,
-    this.notifyOnStart = false,
-    this.timerMinutes,
+    this.isAllDay = false,
+    this.linkedAlarmId,
+    this.linkedTimerId,
+    this.overlayEnabled = true,
+    this.appLockEnabled = false,
+    this.nagEnabled = true,
+    this.nagFrequency = 30,
+    this.nagIntensity = 1,
   }) : activeDays = activeDays ?? List.filled(7, true);
 
   /// Check if this routine is active on a specific date (considering startDate and activeDays).
@@ -32,7 +48,6 @@ class Routine {
       final parts = startDate!.split('-');
       if (parts.length == 3) {
         final sd = DateTime(int.parse(parts[0]), int.parse(parts[1]), int.parse(parts[2]));
-        // Compare date-only (strip time components)
         final dateOnly = DateTime(date.year, date.month, date.day);
         if (dateOnly.isBefore(sd)) return false;
       }
@@ -46,6 +61,8 @@ class Routine {
     final now = DateTime.now();
     if (!isActiveOnDate(now)) return false;
 
+    if (isAllDay) return true;
+
     final nowMinutes = now.hour * 60 + now.minute;
     final startMinutes = startTime.hour * 60 + startTime.minute;
     final endMinutes = endTime.hour * 60 + endTime.minute;
@@ -53,7 +70,6 @@ class Routine {
     if (startMinutes <= endMinutes) {
       return nowMinutes >= startMinutes && nowMinutes <= endMinutes;
     } else {
-      // Overnight routine (e.g., 22:00 - 06:00)
       return nowMinutes >= startMinutes || nowMinutes <= endMinutes;
     }
   }
@@ -70,8 +86,14 @@ class Routine {
         'blockedApps': blockedApps,
         'activeDays': activeDays,
         'isEnabled': isEnabled,
-        'notifyOnStart': notifyOnStart,
-        'timerMinutes': timerMinutes,
+        'isAllDay': isAllDay,
+        'linkedAlarmId': linkedAlarmId,
+        'linkedTimerId': linkedTimerId,
+        'overlayEnabled': overlayEnabled,
+        'appLockEnabled': appLockEnabled,
+        'nagEnabled': nagEnabled,
+        'nagFrequency': nagFrequency,
+        'nagIntensity': nagIntensity,
       };
 
   factory Routine.fromJson(Map<String, dynamic> json) => Routine(
@@ -90,8 +112,14 @@ class Routine {
         blockedApps: List<String>.from(json['blockedApps'] ?? []),
         activeDays: List<bool>.from(json['activeDays'] ?? List.filled(7, true)),
         isEnabled: json['isEnabled'] ?? true,
-        notifyOnStart: json['notifyOnStart'] ?? false,
-        timerMinutes: json['timerMinutes'],
+        isAllDay: json['isAllDay'] ?? false,
+        linkedAlarmId: json['linkedAlarmId'] as String?,
+        linkedTimerId: json['linkedTimerId'] as String?,
+        overlayEnabled: json['overlayEnabled'] ?? true,
+        appLockEnabled: json['appLockEnabled'] ?? false,
+        nagEnabled: json['nagEnabled'] ?? true,
+        nagFrequency: json['nagFrequency'] ?? 30,
+        nagIntensity: json['nagIntensity'] ?? 1,
       );
 }
 

@@ -90,6 +90,7 @@ class _WeatherScreenState extends State<WeatherScreen> {
     final theme = Theme.of(context);
     return Scaffold(
       appBar: AppBar(
+        automaticallyImplyLeading: false,
         title: const Text('날씨'),
         actions: [
           if (_loading)

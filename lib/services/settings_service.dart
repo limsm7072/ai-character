@@ -86,7 +86,7 @@ class SettingsService {
 
   // Dashboard order
   static const _dashboardOrderKey = 'dashboard_order';
-  static const defaultDashboardOrder = ['recommend', 'news', 'weather', 'routine', 'todo', 'card', 'calendar', 'stats', 'alarm', 'timer', 'memo', 'dday'];
+  static const defaultDashboardOrder = ['recommend', 'news', 'weather', 'routine', 'todo', 'diary', 'card', 'calendar', 'stats', 'alarm', 'timer', 'memo', 'dday'];
 
   List<String> get dashboardOrder {
     final raw = _prefs.getString(_dashboardOrderKey);
@@ -118,7 +118,7 @@ class SettingsService {
   // Dashboard section sizes (true=large, false=small)
   static const _dashboardSizesKey = 'dashboard_sizes';
   // All sections default to large
-  static const _defaultLargeSections = {'recommend', 'news', 'weather', 'routine', 'todo', 'card', 'calendar', 'stats', 'alarm', 'timer', 'memo', 'dday'};
+  static const _defaultLargeSections = {'recommend', 'news', 'weather', 'routine', 'todo', 'diary', 'card', 'calendar', 'stats', 'alarm', 'timer', 'memo', 'dday'};
 
   bool isDashboardSectionLarge(String id) {
     final raw = _prefs.getString(_dashboardSizesKey);
@@ -205,5 +205,24 @@ class SettingsService {
   bool get overlayCharacterVisible => _prefs.getBool(_overlayCharacterVisibleKey) ?? true;
   Future<void> setOverlayCharacterVisible(bool v) =>
       _prefs.setBool(_overlayCharacterVisibleKey, v);
+
+  // Past routine check (auto-ask about unchecked past routines)
+  static const _pastRoutineCheckKey = 'past_routine_check_enabled';
+
+  bool get pastRoutineCheckEnabled => _prefs.getBool(_pastRoutineCheckKey) ?? true;
+  Future<void> setPastRoutineCheckEnabled(bool v) =>
+      _prefs.setBool(_pastRoutineCheckKey, v);
+
+  // Alarm: shake to disable
+  static const _shakeToDisableKey = 'shake_to_disable';
+  static const _shakeCountKey = 'shake_count';
+
+  bool get shakeToDisable => _prefs.getBool(_shakeToDisableKey) ?? true;
+  Future<void> setShakeToDisable(bool v) =>
+      _prefs.setBool(_shakeToDisableKey, v);
+
+  int get shakeCount => _prefs.getInt(_shakeCountKey) ?? 10;
+  Future<void> setShakeCount(int v) =>
+      _prefs.setInt(_shakeCountKey, v);
 
 }

@@ -43,6 +43,16 @@ class _CalendarScreenState extends State<CalendarScreen> {
   String _formatDate(DateTime dt) =>
       '${dt.year}-${dt.month.toString().padLeft(2, '0')}-${dt.day.toString().padLeft(2, '0')}';
 
+  bool get _isToday => isSameDay(_selectedDay, DateTime.now());
+
+  void _goToToday() {
+    final today = DateTime.now();
+    setState(() {
+      _selectedDay = today;
+      _focusedDay = today;
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
@@ -53,8 +63,16 @@ class _CalendarScreenState extends State<CalendarScreen> {
 
     return Scaffold(
       appBar: AppBar(
+        automaticallyImplyLeading: false,
         title: const Text('캘린더'),
         actions: [
+          // Go to today
+          if (!_isToday)
+            TextButton.icon(
+              onPressed: _goToToday,
+              icon: const Icon(Icons.today, size: 18),
+              label: const Text('오늘'),
+            ),
           // Lunar toggle
           IconButton(
             icon: Icon(

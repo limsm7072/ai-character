@@ -22,31 +22,250 @@ enum AmbientSound {
   String get typeKey => name; // white, pink, brown, rain, ocean
 }
 
-// ─── Timer Screen ─────────────────────────────────────
+// ─── Timer List Screen ───────────────────────────────
 
 class TimerScreen extends StatefulWidget {
   final TimerService timerService;
-  final int? initialDurationSeconds;
-  final String? initialLabel;
 
-  const TimerScreen({
-    super.key,
-    required this.timerService,
-    this.initialDurationSeconds,
-    this.initialLabel,
-  });
+  const TimerScreen({super.key, required this.timerService});
 
   @override
   State<TimerScreen> createState() => _TimerScreenState();
 }
 
-class _TimerScreenState extends State<TimerScreen> with SingleTickerProviderStateMixin {
+class _TimerScreenState extends State<TimerScreen> {
+  List<TimerPreset> _presets = [];
+
+  @override
+  void initState() {
+    super.initState();
+    _load();
+  }
+
+  void _load() {
+    setState(() => _presets = widget.timerService.getAll().toList());
+  }
+
+  void _addPreset() {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (_) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(vertical: 8),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                width: 40, height: 4,
+                decoration: BoxDecoration(color: AppColors.grey300, borderRadius: BorderRadius.circular(2)),
+              ),
+              const SizedBox(height: 8),
+              ListTile(
+                leading: const Icon(Icons.timer),
+                title: const Text('카운트다운 타이머'),
+                subtitle: const Text('설정한 시간만큼 카운트다운'),
+                onTap: () {
+                  Navigator.pop(context);
+                  _showEditSheet(isPomodoro: false);
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.local_cafe),
+                title: const Text('뽀모도로 타이머'),
+                subtitle: const Text('집중/휴식 반복 타이머'),
+                onTap: () {
+                  Navigator.pop(context);
+                  _showEditSheet(isPomodoro: true);
+                },
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showEditSheet({TimerPreset? existing, bool isPomodoro = false}) {
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      ),
+      builder: (_) => _PresetEditSheet(
+        existing: existing,
+        isPomodoro: existing?.isPomodoro ?? isPomodoro,
+        onSave: (preset) async {
+          if (existing != null) {
+            await widget.timerService.update(preset);
+          } else {
+            await widget.timerService.add(preset);
+          }
+          if (mounted) _load();
+        },
+        onDelete: existing != null ? () async {
+          await widget.timerService.delete(existing.id);
+          if (mounted) _load();
+        } : null,
+      ),
+    );
+  }
+
+  void _openTimer(TimerPreset preset) {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => TimerRunScreen(
+          timerService: widget.timerService,
+          initialPreset: preset,
+        ),
+      ),
+    ).then((_) {
+      if (mounted) _load();
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final countdown = _presets.where((p) => !p.isPomodoro).toList();
+    final pomodoro = _presets.where((p) => p.isPomodoro).toList();
+    final bottomPad = MediaQuery.of(context).viewPadding.bottom;
+
+    return Scaffold(
+      appBar: AppBar(
+        automaticallyImplyLeading: false,
+        title: const Text('타이머'),
+      ),
+      body: _presets.isEmpty
+          ? Center(
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.timer_off, size: 64, color: AppColors.grey400),
+                  const SizedBox(height: 16),
+                  Text('타이머를 추가해보세요!',
+                      style: TextStyle(fontSize: 18, color: AppColors.grey600)),
+                  const SizedBox(height: 8),
+                  Text('+ 버튼을 눌러 새 타이머를 만드세요',
+                      style: TextStyle(fontSize: 13, color: AppColors.grey500)),
+                ],
+              ),
+            )
+          : ListView(
+              padding: EdgeInsets.only(top: 8, bottom: 80 + bottomPad),
+              children: [
+                if (countdown.isNotEmpty) ...[
+                  _sectionHeader('카운트다운'),
+                  ...countdown.map((p) => _buildPresetCard(p)),
+                ],
+                if (pomodoro.isNotEmpty) ...[
+                  _sectionHeader('뽀모도로'),
+                  ...pomodoro.map((p) => _buildPresetCard(p)),
+                ],
+              ],
+            ),
+      floatingActionButton: Padding(
+        padding: EdgeInsets.only(bottom: bottomPad),
+        child: FloatingActionButton(
+          onPressed: _addPreset,
+          child: const Icon(Icons.add),
+        ),
+      ),
+    );
+  }
+
+  Widget _sectionHeader(String title) {
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(16, 12, 16, 4),
+      child: Text(
+        title,
+        style: TextStyle(
+          fontSize: 13,
+          fontWeight: FontWeight.bold,
+          color: Theme.of(context).colorScheme.primary,
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPresetCard(TimerPreset preset) {
+    final theme = Theme.of(context);
+
+    return Card(
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+      child: InkWell(
+        borderRadius: BorderRadius.circular(12),
+        onTap: () => _openTimer(preset),
+        onLongPress: () => _showEditSheet(existing: preset),
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 12, 16, 12),
+          child: Row(
+            children: [
+              Icon(
+                preset.isPomodoro ? Icons.local_cafe : Icons.timer,
+                color: preset.isPomodoro ? AppColors.accent : theme.colorScheme.primary,
+                size: 28,
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      preset.isPomodoro
+                          ? '${preset.focusMinutes}/${preset.breakMinutes}분 × ${preset.targetSessions}세션'
+                          : preset.durationString,
+                      style: const TextStyle(fontSize: 22, fontWeight: FontWeight.w300),
+                    ),
+                    Text(
+                      preset.label,
+                      style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w500),
+                    ),
+                  ],
+                ),
+              ),
+              IconButton(
+                icon: Icon(Icons.edit_outlined, size: 20, color: AppColors.grey500),
+                onPressed: () => _showEditSheet(existing: preset),
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+// ─── Timer Run Screen ────────────────────────────────
+
+class TimerRunScreen extends StatefulWidget {
+  final TimerService timerService;
+  final TimerPreset? initialPreset;
+
+  const TimerRunScreen({
+    super.key,
+    required this.timerService,
+    this.initialPreset,
+  });
+
+  @override
+  State<TimerRunScreen> createState() => _TimerRunScreenState();
+}
+
+class _TimerRunScreenState extends State<TimerRunScreen> with SingleTickerProviderStateMixin {
   late TabController _tabController;
 
   @override
   void initState() {
     super.initState();
-    _tabController = TabController(length: 2, vsync: this);
+    final startPomodoro = widget.initialPreset?.isPomodoro == true;
+    _tabController = TabController(
+      length: 2, vsync: this,
+      initialIndex: startPomodoro ? 1 : 0,
+    );
   }
 
   @override
@@ -55,11 +274,46 @@ class _TimerScreenState extends State<TimerScreen> with SingleTickerProviderStat
     super.dispose();
   }
 
+  void _confirmDelete() {
+    final preset = widget.initialPreset;
+    if (preset == null) return;
+    showDialog(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('타이머 삭제'),
+        content: Text("'${preset.label}' 타이머를 삭제할까요?"),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context), child: const Text('취소')),
+          TextButton(
+            onPressed: () async {
+              await widget.timerService.delete(preset.id);
+              if (mounted) {
+                Navigator.pop(context); // dialog
+                Navigator.pop(context); // back to list
+              }
+            },
+            child: Text('삭제', style: TextStyle(color: AppColors.error)),
+          ),
+        ],
+      ),
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
+    final preset = widget.initialPreset;
+    final canDelete = preset != null;
     return Scaffold(
       appBar: AppBar(
-        title: const Text('타이머'),
+        title: Text(preset?.label ?? '타이머'),
+        actions: [
+          if (canDelete)
+            IconButton(
+              icon: const Icon(Icons.delete_outline),
+              tooltip: '삭제',
+              onPressed: _confirmDelete,
+            ),
+        ],
         bottom: TabBar(
           controller: _tabController,
           tabs: const [
@@ -68,18 +322,20 @@ class _TimerScreenState extends State<TimerScreen> with SingleTickerProviderStat
           ],
         ),
       ),
-      body: SafeArea(
-        child: TabBarView(
-          controller: _tabController,
-          children: [
-            _CountdownTab(
-              timerService: widget.timerService,
-              initialDurationSeconds: widget.initialDurationSeconds,
-              initialLabel: widget.initialLabel,
-            ),
-            _PomodoroTab(timerService: widget.timerService),
-          ],
-        ),
+      body: TabBarView(
+        controller: _tabController,
+        children: [
+          _CountdownTab(
+            timerService: widget.timerService,
+            initialDurationSeconds: preset?.isPomodoro == false ? preset?.durationSeconds : null,
+          ),
+          _PomodoroTab(
+            timerService: widget.timerService,
+            initialFocusMinutes: preset?.isPomodoro == true ? preset?.focusMinutes : null,
+            initialBreakMinutes: preset?.isPomodoro == true ? preset?.breakMinutes : null,
+            initialTargetSessions: preset?.isPomodoro == true ? preset?.targetSessions : null,
+          ),
+        ],
       ),
     );
   }
@@ -249,17 +505,218 @@ class _AmbientSoundControls extends StatelessWidget {
   }
 }
 
+// ─── Preset Edit Bottom Sheet ──────────────────────────
+
+class _PresetEditSheet extends StatefulWidget {
+  final TimerPreset? existing;
+  final bool isPomodoro;
+  final Future<void> Function(TimerPreset) onSave;
+  final Future<void> Function()? onDelete;
+
+  const _PresetEditSheet({
+    this.existing,
+    required this.isPomodoro,
+    required this.onSave,
+    this.onDelete,
+  });
+
+  @override
+  State<_PresetEditSheet> createState() => _PresetEditSheetState();
+}
+
+class _PresetEditSheetState extends State<_PresetEditSheet> {
+  late TextEditingController _labelCtrl;
+  int _hours = 0;
+  int _minutes = 5;
+  int _focusMin = 25;
+  int _breakMin = 5;
+  int _sessions = 4;
+
+  @override
+  void initState() {
+    super.initState();
+    final e = widget.existing;
+    if (e != null) {
+      _labelCtrl = TextEditingController(text: e.label);
+      if (e.isPomodoro) {
+        _focusMin = e.focusMinutes;
+        _breakMin = e.breakMinutes;
+        _sessions = e.targetSessions;
+      } else {
+        _hours = e.durationSeconds ~/ 3600;
+        _minutes = (e.durationSeconds % 3600) ~/ 60;
+      }
+    } else {
+      _labelCtrl = TextEditingController();
+    }
+  }
+
+  @override
+  void dispose() {
+    _labelCtrl.dispose();
+    super.dispose();
+  }
+
+  Future<void> _save() async {
+    final label = _labelCtrl.text.trim();
+    if (label.isEmpty) return;
+
+    int duration;
+    if (widget.isPomodoro) {
+      duration = _focusMin * 60;
+    } else {
+      duration = _hours * 3600 + _minutes * 60;
+      if (duration <= 0) return;
+    }
+
+    final preset = TimerPreset(
+      id: widget.existing?.id ?? DateTime.now().millisecondsSinceEpoch.toString(),
+      label: label,
+      durationSeconds: duration,
+      isPomodoro: widget.isPomodoro,
+      focusMinutes: _focusMin,
+      breakMinutes: _breakMin,
+      targetSessions: _sessions,
+      createdAt: widget.existing?.createdAt,
+    );
+
+    await widget.onSave(preset);
+    if (mounted) Navigator.pop(context);
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final isEdit = widget.existing != null;
+    return Padding(
+      padding: EdgeInsets.only(
+        left: 24, right: 24, top: 16,
+        bottom: MediaQuery.of(context).viewInsets.bottom + 16,
+      ),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Center(child: Container(
+            width: 40, height: 4,
+            decoration: BoxDecoration(color: AppColors.grey300, borderRadius: BorderRadius.circular(2)),
+          )),
+          const SizedBox(height: 16),
+          Text(
+            isEdit
+                ? (widget.isPomodoro ? '뽀모도로 프리셋 수정' : '타이머 프리셋 수정')
+                : (widget.isPomodoro ? '뽀모도로 프리셋 추가' : '타이머 프리셋 추가'),
+            style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+          ),
+          const SizedBox(height: 16),
+          TextField(
+            controller: _labelCtrl,
+            decoration: const InputDecoration(
+              labelText: '이름',
+              hintText: '예: 영어 공부',
+              border: OutlineInputBorder(),
+            ),
+          ),
+          const SizedBox(height: 16),
+          if (!widget.isPomodoro) ...[
+            Row(
+              children: [
+                Expanded(
+                  child: DropdownButtonFormField<int>(
+                    value: _hours,
+                    decoration: const InputDecoration(
+                      labelText: '시간',
+                      border: OutlineInputBorder(),
+                      contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                    ),
+                    items: List.generate(24, (i) => DropdownMenuItem(value: i, child: Text('$i'))),
+                    onChanged: (v) => setState(() => _hours = v ?? 0),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: DropdownButtonFormField<int>(
+                    value: _minutes,
+                    decoration: const InputDecoration(
+                      labelText: '분',
+                      border: OutlineInputBorder(),
+                      contentPadding: EdgeInsets.symmetric(horizontal: 12, vertical: 12),
+                    ),
+                    items: List.generate(60, (i) => DropdownMenuItem(value: i, child: Text('$i'))),
+                    onChanged: (v) => setState(() => _minutes = v ?? 0),
+                  ),
+                ),
+              ],
+            ),
+          ] else ...[
+            _settingRow('집중', _focusMin, 1, 120, (v) => setState(() => _focusMin = v), '분'),
+            _settingRow('휴식', _breakMin, 1, 60, (v) => setState(() => _breakMin = v), '분'),
+            _settingRow('세션', _sessions, 1, 20, (v) => setState(() => _sessions = v), '회'),
+          ],
+          const SizedBox(height: 20),
+          Row(
+            children: [
+              if (isEdit && widget.onDelete != null) ...[
+                Expanded(
+                  child: OutlinedButton(
+                    onPressed: () async {
+                      await widget.onDelete!();
+                      if (mounted) Navigator.pop(context);
+                    },
+                    style: OutlinedButton.styleFrom(foregroundColor: AppColors.error),
+                    child: const Text('삭제'),
+                  ),
+                ),
+                const SizedBox(width: 12),
+              ],
+              Expanded(
+                flex: 2,
+                child: FilledButton(onPressed: _save, child: Text(isEdit ? '수정' : '추가')),
+              ),
+            ],
+          ),
+          const SizedBox(height: 8),
+        ],
+      ),
+    );
+  }
+
+  Widget _settingRow(String label, int value, int min, int max, ValueChanged<int> onChanged, String suffix) {
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 4),
+      child: Row(
+        children: [
+          SizedBox(width: 48, child: Text(label, style: const TextStyle(fontSize: 15))),
+          IconButton(
+            icon: const Icon(Icons.remove_circle_outline, size: 22),
+            onPressed: value > min ? () => onChanged(value - 1) : null,
+            visualDensity: VisualDensity.compact,
+          ),
+          SizedBox(
+            width: 40,
+            child: Text('$value', textAlign: TextAlign.center,
+                style: const TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+          ),
+          IconButton(
+            icon: const Icon(Icons.add_circle_outline, size: 22),
+            onPressed: value < max ? () => onChanged(value + 1) : null,
+            visualDensity: VisualDensity.compact,
+          ),
+          Text(suffix, style: TextStyle(fontSize: 13, color: AppColors.grey600)),
+        ],
+      ),
+    );
+  }
+}
+
 // ─── Countdown Tab ─────────────────────────────────────
 
 class _CountdownTab extends StatefulWidget {
   final TimerService timerService;
   final int? initialDurationSeconds;
-  final String? initialLabel;
 
   const _CountdownTab({
     required this.timerService,
     this.initialDurationSeconds,
-    this.initialLabel,
   });
 
   @override
@@ -274,7 +731,6 @@ class _CountdownTabState extends State<_CountdownTab> {
   int _remaining = 0;
   bool _isRunning = false;
   bool _isAlarmPlaying = false;
-  String _selectedPresetId = '';
 
   // Ambient sound
   AmbientSound _ambientSound = AmbientSound.none;
@@ -341,17 +797,6 @@ class _CountdownTabState extends State<_CountdownTab> {
     }
   }
 
-  void _selectPreset(TimerPreset preset) {
-    if (preset.isPomodoro) return;
-    _timer?.cancel();
-    setState(() {
-      _selectedPresetId = preset.id;
-      _totalSeconds = preset.durationSeconds;
-      _remaining = preset.durationSeconds;
-      _isRunning = false;
-    });
-  }
-
   void _startPause() {
     if (_isAlarmPlaying) {
       _stopAlarm();
@@ -404,15 +849,15 @@ class _CountdownTabState extends State<_CountdownTab> {
 
   @override
   Widget build(BuildContext context) {
-    final presets = widget.timerService.getAll().where((p) => !p.isPomodoro).toList();
     final progress = _totalSeconds > 0 ? _remaining / _totalSeconds : 0.0;
+    final bottomPad = MediaQuery.of(context).viewPadding.bottom;
 
     return LayoutBuilder(
       builder: (context, constraints) {
         final circleSize = (constraints.maxWidth * 0.5).clamp(160.0, 220.0);
 
         return SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(vertical: 16),
+          padding: EdgeInsets.only(top: 16, bottom: 16 + bottomPad),
           child: ConstrainedBox(
             constraints: BoxConstraints(minHeight: constraints.maxHeight),
             child: Column(
@@ -471,48 +916,6 @@ class _CountdownTabState extends State<_CountdownTab> {
                     onVolumeChanged: _onAmbientVolumeChanged,
                   ),
                 ),
-                const SizedBox(height: 20),
-                // Presets
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: Wrap(
-                    spacing: 8,
-                    runSpacing: 8,
-                    alignment: WrapAlignment.center,
-                    children: [
-                      ...presets.map((p) => GestureDetector(
-                            onLongPress: () async {
-                              if (p.id.startsWith('default_')) return;
-                              final confirm = await showDialog<bool>(
-                                context: context,
-                                builder: (_) => AlertDialog(
-                                  title: const Text('프리셋 삭제'),
-                                  content: Text('"${p.label}" 프리셋을 삭제할까요?'),
-                                  actions: [
-                                    TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('취소')),
-                                    TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('삭제')),
-                                  ],
-                                ),
-                              );
-                              if (confirm == true) {
-                                await widget.timerService.delete(p.id);
-                                setState(() {});
-                              }
-                            },
-                            child: ChoiceChip(
-                              label: Text(p.label),
-                              selected: _selectedPresetId == p.id,
-                              onSelected: (_) => _selectPreset(p),
-                            ),
-                          )),
-                      ActionChip(
-                        avatar: const Icon(Icons.add, size: 18),
-                        label: const Text('추가'),
-                        onPressed: _addPreset,
-                      ),
-                    ],
-                  ),
-                ),
                 const SizedBox(height: 16),
               ],
             ),
@@ -522,48 +925,22 @@ class _CountdownTabState extends State<_CountdownTab> {
     );
   }
 
-  Future<void> _addPreset() async {
-    final controller = TextEditingController();
-    final result = await showDialog<int>(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: const Text('커스텀 프리셋'),
-        content: TextField(
-          controller: controller,
-          keyboardType: TextInputType.number,
-          decoration: const InputDecoration(
-            labelText: '시간 (분)',
-            border: OutlineInputBorder(),
-          ),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context), child: const Text('취소')),
-          TextButton(
-            onPressed: () {
-              final mins = int.tryParse(controller.text);
-              if (mins != null && mins > 0) Navigator.pop(context, mins);
-            },
-            child: const Text('추가'),
-          ),
-        ],
-      ),
-    );
-    controller.dispose();
-    if (result == null) return;
-    await widget.timerService.add(TimerPreset(
-      id: DateTime.now().millisecondsSinceEpoch.toString(),
-      label: '${result}분',
-      durationSeconds: result * 60,
-    ));
-    setState(() {});
-  }
 }
 
 // ─── Pomodoro Tab ──────────────────────────────────────
 
 class _PomodoroTab extends StatefulWidget {
   final TimerService timerService;
-  const _PomodoroTab({required this.timerService});
+  final int? initialFocusMinutes;
+  final int? initialBreakMinutes;
+  final int? initialTargetSessions;
+
+  const _PomodoroTab({
+    required this.timerService,
+    this.initialFocusMinutes,
+    this.initialBreakMinutes,
+    this.initialTargetSessions,
+  });
 
   @override
   State<_PomodoroTab> createState() => _PomodoroTabState();
@@ -589,6 +966,9 @@ class _PomodoroTabState extends State<_PomodoroTab> {
   @override
   void initState() {
     super.initState();
+    if (widget.initialFocusMinutes != null) _focusMinutes = widget.initialFocusMinutes!;
+    if (widget.initialBreakMinutes != null) _breakMinutes = widget.initialBreakMinutes!;
+    if (widget.initialTargetSessions != null) _targetSessions = widget.initialTargetSessions!;
     _remaining = _focusMinutes * 60;
   }
 
@@ -770,13 +1150,14 @@ class _PomodoroTabState extends State<_PomodoroTab> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final progress = _totalPhaseSeconds > 0 ? _remaining / _totalPhaseSeconds : 0.0;
+    final bottomPad = MediaQuery.of(context).viewPadding.bottom;
 
     return LayoutBuilder(
       builder: (context, constraints) {
         final circleSize = (constraints.maxWidth * 0.5).clamp(160.0, 220.0);
 
         return SingleChildScrollView(
-          padding: const EdgeInsets.symmetric(vertical: 16),
+          padding: EdgeInsets.only(top: 16, bottom: 16 + bottomPad),
           child: ConstrainedBox(
             constraints: BoxConstraints(minHeight: constraints.maxHeight),
             child: Column(
@@ -858,7 +1239,7 @@ class _PomodoroTabState extends State<_PomodoroTab> {
                     onVolumeChanged: _onAmbientVolumeChanged,
                   ),
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: 16),
                 // Settings - compact layout
                 Card(
                   margin: const EdgeInsets.symmetric(horizontal: 24),

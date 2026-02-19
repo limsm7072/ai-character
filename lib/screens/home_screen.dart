@@ -16,6 +16,8 @@ import '../services/news_service.dart';
 import '../services/card_service.dart';
 import '../services/weather_service.dart';
 import '../services/recommendation_service.dart';
+import '../services/routine_group_service.dart';
+import '../services/diary_service.dart';
 import 'dashboard_screen.dart';
 import 'settings_screen.dart';
 import 'character_chat_screen.dart';
@@ -38,6 +40,8 @@ class HomeScreen extends StatefulWidget {
   final CardService cardService;
   final WeatherService weatherService;
   final RecommendationService recommendationService;
+  final RoutineGroupService routineGroupService;
+  final DiaryService diaryService;
   final VoidCallback? onCompletionUnchecked;
 
   const HomeScreen({
@@ -59,6 +63,8 @@ class HomeScreen extends StatefulWidget {
     required this.cardService,
     required this.weatherService,
     required this.recommendationService,
+    required this.routineGroupService,
+    required this.diaryService,
     this.onCompletionUnchecked,
   });
 
@@ -95,6 +101,8 @@ class _HomeScreenState extends State<HomeScreen> {
             cardService: widget.cardService,
             weatherService: widget.weatherService,
             recommendationService: widget.recommendationService,
+            routineGroupService: widget.routineGroupService,
+            diaryService: widget.diaryService,
             onCompletionUnchecked: widget.onCompletionUnchecked,
           ),
           CharacterChatScreen(

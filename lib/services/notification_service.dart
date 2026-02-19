@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:timezone/timezone.dart' as tz;
 import 'package:timezone/data/latest_all.dart' as tz_data;
@@ -17,14 +18,18 @@ class NotificationService {
   static const int timerBase = 20000;
   static const int routineBase = 30000;
 
-  // Channel IDs
-  static const String alarmChannelId = 'alarm_channel';
+  // Channel IDs (versioned — bump to force Android to recreate with correct settings)
+  static const String alarmChannelId = 'alarm_channel_v2';
   static const String timerChannelId = 'timer_channel';
   static const String routineChannelId = 'routine_channel';
 
   bool get isInitialized => _initialized;
   bool get canScheduleExact => _canScheduleExact;
   bool get hasNotificationPermission => _hasNotificationPermission;
+
+  /// Stream for notification tap payloads
+  static final StreamController<String> onNotificationTap =
+      StreamController<String>.broadcast();
 
   Future<void> initialize() async {
     if (_initialized) return;
@@ -35,11 +40,34 @@ class NotificationService {
     const androidSettings = AndroidInitializationSettings('@mipmap/ic_launcher');
     const initSettings = InitializationSettings(android: androidSettings);
 
-    await _plugin.initialize(initSettings);
+    await _plugin.initialize(
+      initSettings,
+      onDidReceiveNotificationResponse: _onNotificationResponse,
+    );
     _initialized = true;
+
+    // Check if app was opened from a notification
+    final launchDetails = await _plugin.getNotificationAppLaunchDetails();
+    if (launchDetails?.didNotificationLaunchApp == true) {
+      final payload = launchDetails!.notificationResponse?.payload;
+      if (payload != null && payload.isNotEmpty) {
+        // Delay to allow main.dart to set up listener
+        Future.delayed(const Duration(milliseconds: 500), () {
+          onNotificationTap.add(payload);
+        });
+      }
+    }
 
     // Check current permission status (don't request yet)
     await _checkPermissions();
+  }
+
+  static void _onNotificationResponse(NotificationResponse response) {
+    final payload = response.payload;
+    if (payload != null && payload.isNotEmpty) {
+      print('[NotificationService] notification tapped, payload=$payload');
+      onNotificationTap.add(payload);
+    }
   }
 
   /// Check current permission status without requesting.
@@ -50,7 +78,8 @@ class NotificationService {
       if (android == null) return;
 
       _canScheduleExact = await android.canScheduleExactNotifications() ?? false;
-      print('[NotificationService] canScheduleExact=$_canScheduleExact');
+      _hasNotificationPermission = await android.areNotificationsEnabled() ?? false;
+      print('[NotificationService] canScheduleExact=$_canScheduleExact, hasNotificationPermission=$_hasNotificationPermission');
     } catch (e) {
       print('[NotificationService] _checkPermissions failed: $e');
     }
@@ -106,6 +135,7 @@ class NotificationService {
     required DateTime dateTime,
     String channelId = alarmChannelId,
     String channelName = '알람',
+    String? payload,
   }) async {
     if (!_initialized) {
       print('[NotificationService] scheduleExact: not initialized');
@@ -114,12 +144,15 @@ class NotificationService {
     try {
       final scheduledDate = tz.TZDateTime.from(dateTime, tz.local);
       if (scheduledDate.isBefore(tz.TZDateTime.now(tz.local))) {
-        print('[NotificationService] scheduleExact: time is in the past');
+        print('[NotificationService] scheduleExact: time is in the past, skipping id=$id');
         return;
       }
 
-      // Re-check exact alarm capability before scheduling
+      // Re-check permissions before scheduling
       await _checkPermissions();
+      if (!_hasNotificationPermission) {
+        print('[NotificationService] WARNING: notification permission not granted, alarm may not show');
+      }
 
       await _plugin.zonedSchedule(
         id,
@@ -136,12 +169,14 @@ class NotificationService {
             enableVibration: true,
             fullScreenIntent: true,
             audioAttributesUsage: AudioAttributesUsage.alarm,
+            category: AndroidNotificationCategory.alarm,
           ),
         ),
         androidScheduleMode: _scheduleMode,
         uiLocalNotificationDateInterpretation: UILocalNotificationDateInterpretation.absoluteTime,
+        payload: payload,
       );
-      print('[NotificationService] scheduleExact: id=$id at $scheduledDate mode=$_scheduleMode');
+      print('[NotificationService] scheduleExact: id=$id at $scheduledDate mode=$_scheduleMode payload=$payload');
     } catch (e) {
       print('[NotificationService] scheduleExact failed: $e');
     }
@@ -156,6 +191,7 @@ class NotificationService {
     required int dayOfWeek, // 1=Monday ... 7=Sunday (ISO)
     String channelId = alarmChannelId,
     String channelName = '알람',
+    String? payload,
   }) async {
     if (!_initialized) {
       print('[NotificationService] scheduleWeekly: not initialized');
@@ -165,8 +201,11 @@ class NotificationService {
       final now = tz.TZDateTime.now(tz.local);
       var scheduled = _nextDayOfWeek(now, dayOfWeek, hour, minute);
 
-      // Re-check exact alarm capability before scheduling
+      // Re-check permissions before scheduling
       await _checkPermissions();
+      if (!_hasNotificationPermission) {
+        print('[NotificationService] WARNING: notification permission not granted, alarm may not show');
+      }
 
       await _plugin.zonedSchedule(
         id,
@@ -183,13 +222,15 @@ class NotificationService {
             enableVibration: true,
             fullScreenIntent: true,
             audioAttributesUsage: AudioAttributesUsage.alarm,
+            category: AndroidNotificationCategory.alarm,
           ),
         ),
         androidScheduleMode: _scheduleMode,
         uiLocalNotificationDateInterpretation: UILocalNotificationDateInterpretation.absoluteTime,
         matchDateTimeComponents: DateTimeComponents.dayOfWeekAndTime,
+        payload: payload,
       );
-      print('[NotificationService] scheduleWeekly: id=$id day=$dayOfWeek $hour:$minute mode=$_scheduleMode');
+      print('[NotificationService] scheduleWeekly: id=$id day=$dayOfWeek $hour:$minute mode=$_scheduleMode payload=$payload');
     } catch (e) {
       print('[NotificationService] scheduleWeekly failed: $e');
     }

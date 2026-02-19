@@ -64,6 +64,7 @@ class _NewsScreenState extends State<NewsScreen> {
     final theme = Theme.of(context);
     return Scaffold(
       appBar: AppBar(
+        automaticallyImplyLeading: false,
         title: const Text('뉴스'),
         actions: [
           if (_loading)

@@ -44,28 +44,6 @@ class _AlarmScreenState extends State<AlarmScreen> {
     if (result == true) _load();
   }
 
-  Future<void> _deleteAlarm(Alarm alarm) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (_) => AlertDialog(
-        title: const Text('알람 삭제'),
-        content: Text('"${alarm.label}" 알람을 삭제할까요?'),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('취소')),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            style: TextButton.styleFrom(foregroundColor: AppColors.error),
-            child: const Text('삭제'),
-          ),
-        ],
-      ),
-    );
-    if (confirmed == true) {
-      await widget.alarmService.delete(alarm.id);
-      _load();
-    }
-  }
-
   Future<void> _toggleAlarm(Alarm alarm) async {
     if (!alarm.isEnabled) {
       // Enabling an alarm — ensure permissions
@@ -91,6 +69,29 @@ class _AlarmScreenState extends State<AlarmScreen> {
           }
           if (ctx.mounted) Navigator.pop(ctx, true);
         },
+        onDelete: existing != null
+            ? () async {
+                final confirmed = await showDialog<bool>(
+                  context: ctx,
+                  builder: (_) => AlertDialog(
+                    title: const Text('알람 삭제'),
+                    content: Text('"${existing.label}" 알람을 삭제할까요?'),
+                    actions: [
+                      TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('취소')),
+                      TextButton(
+                        onPressed: () => Navigator.pop(context, true),
+                        style: TextButton.styleFrom(foregroundColor: AppColors.error),
+                        child: const Text('삭제'),
+                      ),
+                    ],
+                  ),
+                );
+                if (confirmed == true) {
+                  await widget.alarmService.delete(existing.id);
+                  if (ctx.mounted) Navigator.pop(ctx, true);
+                }
+              }
+            : null,
       ),
     );
   }
@@ -102,7 +103,7 @@ class _AlarmScreenState extends State<AlarmScreen> {
     final bottomPad = MediaQuery.of(context).viewPadding.bottom;
 
     return Scaffold(
-      appBar: AppBar(title: const Text('알람')),
+      appBar: AppBar(automaticallyImplyLeading: false, title: const Text('알람')),
       body: _alarms.isEmpty
           ? Center(
               child: Column(
@@ -162,15 +163,14 @@ class _AlarmScreenState extends State<AlarmScreen> {
         borderRadius: BorderRadius.circular(12),
         onTap: () => _editAlarm(alarm),
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+          padding: const EdgeInsets.fromLTRB(16, 8, 8, 12),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
-              // Row 1: Time + Switch + Delete
+              // Row 1: Time (left) + Switch (right)
               Row(
                 crossAxisAlignment: CrossAxisAlignment.center,
                 children: [
-                  // AM/PM label
                   Text(
                     alarm.hour < 12 ? '오전' : '오후',
                     style: TextStyle(
@@ -180,8 +180,7 @@ class _AlarmScreenState extends State<AlarmScreen> {
                     ),
                   ),
                   const SizedBox(width: 4),
-                  // Time — Flexible to prevent overflow
-                  Flexible(
+                  Expanded(
                     child: Text(
                       _format12Hour(alarm.hour, alarm.minute),
                       style: TextStyle(
@@ -193,43 +192,29 @@ class _AlarmScreenState extends State<AlarmScreen> {
                       overflow: TextOverflow.ellipsis,
                     ),
                   ),
-                  const SizedBox(width: 4),
-                  // Delete button
-                  SizedBox(
-                    width: 36,
-                    height: 36,
-                    child: IconButton(
-                      padding: EdgeInsets.zero,
-                      icon: Icon(Icons.delete_outline, color: AppColors.grey400, size: 20),
-                      onPressed: () => _deleteAlarm(alarm),
-                      tooltip: '삭제',
-                    ),
-                  ),
-                  // Toggle switch
                   Switch(
                     value: isOn,
                     onChanged: (_) => _toggleAlarm(alarm),
                   ),
                 ],
               ),
-              // Row 2: Label + Days
-              Row(
-                children: [
-                  Expanded(
-                    child: Text(
-                      alarm.label,
-                      style: TextStyle(
-                        fontSize: 15,
-                        color: isOn ? null : AppColors.grey500,
-                        fontWeight: FontWeight.w500,
-                      ),
-                      overflow: TextOverflow.ellipsis,
-                    ),
+              // Row 2: Label
+              Padding(
+                padding: const EdgeInsets.only(right: 8),
+                child: Text(
+                  alarm.label,
+                  style: TextStyle(
+                    fontSize: 15,
+                    color: isOn ? null : AppColors.grey500,
+                    fontWeight: FontWeight.w500,
                   ),
-                  const SizedBox(width: 8),
-                  // Day chips
-                  _buildDayIndicator(alarm),
-                ],
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+              // Row 3: Day indicator (left-aligned)
+              Padding(
+                padding: const EdgeInsets.only(top: 4, right: 8),
+                child: _buildDayIndicator(alarm),
               ),
             ],
           ),
@@ -298,8 +283,9 @@ class _AlarmScreenState extends State<AlarmScreen> {
 class _AlarmEditSheet extends StatefulWidget {
   final Alarm? alarm;
   final Future<void> Function(Alarm) onSave;
+  final Future<void> Function()? onDelete;
 
-  const _AlarmEditSheet({this.alarm, required this.onSave});
+  const _AlarmEditSheet({this.alarm, required this.onSave, this.onDelete});
 
   @override
   State<_AlarmEditSheet> createState() => _AlarmEditSheetState();
@@ -311,6 +297,8 @@ class _AlarmEditSheetState extends State<_AlarmEditSheet> {
   late TextEditingController _labelController;
   late List<bool> _activeDays;
   bool _saving = false;
+  bool _shakeToDisable = false;
+  int _shakeCount = 10;
   static const _dayLabels = ['월', '화', '수', '목', '금', '토', '일'];
 
   @override
@@ -321,6 +309,8 @@ class _AlarmEditSheetState extends State<_AlarmEditSheet> {
     _minute = widget.alarm?.minute ?? ((now.minute ~/ 5 + 1) * 5) % 60;
     _labelController = TextEditingController(text: widget.alarm?.label ?? '');
     _activeDays = widget.alarm?.activeDays.toList() ?? List.filled(7, false);
+    _shakeToDisable = widget.alarm?.shakeToDisable ?? false;
+    _shakeCount = widget.alarm?.shakeCount ?? 10;
   }
 
   @override
@@ -499,6 +489,54 @@ class _AlarmEditSheetState extends State<_AlarmEditSheet> {
                 ),
               ],
             ),
+            const SizedBox(height: 20),
+            // Shake to disable
+            SwitchListTile(
+              title: const Text('흔들어서 알람 끄기'),
+              subtitle: const Text('기기를 흔들어야 알람이 꺼집니다'),
+              value: _shakeToDisable,
+              contentPadding: EdgeInsets.zero,
+              onChanged: (v) => setState(() => _shakeToDisable = v),
+            ),
+            if (_shakeToDisable)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 8),
+                child: Row(
+                  children: [
+                    Text('흔들기 횟수', style: TextStyle(fontSize: 14, color: AppColors.grey700)),
+                    const Spacer(),
+                    DropdownButton<int>(
+                      value: _shakeCount,
+                      items: const [
+                        DropdownMenuItem(value: 5, child: Text('5회')),
+                        DropdownMenuItem(value: 10, child: Text('10회')),
+                        DropdownMenuItem(value: 15, child: Text('15회')),
+                        DropdownMenuItem(value: 20, child: Text('20회')),
+                        DropdownMenuItem(value: 30, child: Text('30회')),
+                      ],
+                      onChanged: (v) {
+                        if (v != null) setState(() => _shakeCount = v);
+                      },
+                    ),
+                  ],
+                ),
+              ),
+            if (widget.onDelete != null) ...[
+              const SizedBox(height: 24),
+              SizedBox(
+                width: double.infinity,
+                child: OutlinedButton.icon(
+                  onPressed: widget.onDelete,
+                  icon: const Icon(Icons.delete_outline, size: 18),
+                  label: const Text('알람 삭제'),
+                  style: OutlinedButton.styleFrom(
+                    foregroundColor: AppColors.error,
+                    side: BorderSide(color: AppColors.error.withValues(alpha: 0.3)),
+                    padding: const EdgeInsets.symmetric(vertical: 12),
+                  ),
+                ),
+              ),
+            ],
             const SizedBox(height: 16),
           ],
         ),
@@ -539,6 +577,8 @@ class _AlarmEditSheetState extends State<_AlarmEditSheet> {
       hour: _hour,
       minute: _minute,
       activeDays: _activeDays,
+      shakeToDisable: _shakeToDisable,
+      shakeCount: _shakeCount,
     ));
   }
 }

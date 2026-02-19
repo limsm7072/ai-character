@@ -378,6 +378,26 @@ class AgentTools {
           requiredProperties: ['seconds'],
         ),
       ),
+      FunctionDeclaration(
+        'set_shake_to_disable',
+        '흔들어서 알람 끄기 기능을 켜거나 끕니다',
+        Schema(SchemaType.object,
+          properties: {
+            'enabled': Schema(SchemaType.boolean, description: 'true=켜기, false=끄기'),
+          },
+          requiredProperties: ['enabled'],
+        ),
+      ),
+      FunctionDeclaration(
+        'set_shake_count',
+        '알람을 끄기 위한 흔들기 횟수를 설정합니다',
+        Schema(SchemaType.object,
+          properties: {
+            'count': Schema(SchemaType.integer, description: '흔들기 횟수. 가능한 값: 5, 10, 15, 20, 30'),
+          },
+          requiredProperties: ['count'],
+        ),
+      ),
     ]),
   ];
 
@@ -447,6 +467,10 @@ class AgentTools {
         return await _setCharacterName(call.args);
       case 'set_routine_check_interval':
         return await _setRoutineCheckInterval(call.args);
+      case 'set_shake_to_disable':
+        return await _setShakeToDisable(call.args);
+      case 'set_shake_count':
+        return await _setShakeCount(call.args);
       default:
         return {'error': '알 수 없는 함수: ${call.name}'};
     }
@@ -893,6 +917,8 @@ class AgentTools {
       'overlay_character_visible': s.overlayCharacterVisible,
       'character_name': s.characterName,
       'routine_check_interval_seconds': s.routineCheckInterval,
+      'shake_to_disable': s.shakeToDisable,
+      'shake_count': s.shakeCount,
     };
   }
 
@@ -1013,6 +1039,32 @@ class AgentTools {
       }
       await settingsService!.setRoutineCheckInterval(seconds);
       return {'success': true, 'routine_check_interval_seconds': seconds};
+    } catch (e) {
+      return {'success': false, 'error': e.toString()};
+    }
+  }
+
+  Future<Map<String, Object?>> _setShakeToDisable(Map<String, Object?> args) async {
+    if (settingsService == null) return {'error': 'SettingsService not available'};
+    try {
+      final enabled = args['enabled'] as bool;
+      await settingsService!.setShakeToDisable(enabled);
+      return {'success': true, 'shake_to_disable': enabled};
+    } catch (e) {
+      return {'success': false, 'error': e.toString()};
+    }
+  }
+
+  Future<Map<String, Object?>> _setShakeCount(Map<String, Object?> args) async {
+    if (settingsService == null) return {'error': 'SettingsService not available'};
+    try {
+      final count = (args['count'] as num).toInt();
+      const valid = [5, 10, 15, 20, 30];
+      if (!valid.contains(count)) {
+        return {'success': false, 'error': '유효하지 않은 값: $count회', 'available': valid};
+      }
+      await settingsService!.setShakeCount(count);
+      return {'success': true, 'shake_count': count};
     } catch (e) {
       return {'success': false, 'error': e.toString()};
     }

@@ -14,6 +14,8 @@ import '../services/news_service.dart';
 import '../services/card_service.dart';
 import '../services/weather_service.dart';
 import '../services/recommendation_service.dart';
+import '../services/routine_group_service.dart';
+import '../services/diary_service.dart';
 import '../models/weather_data.dart';
 import '../models/recommendation_data.dart';
 import 'package:geolocator/geolocator.dart';
@@ -29,6 +31,7 @@ import 'card_screen.dart';
 import 'weather_screen.dart';
 import 'news_screen.dart';
 import 'recommendation_screen.dart';
+import 'diary_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
   final RoutineService routineService;
@@ -46,6 +49,8 @@ class DashboardScreen extends StatefulWidget {
   final CardService cardService;
   final WeatherService weatherService;
   final RecommendationService recommendationService;
+  final RoutineGroupService routineGroupService;
+  final DiaryService diaryService;
   final VoidCallback? onCompletionUnchecked;
 
   const DashboardScreen({
@@ -65,6 +70,8 @@ class DashboardScreen extends StatefulWidget {
     required this.cardService,
     required this.weatherService,
     required this.recommendationService,
+    required this.routineGroupService,
+    required this.diaryService,
     this.onCompletionUnchecked,
   });
 
@@ -162,6 +169,8 @@ class DashboardScreenState extends State<DashboardScreen> {
         return large ? _buildAlarmLarge(context) : _buildAlarmSmall(context);
       case 'timer':
         return large ? _buildTimerLarge(context) : _buildTimerSmall(context);
+      case 'diary':
+        return large ? _buildDiaryLarge(context) : _buildDiarySmall(context);
       case 'memo':
         return large ? _buildMemoLarge(context) : _buildMemoSmall(context);
       case 'dday':
@@ -416,7 +425,9 @@ class DashboardScreenState extends State<DashboardScreen> {
         routineService: widget.routineService,
         completionService: widget.completionService,
         settingsService: widget.settingsService,
+        alarmService: widget.alarmService,
         timerService: widget.timerService,
+        routineGroupService: widget.routineGroupService,
         onCompletionUnchecked: widget.onCompletionUnchecked,
       )),
       child: Container(
@@ -453,7 +464,9 @@ class DashboardScreenState extends State<DashboardScreen> {
         routineService: widget.routineService,
         completionService: widget.completionService,
         settingsService: widget.settingsService,
+        alarmService: widget.alarmService,
         timerService: widget.timerService,
+        routineGroupService: widget.routineGroupService,
         onCompletionUnchecked: widget.onCompletionUnchecked,
       )),
       child: Container(
@@ -967,6 +980,136 @@ class DashboardScreenState extends State<DashboardScreen> {
                   ),
                 )).toList(),
               ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ─── 일기장 ──────────────────────────────────────
+
+  Widget _buildDiarySmall(BuildContext context) {
+    final theme = Theme.of(context);
+    final todayStr = _formatDate(DateTime.now());
+    final todayDiary = widget.diaryService.getByDate(todayStr);
+    final streak = widget.diaryService.getCurrentStreak();
+    return InkWell(
+      borderRadius: BorderRadius.circular(12),
+      onTap: () => _push(context, DiaryScreen(diaryService: widget.diaryService)),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        decoration: BoxDecoration(
+          color: theme.colorScheme.primaryContainer.withValues(alpha: 0.15),
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Row(
+          children: [
+            Icon(Icons.auto_stories, size: 18, color: theme.colorScheme.primary),
+            const SizedBox(width: 10),
+            Text('일기장', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: theme.colorScheme.onSurface)),
+            const Spacer(),
+            if (todayDiary != null)
+              Text(todayDiary.moodEmoji, style: const TextStyle(fontSize: 16))
+            else
+              Text('미작성', style: TextStyle(fontSize: 12, color: theme.colorScheme.onSurfaceVariant)),
+            if (streak > 0) ...[
+              const SizedBox(width: 6),
+              Text('🔥$streak', style: TextStyle(fontSize: 12, color: theme.colorScheme.primary, fontWeight: FontWeight.w600)),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildDiaryLarge(BuildContext context) {
+    final theme = Theme.of(context);
+    final now = DateTime.now();
+    final todayStr = _formatDate(now);
+    final todayDiary = widget.diaryService.getByDate(todayStr);
+    final recent = widget.diaryService.getRecent(limit: 3);
+    final streak = widget.diaryService.getCurrentStreak();
+
+    return InkWell(
+      borderRadius: BorderRadius.circular(16),
+      onTap: () => _push(context, DiaryScreen(diaryService: widget.diaryService)),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: theme.colorScheme.primaryContainer.withValues(alpha: 0.15),
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.auto_stories, size: 20, color: theme.colorScheme.primary),
+                const SizedBox(width: 12),
+                Text('일기장', style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600)),
+                const Spacer(),
+                if (streak > 0)
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                    decoration: BoxDecoration(
+                      color: theme.colorScheme.primary.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: Text('🔥 $streak일 연속', style: TextStyle(fontSize: 11, color: theme.colorScheme.primary, fontWeight: FontWeight.w600)),
+                  ),
+              ],
+            ),
+            const SizedBox(height: 10),
+            // Today status
+            if (todayDiary != null)
+              Row(
+                children: [
+                  Text(todayDiary.moodEmoji, style: const TextStyle(fontSize: 20)),
+                  const SizedBox(width: 8),
+                  Expanded(
+                    child: Text(
+                      todayDiary.content.isNotEmpty ? todayDiary.content : '오늘의 일기',
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                      style: TextStyle(fontSize: 13, color: theme.colorScheme.onSurface),
+                    ),
+                  ),
+                ],
+              )
+            else
+              Row(
+                children: [
+                  Icon(Icons.edit_note, size: 18, color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.5)),
+                  const SizedBox(width: 8),
+                  Text('오늘의 일기를 작성해보세요', style: TextStyle(fontSize: 13, color: theme.colorScheme.onSurfaceVariant)),
+                ],
+              ),
+            // Recent entries
+            if (recent.length > 1) ...[
+              const SizedBox(height: 8),
+              ...recent.skip(todayDiary != null ? 1 : 0).take(2).map((d) {
+                final parts = d.date.split('-');
+                return Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: Row(
+                    children: [
+                      Text(d.moodEmoji, style: const TextStyle(fontSize: 12)),
+                      const SizedBox(width: 6),
+                      Text('${parts[1]}/${parts[2]}', style: TextStyle(fontSize: 11, color: theme.colorScheme.onSurfaceVariant, fontWeight: FontWeight.w600)),
+                      const SizedBox(width: 6),
+                      Expanded(
+                        child: Text(
+                          d.content.isNotEmpty ? d.content : '(내용 없음)',
+                          maxLines: 1,
+                          overflow: TextOverflow.ellipsis,
+                          style: TextStyle(fontSize: 12, color: theme.colorScheme.onSurfaceVariant),
+                        ),
+                      ),
+                    ],
+                  ),
+                );
+              }),
             ],
           ],
         ),

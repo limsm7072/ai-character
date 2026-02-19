@@ -1,15 +1,26 @@
 import 'package:flutter/material.dart';
 import '../models/routine.dart' as model;
+import '../models/alarm.dart';
+import '../models/timer_preset.dart';
 import '../services/routine_service.dart';
+import '../services/alarm_service.dart';
+import '../services/timer_service.dart';
+import '../services/routine_group_service.dart';
 import '../theme/app_colors.dart';
 
 class RoutineEditScreen extends StatefulWidget {
   final RoutineService routineService;
+  final AlarmService? alarmService;
+  final TimerService? timerService;
+  final RoutineGroupService? routineGroupService;
   final model.Routine? routine;
 
   const RoutineEditScreen({
     super.key,
     required this.routineService,
+    this.alarmService,
+    this.timerService,
+    this.routineGroupService,
     this.routine,
   });
 
@@ -27,10 +38,16 @@ class _RoutineEditScreenState extends State<RoutineEditScreen> {
   late List<String> _blockedApps;
   DateTime _startDate = DateTime.now();
   bool _isEditing = false;
-  bool _notifyOnStart = false;
-  bool _timerEnabled = false;
-  int _timerMinutes = 25;
+  bool _isEnabled = true;
+  bool _isAllDay = false;
+  String? _linkedAlarmId;
+  String? _linkedTimerId;
   bool _blockAppsEnabled = false;
+  bool _overlayEnabled = true;
+  bool _appLockEnabled = false;
+  bool _nagEnabled = true;
+  int _nagFrequency = 30;
+  int _nagIntensity = 1;
 
   // Common app packages for selection
   static const _commonApps = <String, String>{
@@ -59,10 +76,16 @@ class _RoutineEditScreenState extends State<RoutineEditScreen> {
     _endTime = r?.endTime ?? const model.TimeOfDay(hour: 10, minute: 0);
     _activeDays = r?.activeDays.toList() ?? List.filled(7, true);
     _blockedApps = r?.blockedApps.toList() ?? [];
-    _notifyOnStart = r?.notifyOnStart ?? false;
-    _timerEnabled = r?.timerMinutes != null;
-    _timerMinutes = r?.timerMinutes ?? 25;
+    _isEnabled = r?.isEnabled ?? true;
+    _isAllDay = r?.isAllDay ?? false;
+    _linkedAlarmId = r?.linkedAlarmId;
+    _linkedTimerId = r?.linkedTimerId;
     _blockAppsEnabled = _blockedApps.isNotEmpty;
+    _overlayEnabled = r?.overlayEnabled ?? true;
+    _appLockEnabled = r?.appLockEnabled ?? false;
+    _nagEnabled = r?.nagEnabled ?? true;
+    _nagFrequency = r?.nagFrequency ?? 30;
+    _nagIntensity = r?.nagIntensity ?? 1;
     if (r?.startDate != null) {
       final parts = r!.startDate!.split('-');
       if (parts.length == 3) {
@@ -154,102 +177,66 @@ class _RoutineEditScreenState extends State<RoutineEditScreen> {
                 ),
               ),
             ),
-            const SizedBox(height: 24),
-
-            // Time
-            const Text('시간',
-                style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
-            const SizedBox(height: 8),
-            Row(
-              children: [
-                Expanded(
-                  child: _buildTimePicker('시작', _startTime, (t) {
-                    setState(() => _startTime = t);
-                  }),
-                ),
-                const Padding(
-                  padding: EdgeInsets.symmetric(horizontal: 8),
-                  child: Text('~', style: TextStyle(fontSize: 20)),
-                ),
-                Expanded(
-                  child: _buildTimePicker('종료', _endTime, (t) {
-                    setState(() => _endTime = t);
-                  }),
-                ),
-              ],
-            ),
             const SizedBox(height: 16),
 
-            // Notify on start
+            // Enabled toggle
             SwitchListTile(
-              title: const Text('시작 알림'),
+              title: const Text('활성화'),
               subtitle: Text(
-                '루틴 시작 시간에 알림을 보냅니다',
+                _isEnabled ? '루틴이 켜져 있습니다' : '루틴이 꺼져 있습니다',
                 style: TextStyle(fontSize: 12, color: AppColors.grey600),
               ),
-              value: _notifyOnStart,
-              onChanged: (v) => setState(() => _notifyOnStart = v),
+              value: _isEnabled,
+              onChanged: (v) => setState(() => _isEnabled = v),
               contentPadding: EdgeInsets.zero,
             ),
-            const SizedBox(height: 8),
+            const Divider(),
 
-            // Focus timer
+            // All-day (free) toggle
             SwitchListTile(
-              title: const Text('집중 타이머'),
+              title: const Text('자유 루틴'),
               subtitle: Text(
-                '루틴 목록에서 타이머를 빠르게 실행합니다',
+                _isAllDay ? '시간 제한 없이 자유롭게' : '정해진 시간에 수행',
                 style: TextStyle(fontSize: 12, color: AppColors.grey600),
               ),
-              value: _timerEnabled,
-              onChanged: (v) => setState(() => _timerEnabled = v),
+              value: _isAllDay,
+              onChanged: (v) => setState(() => _isAllDay = v),
               contentPadding: EdgeInsets.zero,
             ),
-            if (_timerEnabled) ...[
+
+            // Time (hidden when all-day)
+            if (!_isAllDay) ...[
+              const SizedBox(height: 8),
+              const Text('시간',
+                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16)),
               const SizedBox(height: 8),
               Row(
                 children: [
-                  const Text('시간: ', style: TextStyle(fontSize: 15)),
-                  const SizedBox(width: 8),
-                  SizedBox(
-                    width: 28, height: 28,
-                    child: IconButton(
-                      padding: EdgeInsets.zero, iconSize: 18,
-                      icon: const Icon(Icons.remove),
-                      onPressed: _timerMinutes > 1
-                          ? () => setState(() => _timerMinutes--)
-                          : null,
-                    ),
+                  Expanded(
+                    child: _buildTimePicker('시작', _startTime, (t) {
+                      setState(() => _startTime = t);
+                    }),
                   ),
-                  SizedBox(
-                    width: 48,
-                    child: Text(
-                      '$_timerMinutes분',
-                      textAlign: TextAlign.center,
-                      style: const TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
-                    ),
+                  const Padding(
+                    padding: EdgeInsets.symmetric(horizontal: 8),
+                    child: Text('~', style: TextStyle(fontSize: 20)),
                   ),
-                  SizedBox(
-                    width: 28, height: 28,
-                    child: IconButton(
-                      padding: EdgeInsets.zero, iconSize: 18,
-                      icon: const Icon(Icons.add),
-                      onPressed: _timerMinutes < 120
-                          ? () => setState(() => _timerMinutes++)
-                          : null,
-                    ),
+                  Expanded(
+                    child: _buildTimePicker('종료', _endTime, (t) {
+                      setState(() => _endTime = t);
+                    }),
                   ),
                 ],
               ),
-              const SizedBox(height: 8),
-              Wrap(
-                spacing: 8,
-                children: [15, 25, 30, 45, 60].map((m) => ChoiceChip(
-                  label: Text('$m분'),
-                  selected: _timerMinutes == m,
-                  onSelected: (_) => setState(() => _timerMinutes = m),
-                )).toList(),
-              ),
+              const SizedBox(height: 16),
+
+              // Linked alarm
+              _buildAlarmSelector(),
             ],
+            const SizedBox(height: 8),
+
+            // Linked timer
+            _buildTimerSelector(),
             const SizedBox(height: 16),
 
             // Active days
@@ -259,23 +246,96 @@ class _RoutineEditScreenState extends State<RoutineEditScreen> {
             _buildDaySelector(),
             const SizedBox(height: 24),
 
-            // Blocked apps
+            // Nag settings
+            const Divider(),
             SwitchListTile(
-              title: const Text('앱 차단'),
+              title: const Text('잔소리'),
               subtitle: Text(
-                _blockAppsEnabled
-                    ? '선택한 앱만 잔소리합니다'
-                    : '끄면 모든 앱에서 잔소리합니다',
+                _nagEnabled ? '딴짓하면 잔소리합니다' : '잔소리를 하지 않습니다',
                 style: TextStyle(fontSize: 12, color: AppColors.grey600),
               ),
-              value: _blockAppsEnabled,
-              onChanged: (v) => setState(() => _blockAppsEnabled = v),
+              value: _nagEnabled,
+              onChanged: (v) => setState(() => _nagEnabled = v),
               contentPadding: EdgeInsets.zero,
             ),
-            if (_blockAppsEnabled) ...[
-              const SizedBox(height: 8),
-              _buildAppSelector(),
+            if (_nagEnabled) ...[
+              // Block mode: all / select
+              Row(
+                children: [
+                  const Expanded(child: Text('차단 범위')),
+                  SegmentedButton<bool>(
+                    segments: const [
+                      ButtonSegment(value: false, label: Text('모두 차단')),
+                      ButtonSegment(value: true, label: Text('선택 차단')),
+                    ],
+                    selected: {_blockAppsEnabled},
+                    onSelectionChanged: (v) => setState(() => _blockAppsEnabled = v.first),
+                    style: ButtonStyle(
+                      visualDensity: VisualDensity.compact,
+                      textStyle: WidgetStatePropertyAll(TextStyle(fontSize: 13)),
+                    ),
+                  ),
+                ],
+              ),
+              if (_blockAppsEnabled) ...[
+                const SizedBox(height: 8),
+                _buildAppSelector(),
+              ],
+              const SizedBox(height: 12),
+              Row(
+                children: [
+                  const Expanded(child: Text('빈도')),
+                  DropdownButton<int>(
+                    value: _nagFrequency,
+                    items: const [
+                      DropdownMenuItem(value: 5, child: Text('5초')),
+                      DropdownMenuItem(value: 15, child: Text('15초')),
+                      DropdownMenuItem(value: 30, child: Text('30초')),
+                      DropdownMenuItem(value: 60, child: Text('1분')),
+                      DropdownMenuItem(value: 120, child: Text('2분')),
+                      DropdownMenuItem(value: 300, child: Text('5분')),
+                    ],
+                    onChanged: (v) { if (v != null) setState(() => _nagFrequency = v); },
+                  ),
+                ],
+              ),
+              Row(
+                children: [
+                  const Expanded(child: Text('강도')),
+                  DropdownButton<int>(
+                    value: _nagIntensity,
+                    items: const [
+                      DropdownMenuItem(value: 0, child: Text('부드럽게')),
+                      DropdownMenuItem(value: 1, child: Text('보통')),
+                      DropdownMenuItem(value: 2, child: Text('엄격하게')),
+                    ],
+                    onChanged: (v) { if (v != null) setState(() => _nagIntensity = v); },
+                  ),
+                ],
+              ),
+              // Overlay (under nag — only when nag is ON)
+              SwitchListTile(
+                title: const Text('오버레이'),
+                subtitle: Text(
+                  _overlayEnabled ? '캐릭터가 화면에 나타납니다' : '소리로만 잔소리합니다',
+                  style: TextStyle(fontSize: 12, color: AppColors.grey600),
+                ),
+                value: _overlayEnabled,
+                onChanged: (v) => setState(() => _overlayEnabled = v),
+                contentPadding: EdgeInsets.zero,
+              ),
             ],
+            const SizedBox(height: 8),
+
+            // App lock (independent)
+            const Divider(),
+            SwitchListTile(
+              title: const Text('앱 잠금'),
+              subtitle: const Text('차단된 앱을 강제로 닫습니다'),
+              value: _appLockEnabled,
+              onChanged: (v) => setState(() => _appLockEnabled = v),
+              contentPadding: EdgeInsets.zero,
+            ),
             const SizedBox(height: 32),
 
             // Save button
@@ -336,6 +396,58 @@ class _RoutineEditScreenState extends State<RoutineEditScreen> {
     );
   }
 
+  Widget _buildAlarmSelector() {
+    final alarms = widget.alarmService?.getAll() ?? [];
+    // Validate linked alarm still exists
+    if (_linkedAlarmId != null && !alarms.any((a) => a.id == _linkedAlarmId)) {
+      _linkedAlarmId = null;
+    }
+    return Row(
+      children: [
+        const Icon(Icons.alarm, size: 20),
+        const SizedBox(width: 8),
+        const Expanded(child: Text('시작 알림')),
+        DropdownButton<String>(
+          value: _linkedAlarmId ?? '',
+          items: [
+            const DropdownMenuItem(value: '', child: Text('없음')),
+            ...alarms.map((a) => DropdownMenuItem(
+              value: a.id,
+              child: Text('${a.label} (${a.timeString})'),
+            )),
+          ],
+          onChanged: (v) => setState(() => _linkedAlarmId = (v == null || v.isEmpty) ? null : v),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildTimerSelector() {
+    final presets = widget.timerService?.getAll() ?? [];
+    // Validate linked timer still exists
+    if (_linkedTimerId != null && !presets.any((p) => p.id == _linkedTimerId)) {
+      _linkedTimerId = null;
+    }
+    return Row(
+      children: [
+        const Icon(Icons.timer, size: 20),
+        const SizedBox(width: 8),
+        const Expanded(child: Text('집중 타이머')),
+        DropdownButton<String>(
+          value: _linkedTimerId ?? '',
+          items: [
+            const DropdownMenuItem(value: '', child: Text('없음')),
+            ...presets.map((p) => DropdownMenuItem(
+              value: p.id,
+              child: Text('${p.label} (${p.durationString})'),
+            )),
+          ],
+          onChanged: (v) => setState(() => _linkedTimerId = (v == null || v.isEmpty) ? null : v),
+        ),
+      ],
+    );
+  }
+
   Widget _buildAppSelector() {
     return Wrap(
       spacing: 8,
@@ -374,8 +486,15 @@ class _RoutineEditScreenState extends State<RoutineEditScreen> {
       endTime: _endTime,
       blockedApps: _blockAppsEnabled ? _blockedApps : [],
       activeDays: _activeDays,
-      notifyOnStart: _notifyOnStart,
-      timerMinutes: _timerEnabled ? _timerMinutes : null,
+      isEnabled: _isEnabled,
+      isAllDay: _isAllDay,
+      linkedAlarmId: _isAllDay ? null : _linkedAlarmId,
+      linkedTimerId: _linkedTimerId,
+      overlayEnabled: _nagEnabled ? _overlayEnabled : false,
+      appLockEnabled: _appLockEnabled,
+      nagEnabled: _nagEnabled,
+      nagFrequency: _nagFrequency,
+      nagIntensity: _nagIntensity,
     );
 
     if (_isEditing) {
@@ -408,6 +527,7 @@ class _RoutineEditScreenState extends State<RoutineEditScreen> {
 
     if (confirm == true) {
       await widget.routineService.delete(widget.routine!.id);
+      await widget.routineGroupService?.onRoutineDeleted(widget.routine!.id);
       if (mounted) Navigator.pop(context, true);
     }
   }
