@@ -97,6 +97,7 @@ void main() async {
     calendarService: calendarService,
     weatherService: weatherService,
     healthService: healthService,
+    geminiService: geminiService,
   );
 
   final apiKey = settingsService.apiKey;

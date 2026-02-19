@@ -318,6 +318,14 @@ class NagOverlay(private val context: Context) {
         } catch (e: Exception) { Log.e(TAG, "stopFlutterOverlay fail", e) }
     }
 
+    // ── Check if overlay character should be visible ──
+    private var voiceOnlyMode = false
+
+    private fun isCharacterVisible(): Boolean {
+        val prefs = context.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        return prefs.getBoolean("flutter.overlay_character_visible", true)
+    }
+
     // ── Show / Dismiss ──
     fun show(appLabel: String, routineName: String, key: String, intensity: Int = 1) {
         if (isShowing) return
@@ -326,6 +334,8 @@ class NagOverlay(private val context: Context) {
         history.add("user" to getSystemPromptForIntensity())
         history.add("model" to getInitialModelReply())
 
+        voiceOnlyMode = !isCharacterVisible()
+
         handler.post {
             try {
                 requestAudioFocus()
@@ -333,18 +343,26 @@ class NagOverlay(private val context: Context) {
 
                 val initialEmotion = getInitialEmotionForIntensity()
                 val initialText = getMessagesForIntensity().random()
-                writeNagState(initialEmotion, initialText)
-                startFlutterOverlay()
-                isShowing = true
 
-                // Start watchdog to detect user dismissal
-                handler.postDelayed(overlayWatchdog, 1000)
-
-                // Wait for Flutter engine to initialize, then send data + speak
-                handler.postDelayed({
-                    sendToFlutterOverlay(initialEmotion, initialText)
+                if (voiceOnlyMode) {
+                    // Voice only: speak without showing overlay
+                    isShowing = true
                     speak(initialText, initialEmotion)
-                }, 800)
+                } else {
+                    // Full overlay: show character + speak
+                    writeNagState(initialEmotion, initialText)
+                    startFlutterOverlay()
+                    isShowing = true
+
+                    // Start watchdog to detect user dismissal
+                    handler.postDelayed(overlayWatchdog, 1000)
+
+                    // Wait for Flutter engine to initialize, then send data + speak
+                    handler.postDelayed({
+                        sendToFlutterOverlay(initialEmotion, initialText)
+                        speak(initialText, initialEmotion)
+                    }, 800)
+                }
             } catch (e: Exception) { Log.e(TAG, "show fail", e) }
         }
     }
@@ -357,9 +375,11 @@ class NagOverlay(private val context: Context) {
                 tts?.stop()
                 stopMediaPlayer()
                 abandonAudioFocus()
-                stopFlutterOverlay()
+                if (!voiceOnlyMode) {
+                    stopFlutterOverlay()
+                }
                 isShowing = false
-                Log.d(TAG, "Overlay dismissed")
+                Log.d(TAG, "Overlay dismissed (voiceOnly=$voiceOnlyMode)")
             } catch (_: Exception) { isShowing = false }
         }
     }

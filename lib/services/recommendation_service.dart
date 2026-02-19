@@ -11,6 +11,7 @@ import 'memo_service.dart';
 import 'calendar_service.dart';
 import 'weather_service.dart';
 import 'health_service.dart';
+import 'gemini_service.dart';
 
 class RecommendationService {
   static const _cacheKey = 'recommendation_cache';
@@ -26,6 +27,7 @@ class RecommendationService {
   final CalendarService _calendarService;
   final WeatherService _weatherService;
   final HealthService? _healthService;
+  final GeminiService? _geminiService;
 
   RecommendationData? _cached;
 
@@ -39,6 +41,7 @@ class RecommendationService {
     required CalendarService calendarService,
     required WeatherService weatherService,
     HealthService? healthService,
+    GeminiService? geminiService,
   })  : _prefs = prefs,
         _cardService = cardService,
         _routineService = routineService,
@@ -47,7 +50,8 @@ class RecommendationService {
         _memoService = memoService,
         _calendarService = calendarService,
         _weatherService = weatherService,
-        _healthService = healthService {
+        _healthService = healthService,
+        _geminiService = geminiService {
     _loadCache();
   }
 
@@ -70,7 +74,27 @@ class RecommendationService {
     }
 
     final keywords = _extractKeywords();
-    final tips = await _generateLocalTips();
+
+    // 1. AI 팁 시도
+    final aiTips = await _generateAiTips();
+
+    // 2. 로컬 팁 (항상 생성)
+    final localTips = await _generateLocalTips();
+
+    // 3. 병합: AI 성공 시 AI 우선 + 로컬 보충, 실패 시 로컬 100%
+    final List<RecommendationTip> tips;
+    if (aiTips.isNotEmpty) {
+      final aiCategories = aiTips.map((t) => t.category).toSet();
+      final supplementLocal = localTips
+          .where((t) => !aiCategories.contains(t.category))
+          .toList();
+      tips = [...aiTips, ...supplementLocal];
+      print('[RecommendationService] AI tips: ${aiTips.length}, local supplement: ${supplementLocal.length}');
+    } else {
+      tips = localTips;
+    }
+
+    // 4. 키워드 뉴스 (기존 로직)
     final articles = await _fetchKeywordNews(keywords);
 
     final data = RecommendationData(
@@ -147,6 +171,173 @@ class RecommendationService {
     for (final w in cleaned.split(RegExp(r'\s+'))) {
       if (w.length < 2) continue;
       map[w] = (map[w] ?? 0) + 1;
+    }
+  }
+
+  // ─── AI 팁 생성 (Gemini) ────────────────────────
+
+  Future<List<RecommendationTip>> _generateAiTips() async {
+    if (_geminiService == null || !_geminiService.isInitialized) return [];
+    try {
+      final context = await _buildUserContext();
+      if (context.isEmpty) return [];
+      final prompt = _buildRecommendationPrompt(context);
+      final raw = await _geminiService.generateRecommendation(prompt);
+      if (raw == null || raw.isEmpty) return [];
+      return _parseAiTips(raw);
+    } catch (e) {
+      print('[RecommendationService] AI tips error: $e');
+      return [];
+    }
+  }
+
+  Future<String> _buildUserContext() async {
+    final buf = StringBuffer();
+    final now = DateTime.now();
+    final todayStr = '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+    const weekdays = ['월', '화', '수', '목', '금', '토', '일'];
+    buf.writeln('[현재] ${now.month}/${now.day}(${weekdays[now.weekday - 1]}) ${now.hour}:${now.minute.toString().padLeft(2, '0')}');
+
+    // 프로필 (개인정보 제외: 이름/전화/이메일/생년/성별 제외)
+    final card = _cardService.get();
+    if (card != null && !card.isEmpty) {
+      final parts = <String>[];
+      if (card.company.isNotEmpty) parts.add('회사: ${card.company}');
+      if (card.position.isNotEmpty) parts.add('직책: ${card.position}');
+      final loc = [card.province, card.city].where((s) => s.isNotEmpty).join(' ');
+      if (loc.isNotEmpty) parts.add('지역: $loc');
+      final interests = [card.interest1, card.interest2, card.interest3]
+          .where((s) => s.isNotEmpty).toList();
+      if (interests.isNotEmpty) parts.add('관심사: ${interests.join(", ")}');
+      if (parts.isNotEmpty) buf.writeln('[프로필] ${parts.join(", ")}');
+    }
+
+    // 날씨
+    final weather = _weatherService.getCached();
+    if (weather != null) {
+      buf.write('[날씨] ${weather.temperature.round()}°C, 습도 ${weather.humidity}%');
+      if (weather.uvIndex >= 3) buf.write(', UV ${weather.uvIndex.round()}');
+      buf.writeln();
+      if (weather.daily.length > 1) {
+        final tm = weather.daily[1];
+        buf.writeln('[내일날씨] ${tm.description}, ${tm.minTemp.round()}~${tm.maxTemp.round()}°C');
+      }
+    }
+
+    // 건강
+    if (_healthService != null && _healthService.isAuthorized) {
+      try {
+        final steps = await _healthService.getTodaySteps();
+        final sleep = await _healthService.getLastSleep();
+        final hr = await _healthService.getLatestHeartRate();
+        final parts = <String>[];
+        if (steps > 0) parts.add('걸음수: ${_formatNum(steps)}');
+        if (sleep != null) parts.add('수면: ${sleep.total.inHours}시간 ${sleep.total.inMinutes.remainder(60)}분');
+        if (hr != null) parts.add('심박: ${hr.bpm}bpm');
+        if (parts.isNotEmpty) buf.writeln('[건강] ${parts.join(", ")}');
+      } catch (_) {}
+    }
+
+    // 루틴
+    final routines = _routineService.getAll();
+    final active = routines.where((r) => r.isActiveOnDate(now)).toList();
+    if (active.isNotEmpty) {
+      final doneCount = active.where((r) =>
+          _completionService.isCompleted(r.id, todayStr) ||
+          _completionService.isSkipped(r.id, todayStr)).length;
+      buf.writeln('[루틴] 활성 ${active.length}개, 완료 $doneCount개');
+      final remaining = active.where((r) =>
+          !_completionService.isCompleted(r.id, todayStr) &&
+          !_completionService.isSkipped(r.id, todayStr))
+          .take(5).map((r) => r.name).toList();
+      if (remaining.isNotEmpty) buf.writeln('[남은루틴] ${remaining.join(", ")}');
+    }
+
+    // 할일
+    final todos = _todoService.getIncomplete();
+    if (todos.isNotEmpty) {
+      buf.writeln('[미완료할일] ${todos.take(5).map((t) => t.title).join(", ")}${todos.length > 5 ? " 외 ${todos.length - 5}개" : ""}');
+    }
+
+    // 일정
+    final todayEvents = _calendarService.getByDate(todayStr);
+    if (todayEvents.isNotEmpty) {
+      buf.writeln('[오늘일정] ${todayEvents.take(5).map((e) => e.title).join(", ")}');
+    }
+    final upcoming = _calendarService.getUpcoming(limit: 5);
+    final futureEvents = upcoming.where((e) => e.date != todayStr).toList();
+    if (futureEvents.isNotEmpty) {
+      buf.writeln('[다가오는일정] ${futureEvents.take(3).map((e) => "${e.title}(${e.date})").join(", ")}');
+    }
+
+    // D-Day
+    final ddayEvents = _calendarService.getDDayEvents();
+    final nearDdays = <String>[];
+    for (final e in ddayEvents) {
+      final d = DateTime.tryParse(e.date);
+      if (d == null) continue;
+      final diff = d.difference(DateTime(now.year, now.month, now.day)).inDays;
+      if (diff >= 0 && diff <= 7) {
+        nearDdays.add('"${e.title}" D-$diff');
+      }
+    }
+    if (nearDdays.isNotEmpty) buf.writeln('[D-Day] ${nearDdays.take(3).join(", ")}');
+
+    // 메모
+    final memos = _memoService.getAll();
+    if (memos.isNotEmpty) {
+      buf.writeln('[최근메모] ${memos.take(3).map((m) => m.title).join(", ")}');
+    }
+
+    return buf.toString().trim();
+  }
+
+  String _buildRecommendationPrompt(String userContext) {
+    return '''너는 "루나"라는 AI 캐릭터야. 다정하고 밝은 성격으로 반말을 사용해.
+사용자의 데이터를 교차 분석해서 맞춤 인사이트를 만들어줘.
+
+교차 분석 예시:
+- 날씨 + 일정 → "비 오는데 외출 일정 있으니 우산 챙겨!"
+- 수면 부족 + 루틴 → "어젯밤에 잠을 못 잤으니 오늘 루틴은 가볍게~"
+- 할일 많음 + 일정 → "오늘 일정도 있고 할일도 쌓였으니 우선순위 정하자!"
+- 걸음수 + 날씨 → "날씨 좋은데 걸음수 부족해! 산책 어때?"
+
+사용자 데이터:
+$userContext
+
+아래 JSON 배열 형식으로만 응답해. 다른 텍스트 없이 JSON만 출력해.
+3~5개의 팁을 만들어줘. 각 팁은 반드시 서로 다른 데이터를 교차 분석한 내용이어야 해.
+
+category는 다음 중 하나: health, weather, routine, todo, calendar
+iconName은 다음 중 하나: directions_walk, bedtime, nightlight, monitor_heart, emoji_events, umbrella, ac_unit, severe_cold, local_fire_department, wb_sunny, calendar_today, celebration, pending_actions, task_alt, event, alarm_on
+
+[
+  {"iconName": "아이콘", "title": "짧은 제목", "message": "루나 톤의 메시지 (1~2문장)", "category": "카테고리"}
+]''';
+  }
+
+  List<RecommendationTip> _parseAiTips(String raw) {
+    try {
+      // JSON 배열 추출 (마크다운 코드블록 대응)
+      final startIdx = raw.indexOf('[');
+      final endIdx = raw.lastIndexOf(']');
+      if (startIdx < 0 || endIdx < 0 || endIdx <= startIdx) return [];
+      final jsonStr = raw.substring(startIdx, endIdx + 1);
+      final list = jsonDecode(jsonStr) as List;
+
+      final tips = <RecommendationTip>[];
+      for (final item in list) {
+        if (item is! Map<String, dynamic>) continue;
+        final title = (item['title'] as String? ?? '').trim();
+        final message = (item['message'] as String? ?? '').trim();
+        if (title.isEmpty || message.isEmpty) continue;
+        tips.add(RecommendationTip.fromJson(item));
+        if (tips.length >= 5) break;
+      }
+      return tips;
+    } catch (e) {
+      print('[RecommendationService] AI tips parse error: $e');
+      return [];
     }
   }
 

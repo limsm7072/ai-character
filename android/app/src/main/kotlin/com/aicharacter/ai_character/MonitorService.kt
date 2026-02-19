@@ -113,13 +113,29 @@ class MonitorService : Service() {
         return prefs.getString("flutter.gemini_api_key", "") ?: ""
     }
 
+    private fun isOverlayEnabled(): Boolean {
+        val prefs = getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE)
+        return prefs.getBoolean("flutter.overlay_enabled", true)
+    }
+
+    private fun isLauncher(pkg: String): Boolean {
+        return try {
+            val intent = Intent(Intent.ACTION_MAIN).addCategory(Intent.CATEGORY_HOME)
+            val resolveInfo = packageManager.resolveActivity(intent, PackageManager.MATCH_DEFAULT_ONLY)
+            resolveInfo?.activityInfo?.packageName == pkg
+        } catch (_: Exception) { false }
+    }
+
     private fun checkForegroundApp() {
         // If overlay is showing (voice conversation active), skip detection
         // Speech recognizer changes foreground app to Google, which would falsely dismiss
         if (nagOverlay?.isShowing == true) return
 
+        // Check if overlay is enabled in app settings
+        if (!isOverlayEnabled()) return
+
         val foregroundApp = getForegroundApp()
-        if (foregroundApp.isEmpty() || foregroundApp == packageName) {
+        if (foregroundApp.isEmpty() || foregroundApp == packageName || isLauncher(foregroundApp)) {
             endCurrentDistraction()
             lastDetectedApp = ""
             return
