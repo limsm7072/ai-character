@@ -32,6 +32,7 @@ import 'weather_screen.dart';
 import 'news_screen.dart';
 import 'recommendation_screen.dart';
 import 'diary_screen.dart';
+import 'nature_scene_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
   final RoutineService routineService;
@@ -176,6 +177,8 @@ class DashboardScreenState extends State<DashboardScreen> {
         return large ? _buildMemoLarge(context) : _buildMemoSmall(context);
       case 'dday':
         return large ? _buildDDayLarge(context, now) : _buildDDaySmall(context, now);
+      case 'nature':
+        return large ? _buildNatureLarge(context) : _buildNatureSmall(context);
       default:
         return null;
     }
@@ -412,14 +415,24 @@ class DashboardScreenState extends State<DashboardScreen> {
 
   // ─── 루틴 ────────────────────────────────────────
 
+  /// Check if a routine is active for today's work type.
+  /// Returns true if: no work type assigned to today, or routine has no workTypeId, or matches.
+  bool _isRoutineActiveForWorkType(dynamic r, String todayStr) {
+    final todayWtId = widget.calendarService.getDateWorkType(todayStr);
+    if (todayWtId == null) return true; // no work type assigned → all active
+    if (r.workTypeId == null) return true; // routine has no work type → always active
+    return r.workTypeId == todayWtId;
+  }
+
   Widget _buildRoutineSmall(BuildContext context, DateTime now, String todayStr) {
     final theme = Theme.of(context);
     final routines = widget.routineService.getAll();
     final active = routines.where((r) => r.isActiveOnDate(now)).toList();
-    final doneCount = active.where((r) =>
+    final matched = active.where((r) => _isRoutineActiveForWorkType(r, todayStr)).toList();
+    final doneCount = matched.where((r) =>
         widget.completionService.isCompleted(r.id, todayStr) ||
         widget.completionService.isSkipped(r.id, todayStr)).length;
-    final total = active.length;
+    final total = matched.length;
     return InkWell(
       borderRadius: BorderRadius.circular(12),
       onTap: () => _push(context, RoutineListScreen(
@@ -429,6 +442,7 @@ class DashboardScreenState extends State<DashboardScreen> {
         alarmService: widget.alarmService,
         timerService: widget.timerService,
         routineGroupService: widget.routineGroupService,
+        calendarService: widget.calendarService,
         onCompletionUnchecked: widget.onCompletionUnchecked,
       )),
       child: Container(
@@ -454,10 +468,11 @@ class DashboardScreenState extends State<DashboardScreen> {
     final theme = Theme.of(context);
     final routines = widget.routineService.getAll();
     final active = routines.where((r) => r.isActiveOnDate(now)).toList();
-    final doneCount = active.where((r) =>
+    final matched = active.where((r) => _isRoutineActiveForWorkType(r, todayStr)).toList();
+    final doneCount = matched.where((r) =>
         widget.completionService.isCompleted(r.id, todayStr) ||
         widget.completionService.isSkipped(r.id, todayStr)).length;
-    final total = active.length;
+    final total = matched.length;
     final progress = total > 0 ? doneCount / total : 0.0;
     return InkWell(
       borderRadius: BorderRadius.circular(16),
@@ -468,6 +483,7 @@ class DashboardScreenState extends State<DashboardScreen> {
         alarmService: widget.alarmService,
         timerService: widget.timerService,
         routineGroupService: widget.routineGroupService,
+        calendarService: widget.calendarService,
         onCompletionUnchecked: widget.onCompletionUnchecked,
       )),
       child: Container(
@@ -503,21 +519,25 @@ class DashboardScreenState extends State<DashboardScreen> {
                 children: active.take(6).map((r) {
                   final done = widget.completionService.isCompleted(r.id, todayStr) ||
                       widget.completionService.isSkipped(r.id, todayStr);
-                  return Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: done
-                          ? theme.colorScheme.primary.withValues(alpha: 0.12)
-                          : theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.6),
-                      borderRadius: BorderRadius.circular(20),
-                    ),
-                    child: Text(
-                      r.name,
-                      style: TextStyle(
-                        fontSize: 12,
-                        color: done ? theme.colorScheme.primary : theme.colorScheme.onSurfaceVariant,
-                        fontWeight: done ? FontWeight.w600 : FontWeight.normal,
-                        decoration: done ? TextDecoration.lineThrough : null,
+                  final isActiveWt = _isRoutineActiveForWorkType(r, todayStr);
+                  return Opacity(
+                    opacity: isActiveWt ? 1.0 : 0.35,
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: done
+                            ? theme.colorScheme.primary.withValues(alpha: 0.12)
+                            : theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.6),
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      child: Text(
+                        r.name,
+                        style: TextStyle(
+                          fontSize: 12,
+                          color: done ? theme.colorScheme.primary : theme.colorScheme.onSurfaceVariant,
+                          fontWeight: done ? FontWeight.w600 : FontWeight.normal,
+                          decoration: done ? TextDecoration.lineThrough : null,
+                        ),
                       ),
                     ),
                   );
@@ -1261,12 +1281,89 @@ class DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
+  // ─── 자연소리 ──────────────────────────────────────
+
+  Widget _buildNatureSmall(BuildContext context) {
+    final theme = Theme.of(context);
+    return InkWell(
+      borderRadius: BorderRadius.circular(12),
+      onTap: () => _push(context, const NatureSceneScreen()),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        decoration: BoxDecoration(
+          color: theme.colorScheme.surfaceContainerLow,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Row(
+          children: [
+            Icon(Icons.spa, size: 18, color: theme.colorScheme.onSurfaceVariant),
+            const SizedBox(width: 10),
+            Text('자연소리', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: theme.colorScheme.onSurface)),
+            const Spacer(),
+            Text('7개 씬', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: theme.colorScheme.onSurfaceVariant)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildNatureLarge(BuildContext context) {
+    final theme = Theme.of(context);
+    final sceneNames = ['빗소리', '파도', '시냇물', '숲속', '모닥불', '바람', '밤벌레'];
+    final sceneIcons = [Icons.water_drop, Icons.waves, Icons.water, Icons.forest, Icons.local_fire_department, Icons.air, Icons.nightlight_round];
+    return InkWell(
+      borderRadius: BorderRadius.circular(16),
+      onTap: () => _push(context, const NatureSceneScreen()),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: theme.colorScheme.surfaceContainerLow,
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.spa, size: 20, color: theme.colorScheme.onSurfaceVariant),
+                const SizedBox(width: 12),
+                Text('자연소리', style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600)),
+                const Spacer(),
+                Text('${sceneNames.length}개 씬', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: theme.colorScheme.primary)),
+              ],
+            ),
+            const SizedBox(height: 12),
+            Wrap(
+              spacing: 6,
+              runSpacing: 6,
+              children: List.generate(sceneNames.length, (i) => Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: theme.colorScheme.surfaceContainerHighest.withValues(alpha: 0.6),
+                  borderRadius: BorderRadius.circular(20),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(sceneIcons[i], size: 14, color: theme.colorScheme.onSurfaceVariant),
+                    const SizedBox(width: 4),
+                    Text(sceneNames[i], style: TextStyle(fontSize: 12, color: theme.colorScheme.onSurfaceVariant)),
+                  ],
+                ),
+              )),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
   // ─── Layout helpers ───────────────────────────────
 
   static const _defaultLabels = {
     'recommend': '맞춤 정보', 'news': '뉴스', 'weather': '날씨', 'routine': '루틴', 'todo': '할 일',
     'diary': '일기장', 'card': '명함', 'calendar': '캘린더', 'stats': '통계', 'alarm': '알람',
-    'timer': '타이머', 'memo': '메모', 'dday': 'D-Day',
+    'timer': '타이머', 'memo': '메모', 'dday': 'D-Day', 'nature': '자연소리',
   };
 
   String _sectionLabel(String id) {
@@ -1281,7 +1378,7 @@ class DashboardScreenState extends State<DashboardScreen> {
       'card': Icons.badge_outlined, 'calendar': Icons.calendar_month_outlined,
       'stats': Icons.bar_chart_rounded, 'alarm': Icons.alarm_rounded,
       'timer': Icons.timer_outlined, 'memo': Icons.note_alt_outlined,
-      'dday': Icons.event_outlined, 'diary': Icons.auto_stories,
+      'dday': Icons.event_outlined, 'diary': Icons.auto_stories, 'nature': Icons.spa,
     };
     final baseId = SettingsService.sectionBaseId(id);
     return icons[baseId] ?? Icons.widgets_outlined;
