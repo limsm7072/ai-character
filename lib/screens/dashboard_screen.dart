@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import '../services/routine_service.dart';
 import '../services/routine_completion_service.dart';
 import '../services/settings_service.dart';
@@ -16,6 +17,7 @@ import '../services/weather_service.dart';
 import '../services/recommendation_service.dart';
 import '../services/routine_group_service.dart';
 import '../services/diary_service.dart';
+import '../services/bookmark_service.dart';
 import '../models/weather_data.dart';
 import '../models/recommendation_data.dart';
 import 'package:geolocator/geolocator.dart';
@@ -33,6 +35,7 @@ import 'news_screen.dart';
 import 'recommendation_screen.dart';
 import 'diary_screen.dart';
 import 'nature_scene_screen.dart';
+import 'bookmark_screen.dart';
 
 class DashboardScreen extends StatefulWidget {
   final RoutineService routineService;
@@ -52,6 +55,7 @@ class DashboardScreen extends StatefulWidget {
   final RecommendationService recommendationService;
   final RoutineGroupService routineGroupService;
   final DiaryService diaryService;
+  final BookmarkService bookmarkService;
   final VoidCallback? onCompletionUnchecked;
 
   const DashboardScreen({
@@ -73,6 +77,7 @@ class DashboardScreen extends StatefulWidget {
     required this.recommendationService,
     required this.routineGroupService,
     required this.diaryService,
+    required this.bookmarkService,
     this.onCompletionUnchecked,
   });
 
@@ -179,6 +184,8 @@ class DashboardScreenState extends State<DashboardScreen> {
         return large ? _buildDDayLarge(context, now) : _buildDDaySmall(context, now);
       case 'nature':
         return large ? _buildNatureLarge(context) : _buildNatureSmall(context);
+      case 'bookmark':
+        return large ? _buildBookmarkLarge(context) : _buildBookmarkSmall(context);
       default:
         return null;
     }
@@ -1358,12 +1365,140 @@ class DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
+  // ─── 바로가기 ──────────────────────────────────────
+
+  static const _channel = MethodChannel('com.aicharacter.ai_character/audio');
+
+  Future<void> _openBookmarkUrl(String url) async {
+    try {
+      await _channel.invokeMethod('openUrl', {'url': url});
+    } catch (_) {}
+  }
+
+  IconData _bookmarkIcon(String url) {
+    final lower = url.toLowerCase();
+    if (lower.contains('naver')) return Icons.language;
+    if (lower.contains('google')) return Icons.search;
+    if (lower.contains('youtube')) return Icons.play_circle_outline;
+    if (lower.contains('instagram')) return Icons.camera_alt_outlined;
+    if (lower.contains('github')) return Icons.code;
+    if (lower.contains('twitter') || lower.contains('x.com')) return Icons.tag;
+    if (lower.contains('facebook')) return Icons.facebook;
+    if (lower.contains('kakao')) return Icons.chat_bubble_outline;
+    return Icons.public;
+  }
+
+  Color _bookmarkColor(String url) {
+    final lower = url.toLowerCase();
+    if (lower.contains('naver')) return const Color(0xFF03C75A);
+    if (lower.contains('google')) return const Color(0xFF4285F4);
+    if (lower.contains('youtube')) return const Color(0xFFFF0000);
+    if (lower.contains('instagram')) return const Color(0xFFE1306C);
+    if (lower.contains('github')) return const Color(0xFF333333);
+    if (lower.contains('twitter') || lower.contains('x.com')) return const Color(0xFF1DA1F2);
+    if (lower.contains('facebook')) return const Color(0xFF1877F2);
+    if (lower.contains('kakao')) return const Color(0xFFFEE500);
+    return const Color(0xFF607D8B);
+  }
+
+  Widget _buildBookmarkSmall(BuildContext context) {
+    final theme = Theme.of(context);
+    final bookmarks = widget.bookmarkService.getAll();
+    return InkWell(
+      borderRadius: BorderRadius.circular(12),
+      onTap: () => _push(context, BookmarkScreen(bookmarkService: widget.bookmarkService)),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        decoration: BoxDecoration(
+          color: theme.colorScheme.surfaceContainerLow,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Row(
+          children: [
+            Icon(Icons.language, size: 18, color: theme.colorScheme.onSurfaceVariant),
+            const SizedBox(width: 10),
+            Text('바로가기', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: theme.colorScheme.onSurface)),
+            const Spacer(),
+            Text('${bookmarks.length}개', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: theme.colorScheme.onSurfaceVariant)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildBookmarkLarge(BuildContext context) {
+    final theme = Theme.of(context);
+    final bookmarks = widget.bookmarkService.getAll();
+    return InkWell(
+      borderRadius: BorderRadius.circular(16),
+      onTap: () => _push(context, BookmarkScreen(bookmarkService: widget.bookmarkService)),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: theme.colorScheme.surfaceContainerLow,
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.language, size: 20, color: theme.colorScheme.onSurfaceVariant),
+                const SizedBox(width: 12),
+                Text('바로가기', style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600)),
+                const Spacer(),
+                Icon(Icons.chevron_right, size: 18, color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.5)),
+              ],
+            ),
+            if (bookmarks.isNotEmpty) ...[
+              const SizedBox(height: 14),
+              Wrap(
+                spacing: 12,
+                runSpacing: 12,
+                children: bookmarks.map((bm) {
+                  final color = _bookmarkColor(bm.url);
+                  return GestureDetector(
+                    onTap: () => _openBookmarkUrl(bm.url),
+                    child: SizedBox(
+                      width: 56,
+                      child: Column(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          Container(
+                            width: 44,
+                            height: 44,
+                            decoration: BoxDecoration(
+                              color: color.withValues(alpha: 0.12),
+                              borderRadius: BorderRadius.circular(12),
+                            ),
+                            child: Icon(_bookmarkIcon(bm.url), color: color, size: 22),
+                          ),
+                          const SizedBox(height: 4),
+                          Text(
+                            bm.name,
+                            style: TextStyle(fontSize: 11, color: theme.colorScheme.onSurfaceVariant),
+                            overflow: TextOverflow.ellipsis,
+                            textAlign: TextAlign.center,
+                          ),
+                        ],
+                      ),
+                    ),
+                  );
+                }).toList(),
+              ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
   // ─── Layout helpers ───────────────────────────────
 
   static const _defaultLabels = {
     'recommend': '맞춤 정보', 'news': '뉴스', 'weather': '날씨', 'routine': '루틴', 'todo': '할 일',
     'diary': '일기장', 'card': '명함', 'calendar': '캘린더', 'stats': '통계', 'alarm': '알람',
-    'timer': '타이머', 'memo': '메모', 'dday': 'D-Day', 'nature': '자연소리',
+    'timer': '타이머', 'memo': '메모', 'dday': 'D-Day', 'nature': '자연소리', 'bookmark': '바로가기',
   };
 
   String _sectionLabel(String id) {
@@ -1379,6 +1514,7 @@ class DashboardScreenState extends State<DashboardScreen> {
       'stats': Icons.bar_chart_rounded, 'alarm': Icons.alarm_rounded,
       'timer': Icons.timer_outlined, 'memo': Icons.note_alt_outlined,
       'dday': Icons.event_outlined, 'diary': Icons.auto_stories, 'nature': Icons.spa,
+      'bookmark': Icons.language,
     };
     final baseId = SettingsService.sectionBaseId(id);
     return icons[baseId] ?? Icons.widgets_outlined;

@@ -30,6 +30,7 @@ import 'services/weather_service.dart';
 import 'services/recommendation_service.dart';
 import 'services/routine_group_service.dart';
 import 'services/diary_service.dart';
+import 'services/bookmark_service.dart';
 import 'widgets/overlay_character.dart';
 import 'theme/app_theme.dart';
 
@@ -93,6 +94,7 @@ void main() async {
 
   final routineGroupService = RoutineGroupService(prefs);
   final diaryService = DiaryService(prefs);
+  final bookmarkService = BookmarkService(prefs);
 
   final recommendationService = RecommendationService(
     prefs: prefs,
@@ -152,6 +154,7 @@ void main() async {
     recommendationService: recommendationService,
     routineGroupService: routineGroupService,
     diaryService: diaryService,
+    bookmarkService: bookmarkService,
   ));
 }
 
@@ -176,6 +179,7 @@ class AiCharacterApp extends StatefulWidget {
   final RecommendationService recommendationService;
   final RoutineGroupService routineGroupService;
   final DiaryService diaryService;
+  final BookmarkService bookmarkService;
 
   const AiCharacterApp({
     super.key,
@@ -199,6 +203,7 @@ class AiCharacterApp extends StatefulWidget {
     required this.recommendationService,
     required this.routineGroupService,
     required this.diaryService,
+    required this.bookmarkService,
   });
 
   @override
@@ -303,6 +308,7 @@ class _AiCharacterAppState extends State<AiCharacterApp>
         recommendationService: widget.recommendationService,
         routineGroupService: widget.routineGroupService,
         diaryService: widget.diaryService,
+        bookmarkService: widget.bookmarkService,
         onCompletionUnchecked: widget.routineMonitor.forceCheck,
       ),
     );
