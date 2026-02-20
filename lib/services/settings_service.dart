@@ -254,6 +254,13 @@ class SettingsService {
   Future<void> setPastRoutineCheckEnabled(bool v) =>
       _prefs.setBool(_pastRoutineCheckKey, v);
 
+  // Chat character visibility (show/hide character in chat screen)
+  static const _chatCharacterVisibleKey = 'chat_character_visible';
+
+  bool get chatCharacterVisible => _prefs.getBool(_chatCharacterVisibleKey) ?? true;
+  Future<void> setChatCharacterVisible(bool v) =>
+      _prefs.setBool(_chatCharacterVisibleKey, v);
+
   // Alarm: shake to disable
   static const _shakeToDisableKey = 'shake_to_disable';
   static const _shakeCountKey = 'shake_count';

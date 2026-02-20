@@ -224,6 +224,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
               },
             ),
           ),
+          SwitchListTile(
+            title: const Text('대화 화면 캐릭터'),
+            subtitle: const Text('대화 화면에서 캐릭터를 표시합니다'),
+            value: widget.settingsService.chatCharacterVisible,
+            onChanged: (v) async {
+              await widget.settingsService.setChatCharacterVisible(v);
+              setState(() {});
+            },
+          ),
           const Divider(),
 
           // Routine Section

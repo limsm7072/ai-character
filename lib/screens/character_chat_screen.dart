@@ -322,8 +322,8 @@ class _CharacterChatScreenState extends State<CharacterChatScreen> {
       ),
       body: Column(
         children: [
-          // Spine 2D Character display — hide when keyboard is open
-          if (MediaQuery.of(context).viewInsets.bottom < 50)
+          // Spine 2D Character display — hide when keyboard is open or setting is off
+          if (widget.settingsService.chatCharacterVisible && MediaQuery.of(context).viewInsets.bottom < 50)
             SizedBox(
               height: 250,
               child: Builder(builder: (_) {
