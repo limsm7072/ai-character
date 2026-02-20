@@ -8,6 +8,7 @@ import '../services/settings_service.dart';
 import '../services/alarm_service.dart';
 import '../services/timer_service.dart';
 import '../services/routine_group_service.dart';
+import '../services/calendar_service.dart';
 import '../utils/routine_icons.dart';
 import 'routine_edit_screen.dart';
 import 'timer_screen.dart';
@@ -20,6 +21,7 @@ class RoutineListScreen extends StatefulWidget {
   final AlarmService? alarmService;
   final TimerService? timerService;
   final RoutineGroupService routineGroupService;
+  final CalendarService? calendarService;
   final VoidCallback? onCompletionUnchecked;
 
   const RoutineListScreen({
@@ -30,6 +32,7 @@ class RoutineListScreen extends StatefulWidget {
     this.alarmService,
     this.timerService,
     required this.routineGroupService,
+    this.calendarService,
     this.onCompletionUnchecked,
   });
 
@@ -203,6 +206,7 @@ class _RoutineListScreenState extends State<RoutineListScreen> {
           alarmService: widget.alarmService,
           timerService: widget.timerService,
           routineGroupService: widget.routineGroupService,
+          calendarService: widget.calendarService,
         ),
       ),
     );
@@ -218,6 +222,7 @@ class _RoutineListScreenState extends State<RoutineListScreen> {
           alarmService: widget.alarmService,
           timerService: widget.timerService,
           routineGroupService: widget.routineGroupService,
+          calendarService: widget.calendarService,
           routine: routine,
         ),
       ),

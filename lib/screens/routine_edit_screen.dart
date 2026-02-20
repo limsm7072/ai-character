@@ -6,6 +6,7 @@ import '../services/routine_service.dart';
 import '../services/alarm_service.dart';
 import '../services/timer_service.dart';
 import '../services/routine_group_service.dart';
+import '../services/calendar_service.dart';
 import '../theme/app_colors.dart';
 
 class RoutineEditScreen extends StatefulWidget {
@@ -13,6 +14,7 @@ class RoutineEditScreen extends StatefulWidget {
   final AlarmService? alarmService;
   final TimerService? timerService;
   final RoutineGroupService? routineGroupService;
+  final CalendarService? calendarService;
   final model.Routine? routine;
 
   const RoutineEditScreen({
@@ -21,6 +23,7 @@ class RoutineEditScreen extends StatefulWidget {
     this.alarmService,
     this.timerService,
     this.routineGroupService,
+    this.calendarService,
     this.routine,
   });
 
@@ -48,6 +51,7 @@ class _RoutineEditScreenState extends State<RoutineEditScreen> {
   bool _nagEnabled = true;
   int _nagFrequency = 30;
   int _nagIntensity = 1;
+  String? _workTypeId;
 
   // Common app packages for selection
   static const _commonApps = <String, String>{
@@ -86,6 +90,7 @@ class _RoutineEditScreenState extends State<RoutineEditScreen> {
     _nagEnabled = r?.nagEnabled ?? true;
     _nagFrequency = r?.nagFrequency ?? 30;
     _nagIntensity = r?.nagIntensity ?? 1;
+    _workTypeId = r?.workTypeId;
     if (r?.startDate != null) {
       final parts = r!.startDate!.split('-');
       if (parts.length == 3) {
@@ -245,6 +250,12 @@ class _RoutineEditScreenState extends State<RoutineEditScreen> {
             const SizedBox(height: 8),
             _buildDaySelector(),
             const SizedBox(height: 24),
+
+            // Work type
+            if (widget.calendarService != null) ...[
+              _buildWorkTypeSelector(),
+              const SizedBox(height: 24),
+            ],
 
             // Nag settings
             const Divider(),
@@ -471,6 +482,45 @@ class _RoutineEditScreenState extends State<RoutineEditScreen> {
     );
   }
 
+  Widget _buildWorkTypeSelector() {
+    final workTypes = widget.calendarService?.getWorkTypes() ?? [];
+    // Validate linked work type still exists
+    if (_workTypeId != null && !workTypes.any((w) => w.id == _workTypeId)) {
+      _workTypeId = null;
+    }
+    return Row(
+      children: [
+        const Icon(Icons.work_outline, size: 20),
+        const SizedBox(width: 8),
+        const Expanded(child: Text('근무형태')),
+        DropdownButton<String>(
+          value: _workTypeId ?? '',
+          items: [
+            const DropdownMenuItem(value: '', child: Text('없음 (항상 활성)')),
+            ...workTypes.map((w) => DropdownMenuItem(
+              value: w.id,
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Container(
+                    width: 12, height: 12,
+                    decoration: BoxDecoration(
+                      color: Color(int.parse(w.color.replaceFirst('#', '0xFF'))),
+                      shape: BoxShape.circle,
+                    ),
+                  ),
+                  const SizedBox(width: 8),
+                  Text(w.name),
+                ],
+              ),
+            )),
+          ],
+          onChanged: (v) => setState(() => _workTypeId = (v == null || v.isEmpty) ? null : v),
+        ),
+      ],
+    );
+  }
+
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;
 
@@ -495,6 +545,7 @@ class _RoutineEditScreenState extends State<RoutineEditScreen> {
       nagEnabled: _nagEnabled,
       nagFrequency: _nagFrequency,
       nagIntensity: _nagIntensity,
+      workTypeId: _workTypeId,
     );
 
     if (_isEditing) {

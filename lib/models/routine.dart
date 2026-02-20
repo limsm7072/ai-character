@@ -21,6 +21,9 @@ class Routine {
   int nagFrequency; // seconds between nags
   int nagIntensity; // 0=soft, 1=normal, 2=strict
 
+  // Work type (null = always active regardless of work type)
+  String? workTypeId;
+
   Routine({
     required this.id,
     required this.name,
@@ -39,6 +42,7 @@ class Routine {
     this.nagEnabled = true,
     this.nagFrequency = 30,
     this.nagIntensity = 1,
+    this.workTypeId,
   }) : activeDays = activeDays ?? List.filled(7, true);
 
   /// Check if this routine is active on a specific date (considering startDate and activeDays).
@@ -94,6 +98,7 @@ class Routine {
         'nagEnabled': nagEnabled,
         'nagFrequency': nagFrequency,
         'nagIntensity': nagIntensity,
+        'workTypeId': workTypeId,
       };
 
   factory Routine.fromJson(Map<String, dynamic> json) => Routine(
@@ -120,6 +125,7 @@ class Routine {
         nagEnabled: json['nagEnabled'] ?? true,
         nagFrequency: json['nagFrequency'] ?? 30,
         nagIntensity: json['nagIntensity'] ?? 1,
+        workTypeId: json['workTypeId'] as String?,
       );
 }
 
