@@ -14,6 +14,7 @@ class MemoListScreen extends StatefulWidget {
 
 class _MemoListScreenState extends State<MemoListScreen> {
   List<Memo> _memos = [];
+  bool _collapsed = false;
 
   @override
   void initState() {
@@ -135,7 +136,17 @@ class _MemoListScreenState extends State<MemoListScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      appBar: AppBar(automaticallyImplyLeading: false, title: const Text('메모')),
+      appBar: AppBar(
+        automaticallyImplyLeading: false,
+        title: const Text('메모'),
+        actions: [
+          IconButton(
+            icon: Icon(_collapsed ? Icons.unfold_more : Icons.unfold_less),
+            tooltip: _collapsed ? '펼치기' : '접기',
+            onPressed: () => setState(() => _collapsed = !_collapsed),
+          ),
+        ],
+      ),
       body: _memos.isEmpty
           ? Center(
               child: Column(
@@ -163,6 +174,34 @@ class _MemoListScreenState extends State<MemoListScreen> {
   }
 
   Widget _buildMemoCard(Memo memo) {
+    if (_collapsed) {
+      return Card(
+        margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
+        child: InkWell(
+          onTap: () => _editMemo(memo),
+          borderRadius: BorderRadius.circular(12),
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+            child: Row(
+              children: [
+                Expanded(
+                  child: Text(
+                    memo.title,
+                    style: const TextStyle(fontSize: 14),
+                    overflow: TextOverflow.ellipsis,
+                  ),
+                ),
+                if (memo.content.isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(left: 8),
+                    child: Icon(Icons.notes, size: 14, color: AppColors.grey400),
+                  ),
+              ],
+            ),
+          ),
+        ),
+      );
+    }
     return Card(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
       child: ListTile(
