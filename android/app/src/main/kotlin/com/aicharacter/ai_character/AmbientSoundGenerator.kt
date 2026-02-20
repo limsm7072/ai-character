@@ -94,6 +94,36 @@ class AmbientSoundGenerator {
         // Ocean state
         var oceanBrown = 0.0
 
+        // Stream state
+        var streamLpValue = 0.0
+        var streamDropTimer = 0
+        var streamDropAmp = 0.0
+
+        // Forest state
+        var forestPinkSum = 0.0
+        val forestPinkRows = DoubleArray(12)
+        var forestPinkIdx = 0
+        var forestBirdTimer = 0
+        var forestBirdFreq = 3000.0
+        var forestBirdDuration = 0
+        var forestBirdPhase = 0.0
+
+        // Fire state
+        var fireBrown = 0.0
+        var fireCrackleTimer = 0
+        var fireCrackleAmp = 0.0
+        var fireCrackleDuration = 0
+
+        // Wind state
+        var windBrown = 0.0
+
+        // Night state
+        var nightChirpFreq = 4000.0
+        var nightChirpOn = false
+        var nightChirpTimer = 0
+        var nightChirpPhase = 0.0
+        var nightBgLp = 0.0
+
         while (isPlaying) {
             val type = currentType
             val vol = volume
@@ -162,6 +192,130 @@ class AmbientSoundGenerator {
                         val mod = 0.3 + 0.7 * ((sin(2.0 * PI * idx / wavePeriod) + 1.0) / 2.0)
 
                         raw[i] = (oceanBrown * mod * 0.5).toFloat()
+                    }
+                }
+                "stream" -> {
+                    for (i in raw.indices) {
+                        // High-pass filtered noise (LP coeff 0.85 = softer, more watery)
+                        val white = Random.nextDouble() * 2.0 - 1.0
+                        streamLpValue = streamLpValue * 0.85 + white * 0.15
+                        var sample = streamLpValue * 0.25
+
+                        // Irregular water droplet bursts
+                        streamDropTimer--
+                        if (streamDropTimer <= 0) {
+                            streamDropTimer = Random.nextInt(500, 4000)
+                            streamDropAmp = Random.nextDouble() * 0.3 + 0.1
+                        }
+                        if (streamDropTimer < 80) {
+                            val env = streamDropTimer / 80.0
+                            sample += (Random.nextDouble() * 2.0 - 1.0) * streamDropAmp * env
+                        }
+
+                        raw[i] = sample.toFloat()
+                    }
+                }
+                "forest" -> {
+                    for (i in raw.indices) {
+                        // Very soft pink noise background
+                        forestPinkIdx++
+                        for (k in forestPinkRows.indices) {
+                            if (forestPinkIdx and (1 shl k) == 0) {
+                                forestPinkSum -= forestPinkRows[k]
+                                forestPinkRows[k] = Random.nextDouble() * 2.0 - 1.0
+                                forestPinkSum += forestPinkRows[k]
+                                break
+                            }
+                        }
+                        val rnd = Random.nextDouble() * 2.0 - 1.0
+                        var sample = ((forestPinkSum + rnd) / (forestPinkRows.size + 1)) * 0.15
+
+                        // Random short sine bursts (bird chirps)
+                        if (forestBirdDuration > 0) {
+                            forestBirdPhase += 2.0 * PI * forestBirdFreq / SAMPLE_RATE
+                            val env = forestBirdDuration / 800.0
+                            sample += sin(forestBirdPhase) * 0.12 * env
+                            forestBirdDuration--
+                        } else {
+                            forestBirdTimer--
+                            if (forestBirdTimer <= 0) {
+                                forestBirdTimer = Random.nextInt(8000, 40000)
+                                forestBirdFreq = Random.nextDouble() * 2000.0 + 2500.0
+                                forestBirdDuration = Random.nextInt(300, 800)
+                                forestBirdPhase = 0.0
+                            }
+                        }
+
+                        raw[i] = sample.toFloat()
+                    }
+                }
+                "fire" -> {
+                    for (i in raw.indices) {
+                        // Low-frequency brown noise base
+                        fireBrown += (Random.nextDouble() * 2.0 - 1.0) * 0.01
+                        fireBrown = fireBrown.coerceIn(-1.0, 1.0)
+                        var sample = fireBrown * 0.3
+
+                        // Random crackle bursts
+                        if (fireCrackleDuration > 0) {
+                            sample += (Random.nextDouble() * 2.0 - 1.0) * fireCrackleAmp * (fireCrackleDuration / 200.0)
+                            fireCrackleDuration--
+                        } else {
+                            fireCrackleTimer--
+                            if (fireCrackleTimer <= 0) {
+                                fireCrackleTimer = Random.nextInt(100, 3000)
+                                fireCrackleAmp = Random.nextDouble() * 0.5 + 0.2
+                                fireCrackleDuration = Random.nextInt(50, 200)
+                            }
+                        }
+
+                        raw[i] = sample.toFloat()
+                    }
+                }
+                "wind" -> {
+                    for (i in raw.indices) {
+                        // Brown noise base
+                        windBrown += (Random.nextDouble() * 2.0 - 1.0) * 0.018
+                        windBrown = windBrown.coerceIn(-1.0, 1.0)
+
+                        // Slow sinusoidal amplitude modulation (20-second period)
+                        val idx = sampleIndex + i
+                        val period = SAMPLE_RATE * 20.0
+                        val mod = 0.2 + 0.8 * ((sin(2.0 * PI * idx / period) + 1.0) / 2.0)
+
+                        raw[i] = (windBrown * mod * 0.4).toFloat()
+                    }
+                }
+                "night" -> {
+                    for (i in raw.indices) {
+                        // Soft background noise
+                        val white = Random.nextDouble() * 2.0 - 1.0
+                        nightBgLp = nightBgLp * 0.95 + white * 0.05
+                        var sample = nightBgLp * 0.1
+
+                        // Cricket chirps: high-freq sine tones (3500-5000Hz) with intermittent on/off
+                        nightChirpTimer--
+                        if (nightChirpTimer <= 0) {
+                            nightChirpOn = !nightChirpOn
+                            nightChirpTimer = if (nightChirpOn) {
+                                Random.nextInt(2000, 8000)
+                            } else {
+                                Random.nextInt(4000, 20000)
+                            }
+                            if (nightChirpOn) {
+                                nightChirpFreq = Random.nextDouble() * 1500.0 + 3500.0
+                                nightChirpPhase = 0.0
+                            }
+                        }
+                        if (nightChirpOn) {
+                            nightChirpPhase += 2.0 * PI * nightChirpFreq / SAMPLE_RATE
+                            // Pulsing envelope for cricket-like rhythm
+                            val pulseFreq = 15.0
+                            val pulse = (sin(2.0 * PI * pulseFreq * (sampleIndex + i) / SAMPLE_RATE) + 1.0) / 2.0
+                            sample += sin(nightChirpPhase) * 0.06 * pulse
+                        }
+
+                        raw[i] = sample.toFloat()
                     }
                 }
                 else -> {
