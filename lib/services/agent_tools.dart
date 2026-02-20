@@ -29,7 +29,6 @@ class AgentTools {
   final SettingsService? settingsService;
   final TtsService? ttsService;
   final Future<void> Function(String url)? onOpenUrl;
-  final Future<void> Function(String query)? onPlayMusic;
 
   AgentTools({
     required this.routineService,
@@ -41,7 +40,6 @@ class AgentTools {
     this.settingsService,
     this.ttsService,
     this.onOpenUrl,
-    this.onPlayMusic,
   });
 
   List<Tool> get tools => [
@@ -413,17 +411,6 @@ class AgentTools {
           requiredProperties: ['url'],
         ),
       ),
-      // ─── Music play tool ─────────────────────────────────────
-      FunctionDeclaration(
-        'play_music',
-        '음악을 재생합니다. 사용자가 "음악 틀어줘", "BTS 틀어줘", "잔잔한 음악 재생해줘" 같이 요청하면 이 도구를 사용하세요. 유튜브뮤직에서 자동 재생됩니다.',
-        Schema(SchemaType.object,
-          properties: {
-            'query': Schema(SchemaType.string, description: '검색할 음악/아티스트/장르 (예: BTS, 잔잔한 음악, 팝송)'),
-          },
-          requiredProperties: ['query'],
-        ),
-      ),
     ]),
   ];
 
@@ -499,8 +486,6 @@ class AgentTools {
         return await _setShakeCount(call.args);
       case 'open_url':
         return await _openUrl(call.args);
-      case 'play_music':
-        return await _playMusic(call.args);
       default:
         return {'error': '알 수 없는 함수: ${call.name}'};
     }
@@ -1113,16 +1098,4 @@ class AgentTools {
     }
   }
 
-  Future<Map<String, Object?>> _playMusic(Map<String, Object?> args) async {
-    try {
-      final query = args['query'] as String;
-      if (onPlayMusic != null) {
-        await onPlayMusic!(query);
-        return {'success': true, 'query': query};
-      }
-      return {'success': false, 'error': '음악 재생 기능을 사용할 수 없습니다'};
-    } catch (e) {
-      return {'success': false, 'error': e.toString()};
-    }
-  }
 }

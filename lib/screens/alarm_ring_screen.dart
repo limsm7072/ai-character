@@ -3,6 +3,7 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../services/settings_service.dart';
+import '../services/alarm_service.dart';
 import '../theme/app_colors.dart';
 
 class AlarmRingScreen extends StatefulWidget {
@@ -44,7 +45,9 @@ class _AlarmRingScreenState extends State<AlarmRingScreen>
       duration: const Duration(milliseconds: 500),
     )..repeat(reverse: true);
 
-    _playAlarm();
+    // AlarmRingService is already playing sound via native foreground service.
+    // If opened from notification tap (old path), play alarm as fallback.
+    _playAlarmFallback();
     if (_shakeEnabled) {
       _startShakeDetection();
     }
@@ -58,20 +61,20 @@ class _AlarmRingScreenState extends State<AlarmRingScreen>
     });
   }
 
-  Future<void> _playAlarm() async {
+  /// Fallback: play alarm via audio channel if service isn't running
+  Future<void> _playAlarmFallback() async {
     try {
       await _audioChannel.invokeMethod('playAlarm');
-    } catch (e) {
-      print('[AlarmRingScreen] playAlarm error: $e');
-    }
+    } catch (_) {}
   }
 
-  Future<void> _stopAlarm() async {
+  Future<void> _stopAllAlarmSounds() async {
+    // Stop native AlarmRingService (foreground service)
+    await AlarmService.stopAlarmRing();
+    // Also stop audio channel alarm (fallback)
     try {
       await _audioChannel.invokeMethod('stopAlarm');
-    } catch (e) {
-      print('[AlarmRingScreen] stopAlarm error: $e');
-    }
+    } catch (_) {}
   }
 
   Future<void> _startShakeDetection() async {
@@ -108,7 +111,7 @@ class _AlarmRingScreenState extends State<AlarmRingScreen>
   }
 
   Future<void> _dismiss() async {
-    await _stopAlarm();
+    await _stopAllAlarmSounds();
     if (_shakeEnabled) {
       await _stopShakeDetection();
     }
@@ -121,7 +124,7 @@ class _AlarmRingScreenState extends State<AlarmRingScreen>
   void dispose() {
     _clockTimer?.cancel();
     _shakeAnim.dispose();
-    _stopAlarm();
+    _stopAllAlarmSounds();
     if (_shakeEnabled) {
       _stopShakeDetection();
     }

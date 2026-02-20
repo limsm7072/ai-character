@@ -73,7 +73,7 @@ void main() async {
     print('[Main] NotificationService init failed: $e');
   }
   final routineService = RoutineService(prefs, notificationService);
-  final alarmService = AlarmService(prefs, notificationService);
+  final alarmService = AlarmService(prefs);
   final timerService = TimerService(prefs, notificationService);
   final calendarService = CalendarService(prefs);
   final newsService = NewsService(prefs);
@@ -224,23 +224,53 @@ class _AiCharacterAppState extends State<AiCharacterApp>
   }
 
   void _listenNotificationTaps() {
+    // Listen for notification taps (timer, routine)
     _notifSub = NotificationService.onNotificationTap.stream.listen((payload) {
       if (payload.startsWith('alarm:')) {
         final alarmId = payload.substring(6);
         final alarm = widget.alarmService.getById(alarmId);
-        final ctx = navigatorKey.currentContext;
-        if (ctx != null) {
-          Navigator.of(ctx).push(
-            MaterialPageRoute(
-              builder: (_) => AlarmRingScreen(
-                alarmLabel: alarm?.label ?? '알람',
-                settingsService: widget.settingsService,
-              ),
-            ),
-          );
-        }
+        _openAlarmRingScreen(alarm?.label ?? '알람');
       }
     });
+
+    // Listen for native alarm ring events (from AlarmRingService fullScreenIntent)
+    const channel = MethodChannel('com.aicharacter.ai_character/usage_stats');
+    channel.setMethodCallHandler((call) async {
+      if (call.method == 'onAlarmRing') {
+        final data = Map<String, dynamic>.from(call.arguments);
+        _openAlarmRingScreen(data['label'] ?? '알람');
+      }
+    });
+
+    // Check if app was launched from alarm fullScreenIntent
+    _checkPendingAlarm();
+  }
+
+  Future<void> _checkPendingAlarm() async {
+    const channel = MethodChannel('com.aicharacter.ai_character/usage_stats');
+    try {
+      final data = await channel.invokeMethod('checkPendingAlarm');
+      if (data != null) {
+        final label = (data as Map)['label'] ?? '알람';
+        // Small delay to ensure navigator is ready
+        await Future.delayed(const Duration(milliseconds: 300));
+        _openAlarmRingScreen(label);
+      }
+    } catch (_) {}
+  }
+
+  void _openAlarmRingScreen(String label) {
+    final ctx = navigatorKey.currentContext;
+    if (ctx != null) {
+      Navigator.of(ctx).push(
+        MaterialPageRoute(
+          builder: (_) => AlarmRingScreen(
+            alarmLabel: label,
+            settingsService: widget.settingsService,
+          ),
+        ),
+      );
+    }
   }
 
   Future<void> _requestPermissionsAndStart() async {

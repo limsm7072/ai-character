@@ -1,15 +1,15 @@
+import 'package:flutter/services.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/alarm.dart';
-import 'notification_service.dart';
 
 class AlarmService {
   static const _key = 'alarms_data';
   static const _counterKey = 'alarm_notif_counter';
+  static const _channel = MethodChannel('com.aicharacter.ai_character/usage_stats');
   final SharedPreferences _prefs;
-  final NotificationService _notification;
   List<Alarm> _alarms = [];
 
-  AlarmService(this._prefs, this._notification) {
+  AlarmService(this._prefs) {
     _load();
   }
 
@@ -34,7 +34,6 @@ class AlarmService {
   }
 
   int _nextNotifBaseId() {
-    // Find max existing notifBaseId across all alarms
     int maxId = _prefs.getInt(_counterKey) ?? 0;
     for (final a in _alarms) {
       if (a.notifBaseId != null && a.notifBaseId! >= maxId) {
@@ -99,61 +98,83 @@ class AlarmService {
     for (final alarm in _alarms) {
       if (alarm.isEnabled) await _scheduleAlarm(alarm);
     }
-    // Debug: print pending notifications
-    final pending = await _notification.getPendingNotifications();
-    final alarmPending = pending.where((p) => p.id >= 10000 && p.id < 20000).toList();
-    print('[AlarmService] pending alarm notifications: ${alarmPending.length}');
-    for (final p in alarmPending) {
-      print('  - id=${p.id} title=${p.title} body=${p.body}');
-    }
   }
 
   Future<void> _scheduleAlarm(Alarm alarm) async {
     final baseId = alarm.notificationId;
-    final payload = 'alarm:${alarm.id}';
 
     if (alarm.isOneTime) {
-      // One-time alarm: schedule for the next occurrence
       final now = DateTime.now();
       var target = DateTime(now.year, now.month, now.day, alarm.hour, alarm.minute);
       if (target.isBefore(now)) {
         target = target.add(const Duration(days: 1));
       }
-      await _notification.scheduleExact(
-        id: baseId,
-        title: '알람',
-        body: alarm.label,
-        dateTime: target,
-        channelId: NotificationService.alarmChannelId,
-        channelName: '알람',
-        payload: payload,
-      );
+      try {
+        await _channel.invokeMethod('scheduleNativeAlarm', {
+          'requestCode': baseId,
+          'timeMillis': target.millisecondsSinceEpoch,
+          'alarmId': alarm.id,
+          'label': alarm.label,
+          'repeating': false,
+        });
+      } catch (e) {
+        print('[AlarmService] scheduleNativeAlarm error: $e');
+      }
     } else {
-      // Weekly repeating: schedule for each active day
       for (int i = 0; i < 7; i++) {
         if (alarm.activeDays[i]) {
-          final dayOfWeek = i + 1; // 1=Mon ... 7=Sun (ISO)
-          await _notification.scheduleWeekly(
-            id: baseId + i,
-            title: '알람',
-            body: alarm.label,
-            hour: alarm.hour,
-            minute: alarm.minute,
-            dayOfWeek: dayOfWeek,
-            channelId: NotificationService.alarmChannelId,
-            channelName: '알람',
-            payload: payload,
-          );
+          final dayOfWeek = i + 1; // 1=Mon ... 7=Sun
+          final target = _nextDayOfWeek(dayOfWeek, alarm.hour, alarm.minute);
+          try {
+            await _channel.invokeMethod('scheduleNativeAlarm', {
+              'requestCode': baseId + i,
+              'timeMillis': target.millisecondsSinceEpoch,
+              'alarmId': alarm.id,
+              'label': alarm.label,
+              'repeating': true,
+            });
+          } catch (e) {
+            print('[AlarmService] scheduleNativeAlarm error: $e');
+          }
+        } else {
+          // Cancel this day if it was previously scheduled
+          try {
+            await _channel.invokeMethod('cancelNativeAlarm', {
+              'requestCode': baseId + i,
+            });
+          } catch (_) {}
         }
       }
     }
   }
 
+  DateTime _nextDayOfWeek(int dayOfWeek, int hour, int minute) {
+    final now = DateTime.now();
+    var target = DateTime(now.year, now.month, now.day, hour, minute);
+    while (target.weekday != dayOfWeek) {
+      target = target.add(const Duration(days: 1));
+    }
+    if (target.isBefore(now)) {
+      target = target.add(const Duration(days: 7));
+    }
+    return target;
+  }
+
   Future<void> _cancelAlarm(Alarm alarm) async {
     final baseId = alarm.notificationId;
-    // Cancel all possible notification IDs for this alarm
-    for (int i = 0; i < 7; i++) {
-      await _notification.cancel(baseId + i);
+    for (int i = 0; i < 8; i++) {
+      try {
+        await _channel.invokeMethod('cancelNativeAlarm', {
+          'requestCode': baseId + i,
+        });
+      } catch (_) {}
     }
+  }
+
+  /// Stop alarm ring service (called when user dismisses alarm)
+  static Future<void> stopAlarmRing() async {
+    try {
+      await _channel.invokeMethod('stopAlarmRing');
+    } catch (_) {}
   }
 }
