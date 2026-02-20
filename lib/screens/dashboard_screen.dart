@@ -785,7 +785,7 @@ class DashboardScreenState extends State<DashboardScreen> {
     final theme = Theme.of(context);
     return InkWell(
       borderRadius: BorderRadius.circular(12),
-      onTap: () => _push(context, StatsScreen(routineService: widget.routineService, completionService: widget.completionService, distractionLogService: widget.distractionLogService, appDetectionService: widget.appDetection, healthService: widget.healthService)),
+      onTap: () => _push(context, StatsScreen(routineService: widget.routineService, completionService: widget.completionService, distractionLogService: widget.distractionLogService, appDetectionService: widget.appDetection, healthService: widget.healthService, calendarService: widget.calendarService)),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         decoration: BoxDecoration(color: theme.colorScheme.surfaceContainerLow, borderRadius: BorderRadius.circular(12)),
@@ -808,7 +808,7 @@ class DashboardScreenState extends State<DashboardScreen> {
     final routines = widget.routineService.getAll();
     return InkWell(
       borderRadius: BorderRadius.circular(16),
-      onTap: () => _push(context, StatsScreen(routineService: widget.routineService, completionService: widget.completionService, distractionLogService: widget.distractionLogService, appDetectionService: widget.appDetection, healthService: widget.healthService)),
+      onTap: () => _push(context, StatsScreen(routineService: widget.routineService, completionService: widget.completionService, distractionLogService: widget.distractionLogService, appDetectionService: widget.appDetection, healthService: widget.healthService, calendarService: widget.calendarService)),
       child: Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(color: theme.colorScheme.surfaceContainerLow, borderRadius: BorderRadius.circular(16)),

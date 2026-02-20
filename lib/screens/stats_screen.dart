@@ -5,6 +5,7 @@ import '../services/routine_completion_service.dart';
 import '../services/distraction_log_service.dart';
 import '../services/app_detection_service.dart';
 import '../services/health_service.dart';
+import '../services/calendar_service.dart';
 import '../models/distraction_log.dart';
 import '../theme/app_colors.dart';
 import 'routine_stats_screen.dart';
@@ -15,6 +16,7 @@ class StatsScreen extends StatefulWidget {
   final DistractionLogService distractionLogService;
   final AppDetectionService? appDetectionService;
   final HealthService? healthService;
+  final CalendarService? calendarService;
   final int initialTab;
 
   const StatsScreen({
@@ -24,6 +26,7 @@ class StatsScreen extends StatefulWidget {
     required this.distractionLogService,
     this.appDetectionService,
     this.healthService,
+    this.calendarService,
     this.initialTab = 0,
   });
 
@@ -154,9 +157,25 @@ class _StatsScreenState extends State<StatsScreen> {
       );
     }
 
+    // 오늘 근무형태 확인
+    final cs = widget.calendarService;
+    final todayWorkTypeId = cs?.getDateWorkType(today);
+    final todayWorkType = todayWorkTypeId != null ? cs?.getWorkTypeById(todayWorkTypeId) : null;
+
+    // 근무형태 필터링된 루틴 목록 (카드 표시용)
+    final displayRoutines = todayWorkType != null
+        ? routines.where((r) => r.workTypeId == null || r.workTypeId == todayWorkTypeId).toList()
+        : routines;
+
     return ListView(
       padding: const EdgeInsets.all(16),
       children: [
+        // 0. 오늘 근무형태 표시
+        if (todayWorkType != null) ...[
+          _buildWorkTypeIndicator(todayWorkType),
+          const SizedBox(height: 16),
+        ],
+
         // 1. 원형 프로그레스
         _buildCircularProgressRow(routines, today),
         const SizedBox(height: 20),
@@ -182,17 +201,73 @@ class _StatsScreenState extends State<StatsScreen> {
           ),
         ),
         const SizedBox(height: 8),
-        ...routines.map((r) => _buildRoutineCard(r)),
+        ...displayRoutines.map((r) => _buildRoutineCard(r)),
         const SizedBox(height: 16),
       ],
     );
   }
 
+  // --- 근무형태 인디케이터 ---
+
+  Widget _buildWorkTypeIndicator(dynamic workType) {
+    Color wtColor;
+    try {
+      wtColor = Color(int.parse(workType.color.replaceFirst('#', '0xFF')));
+    } catch (_) {
+      wtColor = AppColors.primary;
+    }
+
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),
+      decoration: BoxDecoration(
+        color: wtColor.withOpacity(0.08),
+        borderRadius: BorderRadius.circular(12),
+        border: Border.all(color: wtColor.withOpacity(0.3)),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Container(
+            width: 10,
+            height: 10,
+            decoration: BoxDecoration(color: wtColor, shape: BoxShape.circle),
+          ),
+          const SizedBox(width: 8),
+          Text(
+            '오늘: ${workType.name}',
+            style: TextStyle(
+              fontSize: 13,
+              fontWeight: FontWeight.w600,
+              color: wtColor,
+            ),
+          ),
+          const Spacer(),
+          Icon(Icons.filter_list, size: 16, color: wtColor.withOpacity(0.6)),
+          const SizedBox(width: 4),
+          Text(
+            '근무형태 기준 통계',
+            style: TextStyle(fontSize: 11, color: wtColor.withOpacity(0.7)),
+          ),
+        ],
+      ),
+    );
+  }
+
   // --- 원형 프로그레스 ---
 
-  /// Filter routines active on a specific date (checks startDate + activeDays).
+  /// Filter routines active on a specific date (checks startDate + activeDays + workType).
   List<model.Routine> _activeRoutinesOn(List<model.Routine> routines, DateTime date) {
-    return routines.where((r) => r.isActiveOnDate(date)).toList();
+    final dateStr = _formatDate(date);
+    final cs = widget.calendarService;
+    final todayWorkType = cs?.getDateWorkType(dateStr);
+
+    return routines.where((r) {
+      if (!r.isActiveOnDate(date)) return false;
+      if (todayWorkType != null && r.workTypeId != null && r.workTypeId != todayWorkType) {
+        return false;
+      }
+      return true;
+    }).toList();
   }
 
   /// Calculate completion rate over N days, only counting days each routine is active.
