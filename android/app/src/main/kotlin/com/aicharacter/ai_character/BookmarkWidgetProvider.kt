@@ -6,7 +6,9 @@ import android.appwidget.AppWidgetProvider
 import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
+import android.os.Build
 import android.widget.RemoteViews
 
 class BookmarkWidgetProvider : AppWidgetProvider() {
@@ -44,15 +46,56 @@ class BookmarkWidgetProvider : AppWidgetProvider() {
     }
 
     private fun openUrlWithApp(context: Context, url: String) {
+        val viewIntent = Intent(Intent.ACTION_VIEW, Uri.parse(url)).apply {
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+
+        // Step 1: Find non-browser apps that can handle this URL
+        val resolved = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            context.packageManager.queryIntentActivities(
+                viewIntent,
+                PackageManager.ResolveInfoFlags.of(PackageManager.MATCH_DEFAULT_ONLY.toLong())
+            )
+        } else {
+            @Suppress("DEPRECATION")
+            context.packageManager.queryIntentActivities(viewIntent, PackageManager.MATCH_DEFAULT_ONLY)
+        }
+
+        val browsers = setOf(
+            "com.android.chrome", "com.chrome.beta", "com.chrome.dev",
+            "org.mozilla.firefox", "com.opera.browser", "com.opera.mini.native",
+            "com.microsoft.emmx", "com.brave.browser",
+            "com.sec.android.app.sbrowser", "com.sec.android.app.sbrowser.lite",
+            "com.naver.whale", "com.vivaldi.browser", "mark.via.gp",
+            "com.kiwibrowser.browser", "com.duckduckgo.mobile.android",
+        )
+        val nonBrowser = resolved.filter { ri ->
+            val pkg = ri.activityInfo.packageName
+            pkg != context.packageName && !browsers.contains(pkg)
+        }
+
+        if (nonBrowser.isNotEmpty()) {
+            try {
+                val target = nonBrowser[0].activityInfo
+                val appIntent = Intent(Intent.ACTION_VIEW, Uri.parse(url)).apply {
+                    component = android.content.ComponentName(target.packageName, target.name)
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+                context.startActivity(appIntent)
+                return
+            } catch (_: Exception) {}
+        }
+
+        // Step 2: Hardcoded fallback
         val host = Uri.parse(url).host?.lowercase()
         val pkg = if (host != null) urlToPackage(host) else null
         if (pkg != null) {
             try {
-                val appIntent = Intent(Intent.ACTION_VIEW, Uri.parse(url)).apply {
+                val pkgIntent = Intent(Intent.ACTION_VIEW, Uri.parse(url)).apply {
                     setPackage(pkg)
                     addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
                 }
-                context.startActivity(appIntent)
+                context.startActivity(pkgIntent)
                 return
             } catch (_: Exception) {}
             try {
@@ -64,32 +107,35 @@ class BookmarkWidgetProvider : AppWidgetProvider() {
                 }
             } catch (_: Exception) {}
         }
+
+        // Step 3: Browser fallback
         try {
-            val browserIntent = Intent(Intent.ACTION_VIEW, Uri.parse(url)).apply {
-                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-            }
-            context.startActivity(browserIntent)
+            context.startActivity(viewIntent)
         } catch (_: Exception) {}
     }
 
     private fun urlToPackage(host: String): String? {
         return when {
             host.contains("naver.com") || host.contains("naver") -> "com.nhn.android.search"
+            host.contains("kakaotalk") || host.contains("kakao.com") || host.contains("kakaocorp.com") -> "com.kakao.talk"
+            host.contains("daum.net") -> "net.daum.android.daum"
+            host.contains("coupang.com") -> "com.coupang.mobile"
+            host.contains("baemin") || host.contains("woowahan") -> "com.baemin"
+            host.contains("toss") && !host.contains("github") -> "viva.republica.toss"
+            host.contains("danggeun") || host.contains("karrotmarket") || host.contains("daangn") -> "com.towneers.www"
             host.contains("youtube.com") || host.contains("youtu.be") -> "com.google.android.youtube"
             host.contains("instagram.com") -> "com.instagram.android"
+            host.contains("threads.net") -> "com.instagram.barcelona"
             host.contains("twitter.com") || host.contains("x.com") -> "com.twitter.android"
-            host.contains("facebook.com") -> "com.facebook.katana"
-            host.contains("kakaotalk") || host.contains("kakao.com") || host.contains("kakaocorp.com") -> "com.kakao.talk"
+            host.contains("facebook.com") || host.contains("fb.com") -> "com.facebook.katana"
             host.contains("tiktok.com") -> "com.zhiliaoapp.musically"
             host.contains("reddit.com") -> "com.reddit.frontpage"
             host.contains("twitch.tv") -> "tv.twitch.android.app"
             host.contains("discord.com") || host.contains("discord.gg") -> "com.discord"
             host.contains("spotify.com") -> "com.spotify.music"
             host.contains("netflix.com") -> "com.netflix.mediaclient"
-            host.contains("coupang.com") -> "com.coupang.mobile"
-            host.contains("baemin") || host.contains("woowahan") -> "com.sampleapp.baemin"
-            host.contains("daum.net") -> "net.daum.android.daum"
-            host.contains("toss") -> "viva.republica.toss"
+            host.contains("google.com") -> "com.google.android.googlequicksearchbox"
+            host.contains("github.com") -> "com.github.android"
             else -> null
         }
     }

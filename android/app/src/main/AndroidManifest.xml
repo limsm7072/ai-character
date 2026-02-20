@@ -216,10 +216,28 @@
             <data android:scheme="https"/>
         </intent>
         <package android:name="com.google.android.apps.healthdata"/>
+        <!-- Korean apps -->
         <package android:name="com.kakao.talk"/>
         <package android:name="com.nhn.android.search"/>
+        <package android:name="net.daum.android.daum"/>
+        <package android:name="com.coupang.mobile"/>
+        <package android:name="viva.republica.toss"/>
+        <package android:name="com.baemin"/>
+        <package android:name="com.towneers.www"/>
+        <package android:name="com.chbreeze.jikbang4a"/>
+        <package android:name="com.nhn.android.band"/>
+        <package android:name="com.nhn.android.webtoon"/>
+        <package android:name="com.iloen.melon"/>
+        <package android:name="com.neowiz.android.bugs"/>
+        <package android:name="com.ktmusic.geniemusic"/>
+        <package android:name="com.frograms.watcha"/>
+        <package android:name="com.pooq.player"/>
+        <package android:name="net.cj.cjhv.gs.tving"/>
+        <!-- Global apps -->
         <package android:name="com.google.android.youtube"/>
+        <package android:name="com.google.android.googlequicksearchbox"/>
         <package android:name="com.instagram.android"/>
+        <package android:name="com.instagram.barcelona"/>
         <package android:name="com.twitter.android"/>
         <package android:name="com.facebook.katana"/>
         <package android:name="com.zhiliaoapp.musically"/>
@@ -228,8 +246,10 @@
         <package android:name="com.discord"/>
         <package android:name="com.spotify.music"/>
         <package android:name="com.netflix.mediaclient"/>
-        <package android:name="com.coupang.mobile"/>
-        <package android:name="viva.republica.toss"/>
-        <package android:name="net.daum.android.daum"/>
+        <package android:name="com.whatsapp"/>
+        <package android:name="org.telegram.messenger"/>
+        <package android:name="com.pinterest"/>
+        <package android:name="com.linkedin.android"/>
+        <package android:name="com.github.android"/>
     </queries>
 </manifest>

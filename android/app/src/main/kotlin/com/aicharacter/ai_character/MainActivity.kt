@@ -167,34 +167,7 @@ class MainActivity : FlutterFragmentActivity() {
                 "openUrl" -> {
                     val url = call.argument<String>("url") ?: ""
                     try {
-                        val pkg = urlToPackage(url)
-                        if (pkg != null) {
-                            // 1st: try ACTION_VIEW with package (opens URL inside the app)
-                            try {
-                                val appViewIntent = Intent(Intent.ACTION_VIEW, Uri.parse(url)).apply {
-                                    setPackage(pkg)
-                                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                                }
-                                startActivity(appViewIntent)
-                                result.success(true)
-                                return@setMethodCallHandler
-                            } catch (_: Exception) {}
-                            // 2nd: try launching app directly
-                            try {
-                                val launchIntent = packageManager.getLaunchIntentForPackage(pkg)
-                                if (launchIntent != null) {
-                                    launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                                    startActivity(launchIntent)
-                                    result.success(true)
-                                    return@setMethodCallHandler
-                                }
-                            } catch (_: Exception) {}
-                        }
-                        // Fallback: open URL in browser
-                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url)).apply {
-                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                        }
-                        startActivity(intent)
+                        openUrlPreferApp(url)
                         result.success(true)
                     } catch (e: Exception) {
                         result.error("OPEN_URL_ERROR", e.message, null)
@@ -775,25 +748,134 @@ class MainActivity : FlutterFragmentActivity() {
         println("[MainActivity] stopShakeDetection: unregistered")
     }
 
+    /** Known browser packages — used to filter out browsers when preferring native apps */
+    private val BROWSER_PACKAGES = setOf(
+        "com.android.chrome",
+        "com.chrome.beta", "com.chrome.dev", "com.chrome.canary",
+        "org.mozilla.firefox", "org.mozilla.firefox_beta",
+        "com.opera.browser", "com.opera.mini.native",
+        "com.microsoft.emmx",
+        "com.brave.browser",
+        "com.sec.android.app.sbrowser", "com.sec.android.app.sbrowser.lite",
+        "com.naver.whale",
+        "com.vivaldi.browser",
+        "mark.via.gp",
+        "com.kiwibrowser.browser",
+        "com.duckduckgo.mobile.android",
+        "org.chromium.webview_shell",
+        "com.UCMobile.intl",
+        "com.mi.globalbrowser",
+    )
+
+    /**
+     * Open a URL, preferring native apps over browsers.
+     *
+     * Strategy:
+     * 1. Query all apps that can handle this URL via ACTION_VIEW
+     * 2. If a non-browser app claims to handle it → use that app
+     * 3. Else, check hardcoded urlToPackage map → try ACTION_VIEW with package → try just launching the app
+     * 4. Final fallback → open in default browser
+     */
+    private fun openUrlPreferApp(url: String) {
+        val viewIntent = Intent(Intent.ACTION_VIEW, Uri.parse(url)).apply {
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+
+        // Step 1: Query all apps that can handle this URL
+        val resolved = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            packageManager.queryIntentActivities(
+                viewIntent,
+                PackageManager.ResolveInfoFlags.of(PackageManager.MATCH_DEFAULT_ONLY.toLong())
+            )
+        } else {
+            @Suppress("DEPRECATION")
+            packageManager.queryIntentActivities(viewIntent, PackageManager.MATCH_DEFAULT_ONLY)
+        }
+
+        // Step 2: Find non-browser apps (exclude our own app too)
+        val nonBrowserApps = resolved.filter { ri ->
+            val pkg = ri.activityInfo.packageName
+            pkg != packageName && !BROWSER_PACKAGES.contains(pkg)
+        }
+
+        if (nonBrowserApps.isNotEmpty()) {
+            val target = nonBrowserApps[0].activityInfo
+            val appIntent = Intent(Intent.ACTION_VIEW, Uri.parse(url)).apply {
+                component = ComponentName(target.packageName, target.name)
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            try {
+                startActivity(appIntent)
+                return
+            } catch (_: Exception) {}
+        }
+
+        // Step 3: Hardcoded fallback — try launching the mapped app with/without URL
+        val pkg = urlToPackage(url)
+        if (pkg != null) {
+            // 3a: Try ACTION_VIEW with setPackage (app may handle URL internally)
+            try {
+                val pkgIntent = Intent(Intent.ACTION_VIEW, Uri.parse(url)).apply {
+                    setPackage(pkg)
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+                startActivity(pkgIntent)
+                return
+            } catch (_: Exception) {}
+
+            // 3b: Just open the app (without the URL)
+            try {
+                val launchIntent = packageManager.getLaunchIntentForPackage(pkg)
+                if (launchIntent != null) {
+                    launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    startActivity(launchIntent)
+                    return
+                }
+            } catch (_: Exception) {}
+        }
+
+        // Step 4: Final fallback — open in browser
+        startActivity(viewIntent)
+    }
+
     private fun urlToPackage(url: String): String? {
         val host = Uri.parse(url).host?.lowercase() ?: return null
         return when {
+            // Korean apps
             host.contains("naver.com") || host.contains("naver") -> "com.nhn.android.search"
+            host.contains("kakaotalk") || host.contains("kakao.com") || host.contains("kakaocorp.com") -> "com.kakao.talk"
+            host.contains("daum.net") -> "net.daum.android.daum"
+            host.contains("coupang.com") -> "com.coupang.mobile"
+            host.contains("baemin") || host.contains("woowahan") -> "com.baemin"
+            host.contains("toss") && !host.contains("github") -> "viva.republica.toss"
+            host.contains("danggeun") || host.contains("karrotmarket") || host.contains("daangn") -> "com.towneers.www"
+            host.contains("zigbang.com") -> "com.chbreeze.jikbang4a"
+            host.contains("band.us") -> "com.nhn.android.band"
+            host.contains("webtoon") || host.contains("comic.naver") -> "com.nhn.android.webtoon"
+            host.contains("melon.com") -> "com.iloen.melon"
+            host.contains("bugs.co.kr") -> "com.neowiz.android.bugs"
+            host.contains("genie.co.kr") -> "com.ktmusic.geniemusic"
+            host.contains("watcha.com") -> "com.frograms.watcha"
+            host.contains("wavve.com") -> "com.pooq.player"
+            host.contains("tving.com") -> "net.cj.cjhv.gs.tving"
+            // Global apps
             host.contains("youtube.com") || host.contains("youtu.be") -> "com.google.android.youtube"
             host.contains("instagram.com") -> "com.instagram.android"
+            host.contains("threads.net") -> "com.instagram.barcelona"
             host.contains("twitter.com") || host.contains("x.com") -> "com.twitter.android"
-            host.contains("facebook.com") -> "com.facebook.katana"
-            host.contains("kakaotalk") || host.contains("kakao.com") || host.contains("kakaocorp.com") -> "com.kakao.talk"
+            host.contains("facebook.com") || host.contains("fb.com") -> "com.facebook.katana"
             host.contains("tiktok.com") -> "com.zhiliaoapp.musically"
             host.contains("reddit.com") -> "com.reddit.frontpage"
             host.contains("twitch.tv") -> "tv.twitch.android.app"
             host.contains("discord.com") || host.contains("discord.gg") -> "com.discord"
             host.contains("spotify.com") -> "com.spotify.music"
             host.contains("netflix.com") -> "com.netflix.mediaclient"
-            host.contains("coupang.com") -> "com.coupang.mobile"
-            host.contains("baemin") || host.contains("woowahan") -> "com.sampleapp.baemin"
-            host.contains("daum.net") -> "net.daum.android.daum"
-            host.contains("toss") -> "viva.republica.toss"
+            host.contains("whatsapp.com") -> "com.whatsapp"
+            host.contains("telegram.org") || host.contains("t.me") -> "org.telegram.messenger"
+            host.contains("pinterest.com") || host.contains("pin.it") -> "com.pinterest"
+            host.contains("linkedin.com") -> "com.linkedin.android"
+            host.contains("google.com") -> "com.google.android.googlequicksearchbox"
+            host.contains("github.com") -> "com.github.android"
             else -> null
         }
     }
