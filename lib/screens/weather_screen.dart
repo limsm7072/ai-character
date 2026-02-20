@@ -8,11 +8,13 @@ import '../theme/app_colors.dart';
 class WeatherScreen extends StatefulWidget {
   final WeatherService weatherService;
   final SettingsService settingsService;
+  final String? title;
 
   const WeatherScreen({
     super.key,
     required this.weatherService,
     required this.settingsService,
+    this.title,
   });
 
   @override
@@ -91,7 +93,7 @@ class _WeatherScreenState extends State<WeatherScreen> {
     return Scaffold(
       appBar: AppBar(
         automaticallyImplyLeading: false,
-        title: const Text('날씨'),
+        title: Text(widget.title ?? '날씨'),
         actions: [
           if (_loading)
             const Padding(

@@ -15,6 +15,7 @@ class CalendarScreen extends StatefulWidget {
   final RoutineService? routineService;
   final RoutineCompletionService? completionService;
   final SettingsService? settingsService;
+  final String? title;
 
   const CalendarScreen({
     super.key,
@@ -22,6 +23,7 @@ class CalendarScreen extends StatefulWidget {
     this.routineService,
     this.completionService,
     this.settingsService,
+    this.title,
   });
 
   @override
@@ -66,7 +68,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
     return Scaffold(
       appBar: AppBar(
         automaticallyImplyLeading: false,
-        title: const Text('캘린더'),
+        title: Text(widget.title ?? '캘린더'),
         actions: [
           // Go to today
           if (!_isToday)

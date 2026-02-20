@@ -5,8 +5,9 @@ import '../theme/app_colors.dart';
 
 class DiaryScreen extends StatefulWidget {
   final DiaryService diaryService;
+  final String? title;
 
-  const DiaryScreen({super.key, required this.diaryService});
+  const DiaryScreen({super.key, required this.diaryService, this.title});
 
   @override
   State<DiaryScreen> createState() => _DiaryScreenState();
@@ -83,7 +84,7 @@ class _DiaryScreenState extends State<DiaryScreen> {
     return Scaffold(
       appBar: AppBar(
         automaticallyImplyLeading: false,
-        title: const Text('일기장'),
+        title: Text(widget.title ?? '일기장'),
         actions: [
           if (streak > 0)
             Padding(

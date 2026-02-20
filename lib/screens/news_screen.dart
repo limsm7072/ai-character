@@ -5,8 +5,9 @@ import '../models/news_article.dart';
 
 class NewsScreen extends StatefulWidget {
   final NewsService newsService;
+  final String? title;
 
-  const NewsScreen({super.key, required this.newsService});
+  const NewsScreen({super.key, required this.newsService, this.title});
 
   @override
   State<NewsScreen> createState() => _NewsScreenState();
@@ -65,7 +66,7 @@ class _NewsScreenState extends State<NewsScreen> {
     return Scaffold(
       appBar: AppBar(
         automaticallyImplyLeading: false,
-        title: const Text('뉴스'),
+        title: Text(widget.title ?? '뉴스'),
         actions: [
           if (_loading)
             const Padding(

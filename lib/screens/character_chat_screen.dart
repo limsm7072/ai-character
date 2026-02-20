@@ -105,10 +105,6 @@ class _CharacterChatScreenState extends State<CharacterChatScreen> {
           const channel = MethodChannel('com.aicharacter.ai_character/usage_stats');
           await channel.invokeMethod('openUrl', {'url': url});
         },
-        onPlayMusic: (query) async {
-          const channel = MethodChannel('com.aicharacter.ai_character/usage_stats');
-          await channel.invokeMethod('playMusic', {'query': query});
-        },
       );
       _gemini.initializeAgent(apiKey, agentTools: agentTools, characterName: _charName);
     }
@@ -787,8 +783,6 @@ class _CharacterChatScreenState extends State<CharacterChatScreen> {
         return '루틴 확인 간격을 변경했어요';
       case 'open_url':
         return '${action.result['url'] ?? '웹사이트'}를 열었어요';
-      case 'play_music':
-        return '${action.result['query'] ?? '음악'}을(를) 재생했어요';
       default:
         return '${action.name} 실행';
     }

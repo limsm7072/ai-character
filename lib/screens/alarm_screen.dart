@@ -6,8 +6,9 @@ import '../theme/app_colors.dart';
 
 class AlarmScreen extends StatefulWidget {
   final AlarmService alarmService;
+  final String? title;
 
-  const AlarmScreen({super.key, required this.alarmService});
+  const AlarmScreen({super.key, required this.alarmService, this.title});
 
   @override
   State<AlarmScreen> createState() => _AlarmScreenState();
@@ -103,7 +104,7 @@ class _AlarmScreenState extends State<AlarmScreen> {
     final bottomPad = MediaQuery.of(context).viewPadding.bottom;
 
     return Scaffold(
-      appBar: AppBar(automaticallyImplyLeading: false, title: const Text('알람')),
+      appBar: AppBar(automaticallyImplyLeading: false, title: Text(widget.title ?? '알람')),
       body: _alarms.isEmpty
           ? Center(
               child: Column(

@@ -5,8 +5,9 @@ import '../theme/app_colors.dart';
 
 class TodoScreen extends StatefulWidget {
   final TodoService todoService;
+  final String? title;
 
-  const TodoScreen({super.key, required this.todoService});
+  const TodoScreen({super.key, required this.todoService, this.title});
 
   @override
   State<TodoScreen> createState() => _TodoScreenState();
@@ -66,7 +67,7 @@ class _TodoScreenState extends State<TodoScreen> {
         if (didPop) return;
       },
       child: Scaffold(
-        appBar: AppBar(automaticallyImplyLeading: false, title: const Text('할 일')),
+        appBar: AppBar(automaticallyImplyLeading: false, title: Text(widget.title ?? '할 일')),
         body: Column(
           children: [
             Expanded(

@@ -18,6 +18,7 @@ class StatsScreen extends StatefulWidget {
   final HealthService? healthService;
   final CalendarService? calendarService;
   final int initialTab;
+  final String? title;
 
   const StatsScreen({
     super.key,
@@ -28,6 +29,7 @@ class StatsScreen extends StatefulWidget {
     this.healthService,
     this.calendarService,
     this.initialTab = 0,
+    this.title,
   });
 
   @override
@@ -105,7 +107,7 @@ class _StatsScreenState extends State<StatsScreen> {
         headerSliverBuilder: (context, innerBoxIsScrolled) => [
           SliverAppBar(
             automaticallyImplyLeading: false,
-            title: const Text('통계'),
+            title: Text(widget.title ?? '통계'),
             pinned: true,
             forceElevated: innerBoxIsScrolled,
             bottom: TabBar(

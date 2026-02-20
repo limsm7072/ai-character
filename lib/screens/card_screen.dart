@@ -9,8 +9,9 @@ import '../theme/app_colors.dart';
 
 class CardScreen extends StatefulWidget {
   final CardService cardService;
+  final String? title;
 
-  const CardScreen({super.key, required this.cardService});
+  const CardScreen({super.key, required this.cardService, this.title});
 
   @override
   State<CardScreen> createState() => _CardScreenState();
@@ -182,7 +183,7 @@ class _CardScreenState extends State<CardScreen> {
     return Scaffold(
       appBar: AppBar(
         automaticallyImplyLeading: false,
-        title: const Text('내 명함'),
+        title: Text(widget.title ?? '내 명함'),
         actions: _editing
             ? []
             : [

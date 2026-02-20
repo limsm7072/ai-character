@@ -6,8 +6,9 @@ import '../models/news_article.dart';
 
 class RecommendationScreen extends StatefulWidget {
   final RecommendationService recommendationService;
+  final String? title;
 
-  const RecommendationScreen({super.key, required this.recommendationService});
+  const RecommendationScreen({super.key, required this.recommendationService, this.title});
 
   @override
   State<RecommendationScreen> createState() => _RecommendationScreenState();
@@ -56,7 +57,7 @@ class _RecommendationScreenState extends State<RecommendationScreen> {
     return Scaffold(
       appBar: AppBar(
         automaticallyImplyLeading: false,
-        title: const Text('맞춤 정보'),
+        title: Text(widget.title ?? '맞춤 정보'),
         actions: [
           if (_loading)
             const Padding(

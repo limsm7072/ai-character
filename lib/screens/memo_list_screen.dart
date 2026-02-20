@@ -6,8 +6,9 @@ import '../theme/app_colors.dart';
 
 class MemoListScreen extends StatefulWidget {
   final MemoService memoService;
+  final String? title;
 
-  const MemoListScreen({super.key, required this.memoService});
+  const MemoListScreen({super.key, required this.memoService, this.title});
 
   @override
   State<MemoListScreen> createState() => _MemoListScreenState();
@@ -154,7 +155,7 @@ class _MemoListScreenState extends State<MemoListScreen> {
     return Scaffold(
       appBar: AppBar(
         automaticallyImplyLeading: false,
-        title: const Text('메모'),
+        title: Text(widget.title ?? '메모'),
         actions: [
           IconButton(
             icon: Icon(_collapsed ? Icons.unfold_more : Icons.unfold_less),
