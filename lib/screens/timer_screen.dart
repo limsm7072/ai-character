@@ -26,8 +26,9 @@ enum AmbientSound {
 
 class TimerScreen extends StatefulWidget {
   final TimerService timerService;
+  final String? title;
 
-  const TimerScreen({super.key, required this.timerService});
+  const TimerScreen({super.key, required this.timerService, this.title});
 
   @override
   State<TimerScreen> createState() => _TimerScreenState();
@@ -137,7 +138,7 @@ class _TimerScreenState extends State<TimerScreen> {
     return Scaffold(
       appBar: AppBar(
         automaticallyImplyLeading: false,
-        title: const Text('타이머'),
+        title: Text(widget.title ?? '타이머'),
       ),
       body: _presets.isEmpty
           ? Center(
@@ -822,78 +823,79 @@ class _CountdownTabState extends State<_CountdownTab> {
   @override
   Widget build(BuildContext context) {
     final progress = _totalSeconds > 0 ? _remaining / _totalSeconds : 0.0;
-    final bottomPad = MediaQuery.of(context).viewPadding.bottom;
 
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final circleSize = (constraints.maxWidth * 0.5).clamp(160.0, 220.0);
+    return SafeArea(
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final circleSize = (constraints.maxWidth * 0.5).clamp(160.0, 220.0);
 
-        return SingleChildScrollView(
-          padding: EdgeInsets.only(top: 16, bottom: 16 + bottomPad),
-          child: ConstrainedBox(
-            constraints: BoxConstraints(minHeight: constraints.maxHeight),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                const SizedBox(height: 16),
-                // Circular progress
-                SizedBox(
-                  width: circleSize,
-                  height: circleSize,
-                  child: Stack(
-                    alignment: Alignment.center,
-                    children: [
-                      SizedBox(
-                        width: circleSize,
-                        height: circleSize,
-                        child: CircularProgressIndicator(
-                          value: progress,
-                          strokeWidth: 8,
-                          backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest,
+          return SingleChildScrollView(
+            padding: const EdgeInsets.symmetric(vertical: 16),
+            child: ConstrainedBox(
+              constraints: BoxConstraints(minHeight: constraints.maxHeight - 32),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const SizedBox(height: 16),
+                  // Circular progress
+                  SizedBox(
+                    width: circleSize,
+                    height: circleSize,
+                    child: Stack(
+                      alignment: Alignment.center,
+                      children: [
+                        SizedBox(
+                          width: circleSize,
+                          height: circleSize,
+                          child: CircularProgressIndicator(
+                            value: progress,
+                            strokeWidth: 8,
+                            backgroundColor: Theme.of(context).colorScheme.surfaceContainerHighest,
+                          ),
                         ),
+                        Text(
+                          _formatTime(_remaining > 0 ? _remaining : _totalSeconds),
+                          style: TextStyle(fontSize: circleSize * 0.2, fontWeight: FontWeight.bold),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const SizedBox(height: 28),
+                  // Buttons
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      FilledButton.icon(
+                        onPressed: _startPause,
+                        icon: Icon(_isRunning ? Icons.pause : Icons.play_arrow),
+                        label: Text(_isRunning ? '일시정지' : '시작'),
                       ),
-                      Text(
-                        _formatTime(_remaining > 0 ? _remaining : _totalSeconds),
-                        style: TextStyle(fontSize: circleSize * 0.2, fontWeight: FontWeight.bold),
+                      const SizedBox(width: 16),
+                      OutlinedButton.icon(
+                        onPressed: _reset,
+                        icon: const Icon(Icons.refresh),
+                        label: const Text('리셋'),
                       ),
                     ],
                   ),
-                ),
-                const SizedBox(height: 28),
-                // Buttons
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    FilledButton.icon(
-                      onPressed: _startPause,
-                      icon: Icon(_isRunning ? Icons.pause : Icons.play_arrow),
-                      label: Text(_isRunning ? '일시정지' : '시작'),
+                  const SizedBox(height: 20),
+                  // Ambient sound controls
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: _AmbientSoundControls(
+                      selectedSound: _ambientSound,
+                      volume: _ambientVolume,
+                      onSoundChanged: _onAmbientChanged,
+                      onVolumeChanged: _onAmbientVolumeChanged,
                     ),
-                    const SizedBox(width: 16),
-                    OutlinedButton.icon(
-                      onPressed: _reset,
-                      icon: const Icon(Icons.refresh),
-                      label: const Text('리셋'),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 20),
-                // Ambient sound controls
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: _AmbientSoundControls(
-                    selectedSound: _ambientSound,
-                    volume: _ambientVolume,
-                    onSoundChanged: _onAmbientChanged,
-                    onVolumeChanged: _onAmbientVolumeChanged,
                   ),
-                ),
-                const SizedBox(height: 16),
-              ],
+                  const SizedBox(height: 16),
+                ],
+              ),
             ),
-          ),
-        );
-      },
+          );
+        },
+      ),
     );
   }
 
@@ -1122,145 +1124,146 @@ class _PomodoroTabState extends State<_PomodoroTab> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final progress = _totalPhaseSeconds > 0 ? _remaining / _totalPhaseSeconds : 0.0;
-    final bottomPad = MediaQuery.of(context).viewPadding.bottom;
 
-    return LayoutBuilder(
-      builder: (context, constraints) {
-        final circleSize = (constraints.maxWidth * 0.5).clamp(160.0, 220.0);
+    return SafeArea(
+      child: LayoutBuilder(
+        builder: (context, constraints) {
+          final circleSize = (constraints.maxWidth * 0.5).clamp(160.0, 220.0);
 
-        return SingleChildScrollView(
-          padding: EdgeInsets.only(top: 16, bottom: 16 + bottomPad),
-          child: ConstrainedBox(
-            constraints: BoxConstraints(minHeight: constraints.maxHeight),
-            child: Column(
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                const SizedBox(height: 8),
-                // Phase label
-                Text(
-                  _isFocusPhase ? '집중' : '휴식',
-                  style: TextStyle(
-                    fontSize: 22,
-                    fontWeight: FontWeight.bold,
-                    color: _isFocusPhase ? theme.colorScheme.primary : AppColors.success,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  '$_currentSession/$_targetSessions 세션',
-                  style: TextStyle(fontSize: 14, color: AppColors.grey600),
-                ),
-                const SizedBox(height: 20),
-                // Circular progress
-                SizedBox(
-                  width: circleSize,
-                  height: circleSize,
-                  child: Stack(
-                    alignment: Alignment.center,
-                    children: [
-                      SizedBox(
-                        width: circleSize,
-                        height: circleSize,
-                        child: CircularProgressIndicator(
-                          value: progress,
-                          strokeWidth: 8,
-                          color: _isFocusPhase ? theme.colorScheme.primary : AppColors.success,
-                          backgroundColor: theme.colorScheme.surfaceContainerHighest,
-                        ),
-                      ),
-                      Text(
-                        _formatTime(_remaining),
-                        style: TextStyle(fontSize: circleSize * 0.2, fontWeight: FontWeight.bold),
-                      ),
-                    ],
-                  ),
-                ),
-                const SizedBox(height: 24),
-                // Buttons
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    FilledButton.icon(
-                      onPressed: _startPause,
-                      icon: Icon(_isRunning ? Icons.pause : Icons.play_arrow),
-                      label: Text(_isRunning ? '일시정지' : '시작'),
+          return SingleChildScrollView(
+            padding: const EdgeInsets.symmetric(vertical: 16),
+            child: ConstrainedBox(
+              constraints: BoxConstraints(minHeight: constraints.maxHeight - 32),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: [
+                  const SizedBox(height: 8),
+                  // Phase label
+                  Text(
+                    _isFocusPhase ? '집중' : '휴식',
+                    style: TextStyle(
+                      fontSize: 22,
+                      fontWeight: FontWeight.bold,
+                      color: _isFocusPhase ? theme.colorScheme.primary : AppColors.success,
                     ),
-                    const SizedBox(width: 16),
-                    OutlinedButton.icon(
-                      onPressed: _reset,
-                      icon: const Icon(Icons.refresh),
-                      label: const Text('리셋'),
-                    ),
-                  ],
-                ),
-                const SizedBox(height: 12),
-                // Focus mode button
-                TextButton.icon(
-                  onPressed: _enterFocusMode,
-                  icon: const Icon(Icons.fullscreen, size: 20),
-                  label: const Text('집중모드'),
-                ),
-                const SizedBox(height: 8),
-                // Ambient sound controls
-                Padding(
-                  padding: const EdgeInsets.symmetric(horizontal: 16),
-                  child: _AmbientSoundControls(
-                    selectedSound: _ambientSound,
-                    volume: _ambientVolume,
-                    onSoundChanged: _onAmbientChanged,
-                    onVolumeChanged: _onAmbientVolumeChanged,
                   ),
-                ),
-                const SizedBox(height: 16),
-                // Settings - compact layout
-                Card(
-                  margin: const EdgeInsets.symmetric(horizontal: 24),
-                  child: Padding(
-                    padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
-                    child: Row(
+                  const SizedBox(height: 4),
+                  Text(
+                    '$_currentSession/$_targetSessions 세션',
+                    style: TextStyle(fontSize: 14, color: AppColors.grey600),
+                  ),
+                  const SizedBox(height: 20),
+                  // Circular progress
+                  SizedBox(
+                    width: circleSize,
+                    height: circleSize,
+                    child: Stack(
+                      alignment: Alignment.center,
                       children: [
-                        _CompactSetting(
-                          label: '집중(분)',
-                          value: _focusMinutes,
-                          enabled: !_isRunning,
-                          onChanged: (v) {
-                            setState(() {
-                              _focusMinutes = v;
-                              if (_isFocusPhase) _remaining = v * 60;
-                            });
-                          },
+                        SizedBox(
+                          width: circleSize,
+                          height: circleSize,
+                          child: CircularProgressIndicator(
+                            value: progress,
+                            strokeWidth: 8,
+                            color: _isFocusPhase ? theme.colorScheme.primary : AppColors.success,
+                            backgroundColor: theme.colorScheme.surfaceContainerHighest,
+                          ),
                         ),
-                        Container(width: 1, height: 36, color: AppColors.grey300),
-                        _CompactSetting(
-                          label: '휴식(분)',
-                          value: _breakMinutes,
-                          enabled: !_isRunning,
-                          onChanged: (v) {
-                            setState(() {
-                              _breakMinutes = v;
-                              if (!_isFocusPhase) _remaining = v * 60;
-                            });
-                          },
-                        ),
-                        Container(width: 1, height: 36, color: AppColors.grey300),
-                        _CompactSetting(
-                          label: '세션',
-                          value: _targetSessions,
-                          min: 1,
-                          max: 10,
-                          enabled: !_isRunning,
-                          onChanged: (v) => setState(() => _targetSessions = v),
+                        Text(
+                          _formatTime(_remaining),
+                          style: TextStyle(fontSize: circleSize * 0.2, fontWeight: FontWeight.bold),
                         ),
                       ],
                     ),
                   ),
-                ),
-                const SizedBox(height: 16),
-              ],
+                  const SizedBox(height: 24),
+                  // Buttons
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      FilledButton.icon(
+                        onPressed: _startPause,
+                        icon: Icon(_isRunning ? Icons.pause : Icons.play_arrow),
+                        label: Text(_isRunning ? '일시정지' : '시작'),
+                      ),
+                      const SizedBox(width: 16),
+                      OutlinedButton.icon(
+                        onPressed: _reset,
+                        icon: const Icon(Icons.refresh),
+                        label: const Text('리셋'),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  // Focus mode button
+                  TextButton.icon(
+                    onPressed: _enterFocusMode,
+                    icon: const Icon(Icons.fullscreen, size: 20),
+                    label: const Text('집중모드'),
+                  ),
+                  const SizedBox(height: 8),
+                  // Ambient sound controls
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    child: _AmbientSoundControls(
+                      selectedSound: _ambientSound,
+                      volume: _ambientVolume,
+                      onSoundChanged: _onAmbientChanged,
+                      onVolumeChanged: _onAmbientVolumeChanged,
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                  // Settings - compact layout
+                  Card(
+                    margin: const EdgeInsets.symmetric(horizontal: 24),
+                    child: Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 8),
+                      child: Row(
+                        children: [
+                          _CompactSetting(
+                            label: '집중(분)',
+                            value: _focusMinutes,
+                            enabled: !_isRunning,
+                            onChanged: (v) {
+                              setState(() {
+                                _focusMinutes = v;
+                                if (_isFocusPhase) _remaining = v * 60;
+                              });
+                            },
+                          ),
+                          Container(width: 1, height: 36, color: AppColors.grey300),
+                          _CompactSetting(
+                            label: '휴식(분)',
+                            value: _breakMinutes,
+                            enabled: !_isRunning,
+                            onChanged: (v) {
+                              setState(() {
+                                _breakMinutes = v;
+                                if (!_isFocusPhase) _remaining = v * 60;
+                              });
+                            },
+                          ),
+                          Container(width: 1, height: 36, color: AppColors.grey300),
+                          _CompactSetting(
+                            label: '세션',
+                            value: _targetSessions,
+                            min: 1,
+                            max: 10,
+                            enabled: !_isRunning,
+                            onChanged: (v) => setState(() => _targetSessions = v),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                  const SizedBox(height: 16),
+                ],
+              ),
             ),
-          ),
-        );
-      },
+          );
+        },
+      ),
     );
   }
 }
