@@ -23,6 +23,7 @@ class RoutineListScreen extends StatefulWidget {
   final RoutineGroupService routineGroupService;
   final CalendarService? calendarService;
   final VoidCallback? onCompletionUnchecked;
+  final String? title;
 
   const RoutineListScreen({
     super.key,
@@ -34,6 +35,7 @@ class RoutineListScreen extends StatefulWidget {
     required this.routineGroupService,
     this.calendarService,
     this.onCompletionUnchecked,
+    this.title,
   });
 
   @override
@@ -200,6 +202,106 @@ class _RoutineListScreenState extends State<RoutineListScreen> {
     return map;
   }
 
+  // ─── Routine options (long-press) ───────────────────────
+
+  void _showRoutineOptions(model.Routine routine) {
+    final theme = Theme.of(context);
+    showModalBottomSheet(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(width: 40, height: 4, decoration: BoxDecoration(color: theme.colorScheme.outline.withValues(alpha: 0.3), borderRadius: BorderRadius.circular(2))),
+              const SizedBox(height: 16),
+              Text(routine.name, style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
+              const SizedBox(height: 12),
+              ListTile(
+                leading: const Icon(Icons.copy),
+                title: const Text('복제'),
+                subtitle: const Text('같은 설정으로 새 루틴을 만듭니다'),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _duplicateRoutine(routine);
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.add_circle_outline),
+                title: const Text('새로 만들기'),
+                subtitle: const Text('빈 루틴을 새로 만듭니다'),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _addRoutine();
+                },
+              ),
+              ListTile(
+                leading: Icon(Icons.delete_outline, color: AppColors.error),
+                title: Text('삭제', style: TextStyle(color: AppColors.error)),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _confirmDeleteRoutine(routine);
+                },
+              ),
+              const SizedBox(height: 8),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  Future<void> _duplicateRoutine(model.Routine original) async {
+    final copy = model.Routine(
+      id: DateTime.now().millisecondsSinceEpoch.toString(),
+      name: '${original.name} (복사)',
+      description: original.description,
+      startDate: _formatDate(DateTime.now()),
+      startTime: original.startTime,
+      endTime: original.endTime,
+      blockedApps: original.blockedApps.toList(),
+      activeDays: original.activeDays.toList(),
+      isEnabled: original.isEnabled,
+      isAllDay: original.isAllDay,
+      linkedAlarmId: original.linkedAlarmId,
+      linkedTimerId: original.linkedTimerId,
+      overlayEnabled: original.overlayEnabled,
+      appLockEnabled: original.appLockEnabled,
+      nagEnabled: original.nagEnabled,
+      nagFrequency: original.nagFrequency,
+      nagIntensity: original.nagIntensity,
+      workTypeId: original.workTypeId,
+    );
+    await widget.routineService.add(copy);
+    _loadRoutines();
+  }
+
+  Future<void> _confirmDeleteRoutine(model.Routine routine) async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('루틴 삭제'),
+        content: Text("'${routine.name}' 루틴을 삭제하시겠습니까?"),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(context, false),
+            child: const Text('취소'),
+          ),
+          TextButton(
+            onPressed: () => Navigator.pop(context, true),
+            child: Text('삭제', style: TextStyle(color: AppColors.error)),
+          ),
+        ],
+      ),
+    );
+    if (confirm == true) {
+      await widget.routineService.delete(routine.id);
+      await widget.routineGroupService.onRoutineDeleted(routine.id);
+      _loadRoutines();
+    }
+  }
+
   // ─── Navigation ─────────────────────────────────────────
 
   void _launchTimer(model.Routine routine) {
@@ -352,7 +454,7 @@ class _RoutineListScreenState extends State<RoutineListScreen> {
     return SliverAppBar(
       pinned: true,
       automaticallyImplyLeading: false,
-      title: const Text('루틴 관리'),
+      title: Text(widget.title ?? '루틴 관리'),
       actions: [
         if (!_isSelectedToday || _weekOffset != 0)
           TextButton.icon(
@@ -723,7 +825,7 @@ class _RoutineListScreenState extends State<RoutineListScreen> {
                           final group = widget.routineGroupService.groupForRoutine(routine.id);
                           if (group != null) _showRoutineGroupOptions(routine, group);
                         }
-                      : null,
+                      : () => _showRoutineOptions(routine),
                 ),
               ),
       ),
