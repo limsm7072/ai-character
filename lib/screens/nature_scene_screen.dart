@@ -2,6 +2,7 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../models/nature_scene.dart';
+import 'nature_focus_screen.dart';
 
 class NatureSceneScreen extends StatefulWidget {
   const NatureSceneScreen({super.key});
@@ -15,10 +16,11 @@ class _NatureSceneScreenState extends State<NatureSceneScreen>
   static const _channel = MethodChannel('com.aicharacter.ai_character/audio');
 
   int _selectedIndex = 0;
-  double _volume = 0.7;
+  double _volume = 0.1;
   bool _playing = false;
   int? _timerMinutes;
   Timer? _timer;
+  Timer? _fadeTimer;
   int _remainingSeconds = 0;
   late AnimationController _iconAnim;
 
@@ -38,21 +40,38 @@ class _NatureSceneScreenState extends State<NatureSceneScreen>
   void dispose() {
     _stopSound();
     _timer?.cancel();
+    _fadeTimer?.cancel();
     _iconAnim.dispose();
     super.dispose();
   }
 
   Future<void> _startSound() async {
+    _fadeTimer?.cancel();
     try {
+      // Start at volume 0 then fade in
       await _channel.invokeMethod('startAmbient', {
         'type': _current.soundType,
-        'volume': _volume,
+        'volume': 0.0,
       });
       if (mounted) setState(() => _playing = true);
+      // Fade in over 2 seconds (40 steps × 50ms)
+      var step = 0;
+      const totalSteps = 40;
+      _fadeTimer = Timer.periodic(const Duration(milliseconds: 50), (t) {
+        step++;
+        if (step >= totalSteps) {
+          t.cancel();
+          _channel.invokeMethod('setAmbientVolume', {'volume': _volume});
+          return;
+        }
+        final vol = _volume * (step / totalSteps);
+        _channel.invokeMethod('setAmbientVolume', {'volume': vol});
+      });
     } catch (_) {}
   }
 
   Future<void> _stopSound() async {
+    _fadeTimer?.cancel();
     try {
       await _channel.invokeMethod('stopAmbient');
       if (mounted) setState(() => _playing = false);
@@ -68,13 +87,27 @@ class _NatureSceneScreenState extends State<NatureSceneScreen>
 
   void _selectScene(int index) async {
     if (index == _selectedIndex) return;
+    _fadeTimer?.cancel();
     setState(() => _selectedIndex = index);
     try {
       await _channel.invokeMethod('startAmbient', {
         'type': _current.soundType,
-        'volume': _volume,
+        'volume': 0.0,
       });
       if (mounted) setState(() => _playing = true);
+      // Fade in
+      var step = 0;
+      const totalSteps = 40;
+      _fadeTimer = Timer.periodic(const Duration(milliseconds: 50), (t) {
+        step++;
+        if (step >= totalSteps) {
+          t.cancel();
+          _channel.invokeMethod('setAmbientVolume', {'volume': _volume});
+          return;
+        }
+        final vol = _volume * (step / totalSteps);
+        _channel.invokeMethod('setAmbientVolume', {'volume': vol});
+      });
     } catch (_) {}
   }
 
@@ -155,6 +188,23 @@ class _NatureSceneScreenState extends State<NatureSceneScreen>
     return '${m.toString().padLeft(2, '0')}:${s.toString().padLeft(2, '0')}';
   }
 
+  void _openFocusMode() {
+    Navigator.push(
+      context,
+      MaterialPageRoute(
+        builder: (_) => NatureFocusScreen(
+          scene: _current,
+          volume: _volume,
+          remainingSeconds: _timerMinutes != null ? _remainingSeconds : null,
+          onVolumeChanged: (v) => _setVolume(v),
+        ),
+      ),
+    ).then((_) {
+      // Restore system UI when returning
+      SystemChrome.setEnabledSystemUIMode(SystemUiMode.edgeToEdge);
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     final scene = _current;
@@ -176,52 +226,61 @@ class _NatureSceneScreenState extends State<NatureSceneScreen>
           ),
         ),
         child: SafeArea(
+          top: true,
+          bottom: true,
           child: Column(
             children: [
-              const Spacer(flex: 2),
-              // Scene icon with breathing animation
-              AnimatedBuilder(
-                animation: _iconAnim,
-                builder: (_, __) {
-                  final scale = 1.0 + _iconAnim.value * 0.08;
-                  final opacity = 0.6 + _iconAnim.value * 0.4;
-                  return Transform.scale(
-                    scale: scale,
-                    child: Icon(
-                      scene.icon,
-                      size: 80,
-                      color: Colors.white.withValues(alpha: opacity),
-                    ),
-                  );
-                },
-              ),
-              const SizedBox(height: 20),
-              Text(
-                scene.name,
-                style: const TextStyle(
-                  fontSize: 28,
-                  fontWeight: FontWeight.w300,
-                  color: Colors.white,
-                  letterSpacing: 2,
-                ),
-              ),
-              if (_timerMinutes != null) ...[
-                const SizedBox(height: 8),
-                Text(
-                  _formatRemaining(),
-                  style: TextStyle(
-                    fontSize: 16,
-                    color: Colors.white.withValues(alpha: 0.7),
+              // Center content (flexible)
+              Expanded(
+                child: Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      AnimatedBuilder(
+                        animation: _iconAnim,
+                        builder: (_, __) {
+                          final scale = 1.0 + _iconAnim.value * 0.08;
+                          final opacity = 0.6 + _iconAnim.value * 0.4;
+                          return Transform.scale(
+                            scale: scale,
+                            child: Icon(
+                              scene.icon,
+                              size: 64,
+                              color: Colors.white.withValues(alpha: opacity),
+                            ),
+                          );
+                        },
+                      ),
+                      const SizedBox(height: 16),
+                      Text(
+                        scene.name,
+                        style: const TextStyle(
+                          fontSize: 26,
+                          fontWeight: FontWeight.w300,
+                          color: Colors.white,
+                          letterSpacing: 2,
+                        ),
+                      ),
+                      if (_timerMinutes != null) ...[
+                        const SizedBox(height: 6),
+                        Text(
+                          _formatRemaining(),
+                          style: TextStyle(
+                            fontSize: 16,
+                            color: Colors.white.withValues(alpha: 0.7),
+                          ),
+                        ),
+                      ],
+                    ],
                   ),
                 ),
-              ],
-              const Spacer(flex: 3),
-              // Volume slider
+              ),
+              // Bottom controls
               Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 40),
+                padding: const EdgeInsets.symmetric(horizontal: 32),
                 child: Row(
                   children: [
-                    Icon(Icons.volume_down, color: Colors.white.withValues(alpha: 0.7), size: 20),
+                    Icon(Icons.volume_down, color: Colors.white.withValues(alpha: 0.7), size: 18),
                     Expanded(
                       child: SliderTheme(
                         data: SliderThemeData(
@@ -230,7 +289,7 @@ class _NatureSceneScreenState extends State<NatureSceneScreen>
                           thumbColor: Colors.white,
                           overlayColor: Colors.white.withValues(alpha: 0.1),
                           trackHeight: 3,
-                          thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 7),
+                          thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
                         ),
                         child: Slider(
                           value: _volume,
@@ -238,12 +297,11 @@ class _NatureSceneScreenState extends State<NatureSceneScreen>
                         ),
                       ),
                     ),
-                    Icon(Icons.volume_up, color: Colors.white.withValues(alpha: 0.7), size: 20),
+                    Icon(Icons.volume_up, color: Colors.white.withValues(alpha: 0.7), size: 18),
                   ],
                 ),
               ),
-              const SizedBox(height: 12),
-              // Play/Pause + Timer buttons
+              // Play/Pause + Timer + Focus buttons
               Row(
                 mainAxisAlignment: MainAxisAlignment.center,
                 children: [
@@ -254,8 +312,10 @@ class _NatureSceneScreenState extends State<NatureSceneScreen>
                       color: _timerMinutes != null
                           ? Colors.white
                           : Colors.white.withValues(alpha: 0.6),
-                      size: 26,
+                      size: 24,
                     ),
+                    padding: const EdgeInsets.all(8),
+                    constraints: const BoxConstraints(),
                   ),
                   const SizedBox(width: 16),
                   Container(
@@ -264,7 +324,8 @@ class _NatureSceneScreenState extends State<NatureSceneScreen>
                       color: Colors.white.withValues(alpha: 0.15),
                     ),
                     child: IconButton(
-                      iconSize: 36,
+                      iconSize: 32,
+                      padding: const EdgeInsets.all(10),
                       onPressed: () {
                         if (_playing) {
                           _stopSound();
@@ -279,18 +340,30 @@ class _NatureSceneScreenState extends State<NatureSceneScreen>
                     ),
                   ),
                   const SizedBox(width: 16),
-                  const SizedBox(width: 48), // balance
+                  IconButton(
+                    onPressed: _playing ? _openFocusMode : null,
+                    icon: Icon(
+                      Icons.self_improvement,
+                      color: _playing
+                          ? Colors.white
+                          : Colors.white.withValues(alpha: 0.3),
+                      size: 24,
+                    ),
+                    padding: const EdgeInsets.all(8),
+                    constraints: const BoxConstraints(),
+                    tooltip: '집중모드',
+                  ),
                 ],
               ),
-              const SizedBox(height: 24),
+              const SizedBox(height: 4),
               // Scene selector chips
               SizedBox(
-                height: 70,
+                height: 52,
                 child: ListView.separated(
                   scrollDirection: Axis.horizontal,
                   padding: const EdgeInsets.symmetric(horizontal: 20),
                   itemCount: NatureScene.scenes.length,
-                  separatorBuilder: (_, __) => const SizedBox(width: 12),
+                  separatorBuilder: (_, __) => const SizedBox(width: 10),
                   itemBuilder: (_, i) {
                     final s = NatureScene.scenes[i];
                     final selected = i == _selectedIndex;
@@ -298,12 +371,12 @@ class _NatureSceneScreenState extends State<NatureSceneScreen>
                       onTap: () => _selectScene(i),
                       child: AnimatedContainer(
                         duration: const Duration(milliseconds: 200),
-                        width: 64,
+                        width: 54,
                         decoration: BoxDecoration(
                           color: selected
                               ? Colors.white.withValues(alpha: 0.25)
                               : Colors.white.withValues(alpha: 0.08),
-                          borderRadius: BorderRadius.circular(16),
+                          borderRadius: BorderRadius.circular(14),
                           border: selected
                               ? Border.all(color: Colors.white.withValues(alpha: 0.5), width: 1.5)
                               : null,
@@ -311,12 +384,12 @@ class _NatureSceneScreenState extends State<NatureSceneScreen>
                         child: Column(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            Icon(s.icon, size: 24, color: Colors.white.withValues(alpha: selected ? 1.0 : 0.6)),
-                            const SizedBox(height: 4),
+                            Icon(s.icon, size: 20, color: Colors.white.withValues(alpha: selected ? 1.0 : 0.6)),
+                            const SizedBox(height: 2),
                             Text(
                               s.name,
                               style: TextStyle(
-                                fontSize: 11,
+                                fontSize: 10,
                                 color: Colors.white.withValues(alpha: selected ? 1.0 : 0.6),
                                 fontWeight: selected ? FontWeight.w600 : FontWeight.normal,
                               ),
@@ -328,7 +401,7 @@ class _NatureSceneScreenState extends State<NatureSceneScreen>
                   },
                 ),
               ),
-              const SizedBox(height: 20),
+              const SizedBox(height: 4),
             ],
           ),
         ),
@@ -336,4 +409,3 @@ class _NatureSceneScreenState extends State<NatureSceneScreen>
     );
   }
 }
-

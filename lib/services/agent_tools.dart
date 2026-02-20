@@ -28,6 +28,8 @@ class AgentTools {
   final CalendarService? calendarService;
   final SettingsService? settingsService;
   final TtsService? ttsService;
+  final Future<void> Function(String url)? onOpenUrl;
+  final Future<void> Function(String query)? onPlayMusic;
 
   AgentTools({
     required this.routineService,
@@ -38,6 +40,8 @@ class AgentTools {
     this.calendarService,
     this.settingsService,
     this.ttsService,
+    this.onOpenUrl,
+    this.onPlayMusic,
   });
 
   List<Tool> get tools => [
@@ -398,6 +402,28 @@ class AgentTools {
           requiredProperties: ['count'],
         ),
       ),
+      // ─── URL open tool ─────────────────────────────────────
+      FunctionDeclaration(
+        'open_url',
+        '사용자가 요청한 웹사이트나 앱을 엽니다. 예: 네이버, 유튜브, 구글 등. 사용자가 "네이버 열어줘", "유튜브 틀어줘" 같이 요청하면 이 도구를 사용하세요.',
+        Schema(SchemaType.object,
+          properties: {
+            'url': Schema(SchemaType.string, description: '열 URL (예: https://www.naver.com, https://www.youtube.com)'),
+          },
+          requiredProperties: ['url'],
+        ),
+      ),
+      // ─── Music play tool ─────────────────────────────────────
+      FunctionDeclaration(
+        'play_music',
+        '음악을 재생합니다. 사용자가 "음악 틀어줘", "BTS 틀어줘", "잔잔한 음악 재생해줘" 같이 요청하면 이 도구를 사용하세요. 유튜브뮤직에서 자동 재생됩니다.',
+        Schema(SchemaType.object,
+          properties: {
+            'query': Schema(SchemaType.string, description: '검색할 음악/아티스트/장르 (예: BTS, 잔잔한 음악, 팝송)'),
+          },
+          requiredProperties: ['query'],
+        ),
+      ),
     ]),
   ];
 
@@ -471,6 +497,10 @@ class AgentTools {
         return await _setShakeToDisable(call.args);
       case 'set_shake_count':
         return await _setShakeCount(call.args);
+      case 'open_url':
+        return await _openUrl(call.args);
+      case 'play_music':
+        return await _playMusic(call.args);
       default:
         return {'error': '알 수 없는 함수: ${call.name}'};
     }
@@ -1065,6 +1095,32 @@ class AgentTools {
       }
       await settingsService!.setShakeCount(count);
       return {'success': true, 'shake_count': count};
+    } catch (e) {
+      return {'success': false, 'error': e.toString()};
+    }
+  }
+
+  Future<Map<String, Object?>> _openUrl(Map<String, Object?> args) async {
+    try {
+      final url = args['url'] as String;
+      if (onOpenUrl != null) {
+        await onOpenUrl!(url);
+        return {'success': true, 'url': url};
+      }
+      return {'success': false, 'error': 'URL 열기 기능을 사용할 수 없습니다'};
+    } catch (e) {
+      return {'success': false, 'error': e.toString()};
+    }
+  }
+
+  Future<Map<String, Object?>> _playMusic(Map<String, Object?> args) async {
+    try {
+      final query = args['query'] as String;
+      if (onPlayMusic != null) {
+        await onPlayMusic!(query);
+        return {'success': true, 'query': query};
+      }
+      return {'success': false, 'error': '음악 재생 기능을 사용할 수 없습니다'};
     } catch (e) {
       return {'success': false, 'error': e.toString()};
     }

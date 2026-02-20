@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import '../models/memo.dart';
 import '../services/memo_service.dart';
 import '../theme/app_colors.dart';
@@ -13,13 +14,28 @@ class MemoListScreen extends StatefulWidget {
 }
 
 class _MemoListScreenState extends State<MemoListScreen> {
+  static const _collapsedKey = 'memo_collapsed';
   List<Memo> _memos = [];
   bool _collapsed = false;
 
   @override
   void initState() {
     super.initState();
+    _loadCollapsedState();
     _load();
+  }
+
+  Future<void> _loadCollapsedState() async {
+    final prefs = await SharedPreferences.getInstance();
+    if (mounted) {
+      setState(() => _collapsed = prefs.getBool(_collapsedKey) ?? false);
+    }
+  }
+
+  Future<void> _setCollapsed(bool value) async {
+    setState(() => _collapsed = value);
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_collapsedKey, value);
   }
 
   void _load() {
@@ -143,7 +159,7 @@ class _MemoListScreenState extends State<MemoListScreen> {
           IconButton(
             icon: Icon(_collapsed ? Icons.unfold_more : Icons.unfold_less),
             tooltip: _collapsed ? '펼치기' : '접기',
-            onPressed: () => setState(() => _collapsed = !_collapsed),
+            onPressed: () => _setCollapsed(!_collapsed),
           ),
         ],
       ),

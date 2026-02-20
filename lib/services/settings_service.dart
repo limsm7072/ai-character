@@ -233,6 +233,49 @@ class SettingsService {
     await _prefs.setString(_sectionLabelsKey, jsonEncode(map));
   }
 
+  // Dashboard section → work type linking
+  static const _sectionWorkTypeKey = 'dashboard_section_work_types';
+
+  String? getSectionWorkType(String sectionId) {
+    final raw = _prefs.getString(_sectionWorkTypeKey);
+    if (raw == null) return null;
+    try {
+      final map = (jsonDecode(raw) as Map).cast<String, dynamic>();
+      return map[sectionId] as String?;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<void> setSectionWorkType(String sectionId, String? workTypeId) async {
+    final raw = _prefs.getString(_sectionWorkTypeKey);
+    Map<String, dynamic> map = {};
+    if (raw != null) {
+      try { map = (jsonDecode(raw) as Map).cast<String, dynamic>(); } catch (_) {}
+    }
+    if (workTypeId == null) {
+      map.remove(sectionId);
+    } else {
+      map[sectionId] = workTypeId;
+    }
+    await _prefs.setString(_sectionWorkTypeKey, jsonEncode(map));
+  }
+
+  /// Get all section IDs linked to a specific work type.
+  List<String> getSectionsForWorkType(String workTypeId) {
+    final raw = _prefs.getString(_sectionWorkTypeKey);
+    if (raw == null) return [];
+    try {
+      final map = (jsonDecode(raw) as Map).cast<String, dynamic>();
+      return map.entries
+          .where((e) => e.value == workTypeId)
+          .map((e) => e.key)
+          .toList();
+    } catch (_) {
+      return [];
+    }
+  }
+
   // App lock
   static const _appLockEnabledKey = 'app_lock_enabled';
 

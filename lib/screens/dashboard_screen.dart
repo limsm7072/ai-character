@@ -36,6 +36,7 @@ import 'recommendation_screen.dart';
 import 'diary_screen.dart';
 import 'nature_scene_screen.dart';
 import 'bookmark_screen.dart';
+import '../theme/app_colors.dart';
 
 class DashboardScreen extends StatefulWidget {
   final RoutineService routineService;
@@ -155,37 +156,45 @@ class DashboardScreenState extends State<DashboardScreen> {
   Widget? _buildSection(String id, BuildContext context, DateTime now, String todayStr, ThemeData theme) {
     final large = widget.settingsService.isDashboardSectionLarge(id);
     final baseId = SettingsService.sectionBaseId(id);
+    final label = _sectionLabel(id);
     switch (baseId) {
       case 'recommend':
-        return large ? _buildRecommendLarge(theme) : _buildRecommendSmall(theme);
+        return large ? _buildRecommendLarge(theme, label) : _buildRecommendSmall(theme, label);
       case 'news':
-        return large ? _buildNewsLarge(theme) : _buildNewsSmall(theme);
+        return large ? _buildNewsLarge(theme, label) : _buildNewsSmall(theme, label);
       case 'weather':
-        return large ? _buildWeatherLarge(theme) : _buildWeatherSmall(theme);
+        return large ? _buildWeatherLarge(theme, label) : _buildWeatherSmall(theme, label);
       case 'routine':
-        return large ? _buildRoutineLarge(context, now, todayStr) : _buildRoutineSmall(context, now, todayStr);
+        // Check if this section is linked to a work type
+        final sectionWtId = widget.settingsService.getSectionWorkType(id);
+        if (sectionWtId != null) {
+          // Only show if today's work type matches
+          final todayWtId = widget.calendarService.getDateWorkType(todayStr);
+          if (todayWtId != sectionWtId) return null;
+        }
+        return large ? _buildRoutineLarge(context, now, todayStr, label) : _buildRoutineSmall(context, now, todayStr, label);
       case 'todo':
-        return large ? _buildTodoLarge(context) : _buildTodoSmall(context);
+        return large ? _buildTodoLarge(context, label) : _buildTodoSmall(context, label);
       case 'card':
-        return large ? _buildCardLarge(context) : _buildCardSmall(context);
+        return large ? _buildCardLarge(context, label) : _buildCardSmall(context, label);
       case 'calendar':
-        return large ? _buildCalendarLarge(context, now, todayStr) : _buildCalendarSmall(context, now, todayStr);
+        return large ? _buildCalendarLarge(context, now, todayStr, label) : _buildCalendarSmall(context, now, todayStr, label);
       case 'stats':
-        return large ? _buildStatsLarge(context, now) : _buildStatsSmall(context, now);
+        return large ? _buildStatsLarge(context, now, label) : _buildStatsSmall(context, now, label);
       case 'alarm':
-        return large ? _buildAlarmLarge(context) : _buildAlarmSmall(context);
+        return large ? _buildAlarmLarge(context, label) : _buildAlarmSmall(context, label);
       case 'timer':
-        return large ? _buildTimerLarge(context) : _buildTimerSmall(context);
+        return large ? _buildTimerLarge(context, label) : _buildTimerSmall(context, label);
       case 'diary':
-        return large ? _buildDiaryLarge(context) : _buildDiarySmall(context);
+        return large ? _buildDiaryLarge(context, label) : _buildDiarySmall(context, label);
       case 'memo':
-        return large ? _buildMemoLarge(context) : _buildMemoSmall(context);
+        return large ? _buildMemoLarge(context, label) : _buildMemoSmall(context, label);
       case 'dday':
-        return large ? _buildDDayLarge(context, now) : _buildDDaySmall(context, now);
+        return large ? _buildDDayLarge(context, now, label) : _buildDDaySmall(context, now, label);
       case 'nature':
-        return large ? _buildNatureLarge(context) : _buildNatureSmall(context);
+        return large ? _buildNatureLarge(context, label) : _buildNatureSmall(context, label);
       case 'bookmark':
-        return large ? _buildBookmarkLarge(context) : _buildBookmarkSmall(context);
+        return large ? _buildBookmarkLarge(context, label) : _buildBookmarkSmall(context, label);
       default:
         return null;
     }
@@ -193,7 +202,7 @@ class DashboardScreenState extends State<DashboardScreen> {
 
   // ─── 맞춤 정보 ──────────────────────────────────────
 
-  Widget? _buildRecommendLarge(ThemeData theme) {
+  Widget? _buildRecommendLarge(ThemeData theme, String label) {
     final tipCount = _recommendation?.tips.length ?? 0;
     final articleCount = _recommendation?.articles.length ?? 0;
     if (tipCount == 0 && articleCount == 0 && _recommendation == null) return null;
@@ -213,7 +222,7 @@ class DashboardScreenState extends State<DashboardScreen> {
               children: [
                 Icon(Icons.auto_awesome_outlined, size: 18, color: theme.colorScheme.primary),
                 const SizedBox(width: 8),
-                Text('맞춤 정보', style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600)),
+                Text(label, style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600)),
                 const Spacer(),
                 if (tipCount + articleCount > 0)
                   Text('${tipCount + articleCount}건', style: TextStyle(fontSize: 13, color: theme.colorScheme.onSurfaceVariant)),
@@ -258,7 +267,7 @@ class DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  Widget? _buildRecommendSmall(ThemeData theme) {
+  Widget? _buildRecommendSmall(ThemeData theme, String label) {
     final tipCount = _recommendation?.tips.length ?? 0;
     final articleCount = _recommendation?.articles.length ?? 0;
     if (tipCount == 0 && articleCount == 0 && _recommendation == null) return null;
@@ -275,7 +284,7 @@ class DashboardScreenState extends State<DashboardScreen> {
           children: [
             Icon(Icons.auto_awesome_outlined, size: 18, color: theme.colorScheme.primary),
             const SizedBox(width: 10),
-            Text('맞춤 정보', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: theme.colorScheme.onSurface)),
+            Text(label, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: theme.colorScheme.onSurface)),
             const Spacer(),
             Text('${tipCount + articleCount}건', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: theme.colorScheme.onSurfaceVariant)),
           ],
@@ -286,7 +295,7 @@ class DashboardScreenState extends State<DashboardScreen> {
 
   // ─── 뉴스 ────────────────────────────────────────
 
-  Widget? _buildNewsLarge(ThemeData theme) {
+  Widget? _buildNewsLarge(ThemeData theme, String label) {
     if (_headlines.isEmpty) return null;
     return InkWell(
       borderRadius: BorderRadius.circular(16),
@@ -304,7 +313,7 @@ class DashboardScreenState extends State<DashboardScreen> {
               children: [
                 Icon(Icons.newspaper_outlined, size: 18, color: theme.colorScheme.onSurfaceVariant),
                 const SizedBox(width: 8),
-                Text('뉴스', style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600)),
+                Text(label, style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600)),
               ],
             ),
             const SizedBox(height: 10),
@@ -318,7 +327,7 @@ class DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  Widget? _buildNewsSmall(ThemeData theme) {
+  Widget? _buildNewsSmall(ThemeData theme, String label) {
     if (_headlines.isEmpty) return null;
     return InkWell(
       borderRadius: BorderRadius.circular(12),
@@ -333,7 +342,7 @@ class DashboardScreenState extends State<DashboardScreen> {
           children: [
             Icon(Icons.newspaper_outlined, size: 18, color: theme.colorScheme.onSurfaceVariant),
             const SizedBox(width: 10),
-            Text('뉴스', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: theme.colorScheme.onSurface)),
+            Text(label, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: theme.colorScheme.onSurface)),
             const Spacer(),
             Text('${_headlines.length}건', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: theme.colorScheme.onSurfaceVariant)),
           ],
@@ -344,7 +353,7 @@ class DashboardScreenState extends State<DashboardScreen> {
 
   // ─── 날씨 ────────────────────────────────────────
 
-  Widget? _buildWeatherLarge(ThemeData theme) {
+  Widget? _buildWeatherLarge(ThemeData theme, String label) {
     if (_weather == null) return null;
     return InkWell(
       borderRadius: BorderRadius.circular(16),
@@ -364,7 +373,7 @@ class DashboardScreenState extends State<DashboardScreen> {
                 const SizedBox(width: 8),
                 Expanded(
                   child: Text(
-                    '날씨  ${_weather!.temperature.round()}° ${_weather!.description}',
+                    '$label  ${_weather!.temperature.round()}° ${_weather!.description}',
                     style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600),
                     overflow: TextOverflow.ellipsis,
                   ),
@@ -393,7 +402,7 @@ class DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  Widget? _buildWeatherSmall(ThemeData theme) {
+  Widget? _buildWeatherSmall(ThemeData theme, String label) {
     if (_weather == null) return null;
     return InkWell(
       borderRadius: BorderRadius.circular(12),
@@ -408,7 +417,7 @@ class DashboardScreenState extends State<DashboardScreen> {
           children: [
             Icon(_weather!.icon, size: 18, color: _weather!.iconColor),
             const SizedBox(width: 10),
-            Text('날씨', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: theme.colorScheme.onSurface)),
+            Text(label, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: theme.colorScheme.onSurface)),
             const Spacer(),
             Text(
               '${_weather!.temperature.round()}° ${_weather!.description}',
@@ -431,7 +440,7 @@ class DashboardScreenState extends State<DashboardScreen> {
     return r.workTypeId == todayWtId;
   }
 
-  Widget _buildRoutineSmall(BuildContext context, DateTime now, String todayStr) {
+  Widget _buildRoutineSmall(BuildContext context, DateTime now, String todayStr, String label) {
     final theme = Theme.of(context);
     final routines = widget.routineService.getAll();
     final active = routines.where((r) => r.isActiveOnDate(now)).toList();
@@ -462,7 +471,7 @@ class DashboardScreenState extends State<DashboardScreen> {
           children: [
             Icon(Icons.check_circle_outline, size: 18, color: theme.colorScheme.primary),
             const SizedBox(width: 10),
-            Text('루틴', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: theme.colorScheme.onSurface)),
+            Text(label, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: theme.colorScheme.onSurface)),
             const Spacer(),
             Text('$doneCount / $total', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: theme.colorScheme.primary)),
           ],
@@ -471,7 +480,7 @@ class DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  Widget _buildRoutineLarge(BuildContext context, DateTime now, String todayStr) {
+  Widget _buildRoutineLarge(BuildContext context, DateTime now, String todayStr, String label) {
     final theme = Theme.of(context);
     final routines = widget.routineService.getAll();
     final active = routines.where((r) => r.isActiveOnDate(now)).toList();
@@ -504,7 +513,7 @@ class DashboardScreenState extends State<DashboardScreen> {
           children: [
             Row(
               children: [
-                Text('오늘의 루틴', style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600)),
+                Text(label, style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600)),
                 const Spacer(),
                 Text('$doneCount / $total', style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700, color: theme.colorScheme.primary)),
               ],
@@ -559,7 +568,7 @@ class DashboardScreenState extends State<DashboardScreen> {
 
   // ─── 할 일 ────────────────────────────────────────
 
-  Widget _buildTodoSmall(BuildContext context) {
+  Widget _buildTodoSmall(BuildContext context, String label) {
     final theme = Theme.of(context);
     final count = widget.todoService.getIncomplete().length;
     return InkWell(
@@ -575,7 +584,7 @@ class DashboardScreenState extends State<DashboardScreen> {
           children: [
             Icon(Icons.checklist, size: 18, color: theme.colorScheme.onSurfaceVariant),
             const SizedBox(width: 10),
-            Text('할 일', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: theme.colorScheme.onSurface)),
+            Text(label, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: theme.colorScheme.onSurface)),
             const Spacer(),
             Text('${count}개', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: theme.colorScheme.onSurfaceVariant)),
           ],
@@ -584,7 +593,7 @@ class DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  Widget _buildTodoLarge(BuildContext context) {
+  Widget _buildTodoLarge(BuildContext context, String label) {
     final theme = Theme.of(context);
     final incomplete = widget.todoService.getIncomplete();
     return InkWell(
@@ -601,7 +610,7 @@ class DashboardScreenState extends State<DashboardScreen> {
           children: [
             Row(
               children: [
-                Text('할 일', style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600)),
+                Text(label, style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600)),
                 const Spacer(),
                 Text('${incomplete.length}개', style: TextStyle(fontSize: 13, color: theme.colorScheme.onSurfaceVariant)),
               ],
@@ -633,7 +642,7 @@ class DashboardScreenState extends State<DashboardScreen> {
 
   // ─── 명함 ────────────────────────────────────────
 
-  Widget _buildCardSmall(BuildContext context) {
+  Widget _buildCardSmall(BuildContext context, String label) {
     final theme = Theme.of(context);
     final card = widget.cardService.get();
     return InkWell(
@@ -649,7 +658,7 @@ class DashboardScreenState extends State<DashboardScreen> {
           children: [
             Icon(Icons.badge_outlined, size: 18, color: theme.colorScheme.onSurfaceVariant),
             const SizedBox(width: 10),
-            Text('명함', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: theme.colorScheme.onSurface)),
+            Text(label, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: theme.colorScheme.onSurface)),
             const Spacer(),
             Text(
               card != null && !card.isEmpty ? card.name : '미등록',
@@ -661,7 +670,7 @@ class DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  Widget _buildCardLarge(BuildContext context) {
+  Widget _buildCardLarge(BuildContext context, String label) {
     final theme = Theme.of(context);
     final card = widget.cardService.get();
     return InkWell(
@@ -678,7 +687,7 @@ class DashboardScreenState extends State<DashboardScreen> {
                 children: [
                   Icon(Icons.badge_outlined, size: 20, color: theme.colorScheme.onSurfaceVariant),
                   const SizedBox(width: 10),
-                  Text('명함을 만들어보세요', style: TextStyle(fontSize: 13, color: theme.colorScheme.onSurfaceVariant)),
+                  Text('$label을 만들어보세요', style: TextStyle(fontSize: 13, color: theme.colorScheme.onSurfaceVariant)),
                   const Spacer(),
                   Icon(Icons.arrow_forward_ios, size: 14, color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.5)),
                 ],
@@ -717,7 +726,7 @@ class DashboardScreenState extends State<DashboardScreen> {
 
   // ─── 캘린더 (Enhanced) ────────────────────────────
 
-  Widget _buildCalendarSmall(BuildContext context, DateTime now, String todayStr) {
+  Widget _buildCalendarSmall(BuildContext context, DateTime now, String todayStr, String label) {
     final theme = Theme.of(context);
     return InkWell(
       borderRadius: BorderRadius.circular(12),
@@ -729,7 +738,7 @@ class DashboardScreenState extends State<DashboardScreen> {
           children: [
             Icon(Icons.calendar_month_outlined, size: 18, color: theme.colorScheme.onSurfaceVariant),
             const SizedBox(width: 10),
-            Text('캘린더', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: theme.colorScheme.onSurface)),
+            Text(label, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: theme.colorScheme.onSurface)),
             const Spacer(),
             Text(_calendarValue(todayStr, now), style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: theme.colorScheme.onSurfaceVariant)),
           ],
@@ -738,7 +747,7 @@ class DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  Widget _buildCalendarLarge(BuildContext context, DateTime now, String todayStr) {
+  Widget _buildCalendarLarge(BuildContext context, DateTime now, String todayStr, String label) {
     final theme = Theme.of(context);
     final events = widget.calendarService.getByDate(todayStr);
     return InkWell(
@@ -754,7 +763,7 @@ class DashboardScreenState extends State<DashboardScreen> {
               children: [
                 Icon(Icons.calendar_month_outlined, size: 20, color: theme.colorScheme.onSurfaceVariant),
                 const SizedBox(width: 12),
-                Text('캘린더', style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600)),
+                Text(label, style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600)),
                 const Spacer(),
                 Text(
                   events.isNotEmpty ? '오늘 ${events.length}건' : '${now.month}월',
@@ -788,7 +797,7 @@ class DashboardScreenState extends State<DashboardScreen> {
 
   // ─── 통계 (Enhanced) ──────────────────────────────
 
-  Widget _buildStatsSmall(BuildContext context, DateTime now) {
+  Widget _buildStatsSmall(BuildContext context, DateTime now, String label) {
     final theme = Theme.of(context);
     return InkWell(
       borderRadius: BorderRadius.circular(12),
@@ -800,7 +809,7 @@ class DashboardScreenState extends State<DashboardScreen> {
           children: [
             Icon(Icons.bar_chart_rounded, size: 18, color: theme.colorScheme.onSurfaceVariant),
             const SizedBox(width: 10),
-            Text('통계', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: theme.colorScheme.onSurface)),
+            Text(label, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: theme.colorScheme.onSurface)),
             const Spacer(),
             Text('${_weeklyPct(now)}%', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: theme.colorScheme.onSurfaceVariant)),
           ],
@@ -809,7 +818,7 @@ class DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  Widget _buildStatsLarge(BuildContext context, DateTime now) {
+  Widget _buildStatsLarge(BuildContext context, DateTime now, String label) {
     final theme = Theme.of(context);
     final pct = _weeklyPct(now);
     final routines = widget.routineService.getAll();
@@ -826,7 +835,7 @@ class DashboardScreenState extends State<DashboardScreen> {
               children: [
                 Icon(Icons.bar_chart_rounded, size: 20, color: theme.colorScheme.onSurfaceVariant),
                 const SizedBox(width: 12),
-                Text('통계', style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600)),
+                Text(label, style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600)),
                 const Spacer(),
                 Text('주간 $pct%', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: theme.colorScheme.primary)),
               ],
@@ -884,7 +893,7 @@ class DashboardScreenState extends State<DashboardScreen> {
 
   // ─── 알람 (Enhanced) ──────────────────────────────
 
-  Widget _buildAlarmSmall(BuildContext context) {
+  Widget _buildAlarmSmall(BuildContext context, String label) {
     final theme = Theme.of(context);
     return InkWell(
       borderRadius: BorderRadius.circular(12),
@@ -896,7 +905,7 @@ class DashboardScreenState extends State<DashboardScreen> {
           children: [
             Icon(Icons.alarm_rounded, size: 18, color: theme.colorScheme.onSurfaceVariant),
             const SizedBox(width: 10),
-            Text('알람', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: theme.colorScheme.onSurface)),
+            Text(label, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: theme.colorScheme.onSurface)),
             const Spacer(),
             Text('${widget.alarmService.enabledCount}개', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: theme.colorScheme.onSurfaceVariant)),
           ],
@@ -905,7 +914,7 @@ class DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  Widget _buildAlarmLarge(BuildContext context) {
+  Widget _buildAlarmLarge(BuildContext context, String label) {
     final theme = Theme.of(context);
     final alarms = widget.alarmService.getAll();
     final enabled = alarms.where((a) => a.isEnabled).toList();
@@ -922,7 +931,7 @@ class DashboardScreenState extends State<DashboardScreen> {
               children: [
                 Icon(Icons.alarm_rounded, size: 20, color: theme.colorScheme.onSurfaceVariant),
                 const SizedBox(width: 12),
-                Text('알람', style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600)),
+                Text(label, style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600)),
                 const Spacer(),
                 Text('${enabled.length}개 활성', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: theme.colorScheme.primary)),
               ],
@@ -949,7 +958,7 @@ class DashboardScreenState extends State<DashboardScreen> {
 
   // ─── 타이머 (Enhanced) ────────────────────────────
 
-  Widget _buildTimerSmall(BuildContext context) {
+  Widget _buildTimerSmall(BuildContext context, String label) {
     final theme = Theme.of(context);
     return InkWell(
       borderRadius: BorderRadius.circular(12),
@@ -961,7 +970,7 @@ class DashboardScreenState extends State<DashboardScreen> {
           children: [
             Icon(Icons.timer_outlined, size: 18, color: theme.colorScheme.onSurfaceVariant),
             const SizedBox(width: 10),
-            Text('타이머', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: theme.colorScheme.onSurface)),
+            Text(label, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: theme.colorScheme.onSurface)),
             const Spacer(),
             Text('${widget.timerService.getAll().length}개', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: theme.colorScheme.onSurfaceVariant)),
           ],
@@ -970,7 +979,7 @@ class DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  Widget _buildTimerLarge(BuildContext context) {
+  Widget _buildTimerLarge(BuildContext context, String label) {
     final theme = Theme.of(context);
     final timers = widget.timerService.getAll();
     return InkWell(
@@ -986,7 +995,7 @@ class DashboardScreenState extends State<DashboardScreen> {
               children: [
                 Icon(Icons.timer_outlined, size: 20, color: theme.colorScheme.onSurfaceVariant),
                 const SizedBox(width: 12),
-                Text('타이머', style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600)),
+                Text(label, style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600)),
                 const Spacer(),
                 Text('${timers.length}개', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: theme.colorScheme.primary)),
               ],
@@ -1017,7 +1026,7 @@ class DashboardScreenState extends State<DashboardScreen> {
 
   // ─── 일기장 ──────────────────────────────────────
 
-  Widget _buildDiarySmall(BuildContext context) {
+  Widget _buildDiarySmall(BuildContext context, String label) {
     final theme = Theme.of(context);
     final todayStr = _formatDate(DateTime.now());
     final todayDiary = widget.diaryService.getByDate(todayStr);
@@ -1035,7 +1044,7 @@ class DashboardScreenState extends State<DashboardScreen> {
           children: [
             Icon(Icons.auto_stories, size: 18, color: theme.colorScheme.primary),
             const SizedBox(width: 10),
-            Text('일기장', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: theme.colorScheme.onSurface)),
+            Text(label, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: theme.colorScheme.onSurface)),
             const Spacer(),
             if (todayDiary != null)
               Text(todayDiary.moodEmoji, style: const TextStyle(fontSize: 16))
@@ -1051,7 +1060,7 @@ class DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  Widget _buildDiaryLarge(BuildContext context) {
+  Widget _buildDiaryLarge(BuildContext context, String label) {
     final theme = Theme.of(context);
     final now = DateTime.now();
     final todayStr = _formatDate(now);
@@ -1075,7 +1084,7 @@ class DashboardScreenState extends State<DashboardScreen> {
               children: [
                 Icon(Icons.auto_stories, size: 20, color: theme.colorScheme.primary),
                 const SizedBox(width: 12),
-                Text('일기장', style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600)),
+                Text(label, style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600)),
                 const Spacer(),
                 if (streak > 0)
                   Container(
@@ -1147,7 +1156,7 @@ class DashboardScreenState extends State<DashboardScreen> {
 
   // ─── 메모 (Enhanced) ──────────────────────────────
 
-  Widget _buildMemoSmall(BuildContext context) {
+  Widget _buildMemoSmall(BuildContext context, String label) {
     final theme = Theme.of(context);
     return InkWell(
       borderRadius: BorderRadius.circular(12),
@@ -1159,7 +1168,7 @@ class DashboardScreenState extends State<DashboardScreen> {
           children: [
             Icon(Icons.note_alt_outlined, size: 18, color: theme.colorScheme.onSurfaceVariant),
             const SizedBox(width: 10),
-            Text('메모', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: theme.colorScheme.onSurface)),
+            Text(label, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: theme.colorScheme.onSurface)),
             const Spacer(),
             Text('${widget.memoService.getAll().length}개', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: theme.colorScheme.onSurfaceVariant)),
           ],
@@ -1168,7 +1177,7 @@ class DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  Widget _buildMemoLarge(BuildContext context) {
+  Widget _buildMemoLarge(BuildContext context, String label) {
     final theme = Theme.of(context);
     final memos = widget.memoService.getRecent(limit: 3);
     return InkWell(
@@ -1184,7 +1193,7 @@ class DashboardScreenState extends State<DashboardScreen> {
               children: [
                 Icon(Icons.note_alt_outlined, size: 20, color: theme.colorScheme.onSurfaceVariant),
                 const SizedBox(width: 12),
-                Text('메모', style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600)),
+                Text(label, style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600)),
                 const Spacer(),
                 Text('${widget.memoService.getAll().length}개', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: theme.colorScheme.primary)),
               ],
@@ -1213,7 +1222,7 @@ class DashboardScreenState extends State<DashboardScreen> {
 
   // ─── D-Day ────────────────────────────────────────
 
-  Widget? _buildDDaySmall(BuildContext context, DateTime now) {
+  Widget? _buildDDaySmall(BuildContext context, DateTime now, String label) {
     final theme = Theme.of(context);
     final ddayEvents = widget.calendarService.getDDayEvents();
     final upcoming = ddayEvents.where((e) {
@@ -1247,7 +1256,7 @@ class DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  Widget? _buildDDayLarge(BuildContext context, DateTime now) {
+  Widget? _buildDDayLarge(BuildContext context, DateTime now, String label) {
     final theme = Theme.of(context);
     final ddayEvents = widget.calendarService.getDDayEvents();
     final upcoming = ddayEvents.where((e) {
@@ -1264,7 +1273,7 @@ class DashboardScreenState extends State<DashboardScreen> {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text('D-Day', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: theme.colorScheme.onSurfaceVariant)),
+          Text(label, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: theme.colorScheme.onSurfaceVariant)),
           const SizedBox(height: 8),
           ...upcoming.take(3).map((e) => Padding(
             padding: const EdgeInsets.only(bottom: 6),
@@ -1290,7 +1299,7 @@ class DashboardScreenState extends State<DashboardScreen> {
 
   // ─── 자연소리 ──────────────────────────────────────
 
-  Widget _buildNatureSmall(BuildContext context) {
+  Widget _buildNatureSmall(BuildContext context, String label) {
     final theme = Theme.of(context);
     return InkWell(
       borderRadius: BorderRadius.circular(12),
@@ -1305,7 +1314,7 @@ class DashboardScreenState extends State<DashboardScreen> {
           children: [
             Icon(Icons.spa, size: 18, color: theme.colorScheme.onSurfaceVariant),
             const SizedBox(width: 10),
-            Text('자연소리', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: theme.colorScheme.onSurface)),
+            Text(label, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: theme.colorScheme.onSurface)),
             const Spacer(),
             Text('7개 씬', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: theme.colorScheme.onSurfaceVariant)),
           ],
@@ -1314,7 +1323,7 @@ class DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  Widget _buildNatureLarge(BuildContext context) {
+  Widget _buildNatureLarge(BuildContext context, String label) {
     final theme = Theme.of(context);
     final sceneNames = ['빗소리', '파도', '시냇물', '숲속', '모닥불', '바람', '밤벌레'];
     final sceneIcons = [Icons.water_drop, Icons.waves, Icons.water, Icons.forest, Icons.local_fire_department, Icons.air, Icons.nightlight_round];
@@ -1334,7 +1343,7 @@ class DashboardScreenState extends State<DashboardScreen> {
               children: [
                 Icon(Icons.spa, size: 20, color: theme.colorScheme.onSurfaceVariant),
                 const SizedBox(width: 12),
-                Text('자연소리', style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600)),
+                Text(label, style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600)),
                 const Spacer(),
                 Text('${sceneNames.length}개 씬', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: theme.colorScheme.primary)),
               ],
@@ -1367,7 +1376,7 @@ class DashboardScreenState extends State<DashboardScreen> {
 
   // ─── 바로가기 ──────────────────────────────────────
 
-  static const _channel = MethodChannel('com.aicharacter.ai_character/audio');
+  static const _channel = MethodChannel('com.aicharacter.ai_character/usage_stats');
 
   Future<void> _openBookmarkUrl(String url) async {
     try {
@@ -1375,33 +1384,25 @@ class DashboardScreenState extends State<DashboardScreen> {
     } catch (_) {}
   }
 
-  IconData _bookmarkIcon(String url) {
-    final lower = url.toLowerCase();
-    if (lower.contains('naver')) return Icons.language;
-    if (lower.contains('google')) return Icons.search;
-    if (lower.contains('youtube')) return Icons.play_circle_outline;
-    if (lower.contains('instagram')) return Icons.camera_alt_outlined;
-    if (lower.contains('github')) return Icons.code;
-    if (lower.contains('twitter') || lower.contains('x.com')) return Icons.tag;
-    if (lower.contains('facebook')) return Icons.facebook;
-    if (lower.contains('kakao')) return Icons.chat_bubble_outline;
-    return Icons.public;
+  Widget _bookmarkFavicon(String url, {double size = 22}) {
+    try {
+      final host = Uri.parse(url).host;
+      final favUrl = 'https://www.google.com/s2/favicons?domain=$host&sz=64';
+      return ClipRRect(
+        borderRadius: BorderRadius.circular(4),
+        child: Image.network(
+          favUrl,
+          width: size,
+          height: size,
+          errorBuilder: (_, __, ___) => Icon(Icons.public, size: size, color: AppColors.grey400),
+        ),
+      );
+    } catch (_) {
+      return Icon(Icons.public, size: size, color: AppColors.grey400);
+    }
   }
 
-  Color _bookmarkColor(String url) {
-    final lower = url.toLowerCase();
-    if (lower.contains('naver')) return const Color(0xFF03C75A);
-    if (lower.contains('google')) return const Color(0xFF4285F4);
-    if (lower.contains('youtube')) return const Color(0xFFFF0000);
-    if (lower.contains('instagram')) return const Color(0xFFE1306C);
-    if (lower.contains('github')) return const Color(0xFF333333);
-    if (lower.contains('twitter') || lower.contains('x.com')) return const Color(0xFF1DA1F2);
-    if (lower.contains('facebook')) return const Color(0xFF1877F2);
-    if (lower.contains('kakao')) return const Color(0xFFFEE500);
-    return const Color(0xFF607D8B);
-  }
-
-  Widget _buildBookmarkSmall(BuildContext context) {
+  Widget _buildBookmarkSmall(BuildContext context, String label) {
     final theme = Theme.of(context);
     final bookmarks = widget.bookmarkService.getAll();
     return InkWell(
@@ -1417,7 +1418,7 @@ class DashboardScreenState extends State<DashboardScreen> {
           children: [
             Icon(Icons.language, size: 18, color: theme.colorScheme.onSurfaceVariant),
             const SizedBox(width: 10),
-            Text('바로가기', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: theme.colorScheme.onSurface)),
+            Text(label, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: theme.colorScheme.onSurface)),
             const Spacer(),
             Text('${bookmarks.length}개', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: theme.colorScheme.onSurfaceVariant)),
           ],
@@ -1426,7 +1427,7 @@ class DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  Widget _buildBookmarkLarge(BuildContext context) {
+  Widget _buildBookmarkLarge(BuildContext context, String label) {
     final theme = Theme.of(context);
     final bookmarks = widget.bookmarkService.getAll();
     return InkWell(
@@ -1445,7 +1446,7 @@ class DashboardScreenState extends State<DashboardScreen> {
               children: [
                 Icon(Icons.language, size: 20, color: theme.colorScheme.onSurfaceVariant),
                 const SizedBox(width: 12),
-                Text('바로가기', style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600)),
+                Text(label, style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600)),
                 const Spacer(),
                 Icon(Icons.chevron_right, size: 18, color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.5)),
               ],
@@ -1456,7 +1457,6 @@ class DashboardScreenState extends State<DashboardScreen> {
                 spacing: 12,
                 runSpacing: 12,
                 children: bookmarks.map((bm) {
-                  final color = _bookmarkColor(bm.url);
                   return GestureDetector(
                     onTap: () => _openBookmarkUrl(bm.url),
                     child: SizedBox(
@@ -1468,10 +1468,10 @@ class DashboardScreenState extends State<DashboardScreen> {
                             width: 44,
                             height: 44,
                             decoration: BoxDecoration(
-                              color: color.withValues(alpha: 0.12),
+                              color: theme.colorScheme.surfaceContainerHighest,
                               borderRadius: BorderRadius.circular(12),
                             ),
-                            child: Icon(_bookmarkIcon(bm.url), color: color, size: 22),
+                            child: Center(child: _bookmarkFavicon(bm.url, size: 24)),
                           ),
                           const SizedBox(height: 4),
                           Text(
@@ -1711,7 +1711,7 @@ class DashboardScreenState extends State<DashboardScreen> {
     try {
       return Color(int.parse(hex.replaceFirst('#', '0xFF')));
     } catch (_) {
-      return Colors.blue;
+      return AppColors.info;
     }
   }
 
@@ -1872,17 +1872,20 @@ class DashboardScreenState extends State<DashboardScreen> {
         return ReorderableDragStartListener(
           key: ValueKey(id),
           index: index,
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
-            child: isHalf
-                ? Row(
-                    children: [
-                      Expanded(child: AbsorbPointer(child: sectionWidget)),
-                      const SizedBox(width: 8),
-                      const Expanded(child: SizedBox()),
-                    ],
-                  )
-                : AbsorbPointer(child: sectionWidget),
+          child: GestureDetector(
+            onTap: () => _showSectionOptions(id),
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 4),
+              child: isHalf
+                  ? Row(
+                      children: [
+                        Expanded(child: AbsorbPointer(child: sectionWidget)),
+                        const SizedBox(width: 8),
+                        const Expanded(child: SizedBox()),
+                      ],
+                    )
+                  : AbsorbPointer(child: sectionWidget),
+            ),
           ),
         );
       },

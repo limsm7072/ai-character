@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../models/bookmark.dart';
+import '../theme/app_colors.dart';
 import '../services/bookmark_service.dart';
 
 class BookmarkScreen extends StatefulWidget {
@@ -13,9 +14,36 @@ class BookmarkScreen extends StatefulWidget {
 }
 
 class _BookmarkScreenState extends State<BookmarkScreen> {
-  static const _channel = MethodChannel('com.aicharacter.ai_character/audio');
+  static const _channel = MethodChannel('com.aicharacter.ai_character/usage_stats');
 
   List<Bookmark> _bookmarks = [];
+
+  static const _presets = [
+    _PresetSite('네이버', 'https://www.naver.com'),
+    _PresetSite('구글', 'https://www.google.com'),
+    _PresetSite('유튜브', 'https://www.youtube.com'),
+    _PresetSite('인스타그램', 'https://www.instagram.com'),
+    _PresetSite('카카오톡', 'https://www.kakao.com'),
+    _PresetSite('다음', 'https://www.daum.net'),
+    _PresetSite('쿠팡', 'https://www.coupang.com'),
+    _PresetSite('배달의민족', 'https://www.baemin.com'),
+    _PresetSite('당근마켓', 'https://www.daangn.com'),
+    _PresetSite('토스', 'https://toss.im'),
+    _PresetSite('넷플릭스', 'https://www.netflix.com'),
+    _PresetSite('트위터(X)', 'https://x.com'),
+    _PresetSite('페이스북', 'https://www.facebook.com'),
+    _PresetSite('틱톡', 'https://www.tiktok.com'),
+    _PresetSite('깃허브', 'https://github.com'),
+    _PresetSite('디스코드', 'https://discord.com'),
+    _PresetSite('트위치', 'https://www.twitch.tv'),
+    _PresetSite('스포티파이', 'https://www.spotify.com'),
+    _PresetSite('레딧', 'https://www.reddit.com'),
+    _PresetSite('네이버 지도', 'https://map.naver.com'),
+    _PresetSite('카카오맵', 'https://map.kakao.com'),
+    _PresetSite('벅스', 'https://www.bugs.co.kr'),
+    _PresetSite('멜론', 'https://www.melon.com'),
+    _PresetSite('네이버 웹툰', 'https://comic.naver.com'),
+  ];
 
   @override
   void initState() {
@@ -35,33 +63,124 @@ class _BookmarkScreenState extends State<BookmarkScreen> {
     } catch (_) {}
   }
 
-  IconData _guessIcon(String url) {
-    final lower = url.toLowerCase();
-    if (lower.contains('naver')) return Icons.language;
-    if (lower.contains('google')) return Icons.search;
-    if (lower.contains('youtube')) return Icons.play_circle_outline;
-    if (lower.contains('instagram')) return Icons.camera_alt_outlined;
-    if (lower.contains('github')) return Icons.code;
-    if (lower.contains('twitter') || lower.contains('x.com')) return Icons.tag;
-    if (lower.contains('facebook')) return Icons.facebook;
-    if (lower.contains('kakao')) return Icons.chat_bubble_outline;
-    return Icons.public;
+  String _faviconApiUrl(String url) {
+    try {
+      final host = Uri.parse(url).host;
+      return 'https://www.google.com/s2/favicons?domain=$host&sz=64';
+    } catch (_) {
+      return '';
+    }
   }
 
-  Color _guessColor(String url) {
-    final lower = url.toLowerCase();
-    if (lower.contains('naver')) return const Color(0xFF03C75A);
-    if (lower.contains('google')) return const Color(0xFF4285F4);
-    if (lower.contains('youtube')) return const Color(0xFFFF0000);
-    if (lower.contains('instagram')) return const Color(0xFFE1306C);
-    if (lower.contains('github')) return const Color(0xFF333333);
-    if (lower.contains('twitter') || lower.contains('x.com')) return const Color(0xFF1DA1F2);
-    if (lower.contains('facebook')) return const Color(0xFF1877F2);
-    if (lower.contains('kakao')) return const Color(0xFFFEE500);
-    return const Color(0xFF607D8B);
+  Widget _faviconWidget(String url, {double size = 24}) {
+    final favUrl = _faviconApiUrl(url);
+    if (favUrl.isEmpty) {
+      return Icon(Icons.public, size: size, color: AppColors.grey400);
+    }
+    return ClipRRect(
+      borderRadius: BorderRadius.circular(4),
+      child: Image.network(
+        favUrl,
+        width: size,
+        height: size,
+        errorBuilder: (_, __, ___) => Icon(Icons.public, size: size, color: AppColors.grey400),
+      ),
+    );
   }
 
-  void _showAddDialog({Bookmark? existing}) {
+  void _showAddSheet() {
+    final existingUrls = _bookmarks.map((b) => Uri.parse(b.url).host).toSet();
+    final available = _presets.where((p) {
+      try {
+        return !existingUrls.contains(Uri.parse(p.url).host);
+      } catch (_) {
+        return true;
+      }
+    }).toList();
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      builder: (ctx) {
+        final theme = Theme.of(ctx);
+        return DraggableScrollableSheet(
+          expand: false,
+          initialChildSize: 0.65,
+          maxChildSize: 0.85,
+          minChildSize: 0.4,
+          builder: (_, scrollCtrl) {
+            return Column(
+              children: [
+                Padding(
+                  padding: const EdgeInsets.fromLTRB(20, 16, 20, 8),
+                  child: Column(
+                    children: [
+                      Container(
+                        width: 40, height: 4,
+                        decoration: BoxDecoration(
+                          color: theme.colorScheme.outline.withValues(alpha: 0.3),
+                          borderRadius: BorderRadius.circular(2),
+                        ),
+                      ),
+                      const SizedBox(height: 16),
+                      Row(
+                        children: [
+                          Text('바로가기 추가', style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
+                          const Spacer(),
+                          TextButton.icon(
+                            onPressed: () {
+                              Navigator.pop(ctx);
+                              _showCustomAddDialog();
+                            },
+                            icon: const Icon(Icons.edit, size: 18),
+                            label: const Text('직접 입력'),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                ),
+                Expanded(
+                  child: ListView.builder(
+                    controller: scrollCtrl,
+                    padding: const EdgeInsets.symmetric(horizontal: 16),
+                    itemCount: available.length,
+                    itemBuilder: (_, i) {
+                      final preset = available[i];
+                      return ListTile(
+                        leading: Container(
+                          width: 40,
+                          height: 40,
+                          decoration: BoxDecoration(
+                            color: theme.colorScheme.surfaceContainerHighest,
+                            borderRadius: BorderRadius.circular(10),
+                          ),
+                          child: Center(child: _faviconWidget(preset.url, size: 24)),
+                        ),
+                        title: Text(preset.name, style: const TextStyle(fontWeight: FontWeight.w500)),
+                        subtitle: Text(
+                          Uri.parse(preset.url).host,
+                          style: TextStyle(fontSize: 12, color: theme.colorScheme.onSurfaceVariant),
+                        ),
+                        trailing: Icon(Icons.add_circle_outline, color: theme.colorScheme.primary),
+                        onTap: () async {
+                          await widget.bookmarkService.add(preset.name, preset.url, faviconUrl: _faviconApiUrl(preset.url));
+                          _load();
+                          if (ctx.mounted) Navigator.pop(ctx);
+                        },
+                      );
+                    },
+                  ),
+                ),
+              ],
+            );
+          },
+        );
+      },
+    );
+  }
+
+  void _showCustomAddDialog({Bookmark? existing}) {
     final nameCtrl = TextEditingController(text: existing?.name ?? '');
     final urlCtrl = TextEditingController(text: existing?.url ?? '');
     final isEditing = existing != null;
@@ -71,7 +190,7 @@ class _BookmarkScreenState extends State<BookmarkScreen> {
       builder: (ctx) {
         final theme = Theme.of(ctx);
         return AlertDialog(
-          title: Text(isEditing ? '바로가기 수정' : '바로가기 추가'),
+          title: Text(isEditing ? '바로가기 수정' : '직접 입력'),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             children: [
@@ -108,13 +227,18 @@ class _BookmarkScreenState extends State<BookmarkScreen> {
                 if (!url.startsWith('http://') && !url.startsWith('https://')) {
                   url = 'https://$url';
                 }
-                if (isEditing) {
-                  existing.name = name;
-                  existing.url = url;
-                  existing.faviconUrl = _faviconFromUrl(url);
-                  await widget.bookmarkService.update(existing);
+                if (existing != null) {
+                  final updated = Bookmark(
+                    id: existing.id,
+                    name: name,
+                    url: url,
+                    faviconUrl: _faviconApiUrl(url),
+                    order: existing.order,
+                    createdAt: existing.createdAt,
+                  );
+                  await widget.bookmarkService.update(updated);
                 } else {
-                  await widget.bookmarkService.add(name, url, faviconUrl: _faviconFromUrl(url));
+                  await widget.bookmarkService.add(name, url, faviconUrl: _faviconApiUrl(url));
                 }
                 if (ctx.mounted) Navigator.pop(ctx);
                 _load();
@@ -125,15 +249,6 @@ class _BookmarkScreenState extends State<BookmarkScreen> {
         );
       },
     );
-  }
-
-  String _faviconFromUrl(String url) {
-    try {
-      final uri = Uri.parse(url);
-      return '${uri.scheme}://${uri.host}/favicon.ico';
-    } catch (_) {
-      return '';
-    }
   }
 
   void _confirmDelete(Bookmark bookmark) {
@@ -153,7 +268,7 @@ class _BookmarkScreenState extends State<BookmarkScreen> {
               await widget.bookmarkService.delete(bookmark.id);
               _load();
             },
-            child: const Text('삭제', style: TextStyle(color: Colors.red)),
+            child: Text('삭제', style: TextStyle(color: AppColors.error)),
           ),
         ],
       ),
@@ -169,7 +284,7 @@ class _BookmarkScreenState extends State<BookmarkScreen> {
         actions: [
           IconButton(
             icon: const Icon(Icons.add),
-            onPressed: () => _showAddDialog(),
+            onPressed: _showAddSheet,
           ),
         ],
       ),
@@ -183,7 +298,7 @@ class _BookmarkScreenState extends State<BookmarkScreen> {
                   Text('바로가기가 없습니다', style: TextStyle(color: theme.colorScheme.onSurfaceVariant)),
                   const SizedBox(height: 8),
                   FilledButton.tonal(
-                    onPressed: () => _showAddDialog(),
+                    onPressed: _showAddSheet,
                     child: const Text('추가하기'),
                   ),
                 ],
@@ -199,7 +314,6 @@ class _BookmarkScreenState extends State<BookmarkScreen> {
               },
               itemBuilder: (context, index) {
                 final bm = _bookmarks[index];
-                final iconColor = _guessColor(bm.url);
                 return Card(
                   key: ValueKey(bm.id),
                   margin: const EdgeInsets.only(bottom: 8),
@@ -208,10 +322,10 @@ class _BookmarkScreenState extends State<BookmarkScreen> {
                       width: 40,
                       height: 40,
                       decoration: BoxDecoration(
-                        color: iconColor.withValues(alpha: 0.12),
+                        color: theme.colorScheme.surfaceContainerHighest,
                         borderRadius: BorderRadius.circular(10),
                       ),
-                      child: Icon(_guessIcon(bm.url), color: iconColor, size: 22),
+                      child: Center(child: _faviconWidget(bm.url, size: 24)),
                     ),
                     title: Text(bm.name, style: const TextStyle(fontWeight: FontWeight.w600)),
                     subtitle: Text(
@@ -221,7 +335,7 @@ class _BookmarkScreenState extends State<BookmarkScreen> {
                     ),
                     trailing: PopupMenuButton<String>(
                       onSelected: (value) {
-                        if (value == 'edit') _showAddDialog(existing: bm);
+                        if (value == 'edit') _showCustomAddDialog(existing: bm);
                         if (value == 'delete') _confirmDelete(bm);
                       },
                       itemBuilder: (_) => [
@@ -236,4 +350,10 @@ class _BookmarkScreenState extends State<BookmarkScreen> {
             ),
     );
   }
+}
+
+class _PresetSite {
+  final String name;
+  final String url;
+  const _PresetSite(this.name, this.url);
 }

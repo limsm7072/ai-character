@@ -251,11 +251,7 @@ class _RoutineEditScreenState extends State<RoutineEditScreen> {
             _buildDaySelector(),
             const SizedBox(height: 24),
 
-            // Work type
-            if (widget.calendarService != null) ...[
-              _buildWorkTypeSelector(),
-              const SizedBox(height: 24),
-            ],
+            // Work type (managed via calendar work type manager)
 
             // Nag settings
             const Divider(),
@@ -305,6 +301,10 @@ class _RoutineEditScreenState extends State<RoutineEditScreen> {
                       DropdownMenuItem(value: 60, child: Text('1분')),
                       DropdownMenuItem(value: 120, child: Text('2분')),
                       DropdownMenuItem(value: 300, child: Text('5분')),
+                      DropdownMenuItem(value: 600, child: Text('10분')),
+                      DropdownMenuItem(value: 1800, child: Text('30분')),
+                      DropdownMenuItem(value: 3600, child: Text('1시간')),
+                      DropdownMenuItem(value: 10800, child: Text('3시간')),
                     ],
                     onChanged: (v) { if (v != null) setState(() => _nagFrequency = v); },
                   ),
@@ -482,44 +482,6 @@ class _RoutineEditScreenState extends State<RoutineEditScreen> {
     );
   }
 
-  Widget _buildWorkTypeSelector() {
-    final workTypes = widget.calendarService?.getWorkTypes() ?? [];
-    // Validate linked work type still exists
-    if (_workTypeId != null && !workTypes.any((w) => w.id == _workTypeId)) {
-      _workTypeId = null;
-    }
-    return Row(
-      children: [
-        const Icon(Icons.work_outline, size: 20),
-        const SizedBox(width: 8),
-        const Expanded(child: Text('근무형태')),
-        DropdownButton<String>(
-          value: _workTypeId ?? '',
-          items: [
-            const DropdownMenuItem(value: '', child: Text('없음 (항상 활성)')),
-            ...workTypes.map((w) => DropdownMenuItem(
-              value: w.id,
-              child: Row(
-                mainAxisSize: MainAxisSize.min,
-                children: [
-                  Container(
-                    width: 12, height: 12,
-                    decoration: BoxDecoration(
-                      color: Color(int.parse(w.color.replaceFirst('#', '0xFF'))),
-                      shape: BoxShape.circle,
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  Text(w.name),
-                ],
-              ),
-            )),
-          ],
-          onChanged: (v) => setState(() => _workTypeId = (v == null || v.isEmpty) ? null : v),
-        ),
-      ],
-    );
-  }
 
   Future<void> _save() async {
     if (!_formKey.currentState!.validate()) return;

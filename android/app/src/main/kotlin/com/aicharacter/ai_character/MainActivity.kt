@@ -15,6 +15,7 @@ import android.hardware.Sensor
 import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
 import android.hardware.SensorManager
+import android.app.SearchManager
 import android.media.AudioAttributes
 import android.media.MediaPlayer
 import android.media.RingtoneManager
@@ -157,10 +158,38 @@ class MainActivity : FlutterFragmentActivity() {
                     }
                     startActivityForResult(intent, PICK_IMAGE_REQUEST)
                 }
+                "playMusic" -> {
+                    val query = call.argument<String>("query") ?: "음악"
+                    try {
+                        val intent = Intent(android.provider.MediaStore.INTENT_ACTION_MEDIA_PLAY_FROM_SEARCH).apply {
+                            putExtra(android.provider.MediaStore.EXTRA_MEDIA_FOCUS, "vnd.android.cursor.item/*")
+                            putExtra(SearchManager.QUERY, query)
+                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        }
+                        startActivity(intent)
+                        result.success(true)
+                    } catch (e: Exception) {
+                        result.error("PLAY_MUSIC_ERROR", e.message, null)
+                    }
+                }
                 "openUrl" -> {
                     val url = call.argument<String>("url") ?: ""
                     try {
-                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url))
+                        // Try to launch the app directly if installed
+                        val pkg = urlToPackage(url)
+                        if (pkg != null) {
+                            val launchIntent = packageManager.getLaunchIntentForPackage(pkg)
+                            if (launchIntent != null) {
+                                launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                startActivity(launchIntent)
+                                result.success(true)
+                                return@setMethodCallHandler
+                            }
+                        }
+                        // Fallback: open URL in browser
+                        val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url)).apply {
+                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        }
                         startActivity(intent)
                         result.success(true)
                     } catch (e: Exception) {
@@ -645,5 +674,28 @@ class MainActivity : FlutterFragmentActivity() {
         shakeListener = null
         sensorManager = null
         println("[MainActivity] stopShakeDetection: unregistered")
+    }
+
+    private fun urlToPackage(url: String): String? {
+        val host = Uri.parse(url).host?.lowercase() ?: return null
+        return when {
+            host.contains("naver.com") || host.contains("naver") -> "com.nhn.android.search"
+            host.contains("youtube.com") || host.contains("youtu.be") -> "com.google.android.youtube"
+            host.contains("instagram.com") -> "com.instagram.android"
+            host.contains("twitter.com") || host.contains("x.com") -> "com.twitter.android"
+            host.contains("facebook.com") -> "com.facebook.katana"
+            host.contains("kakaotalk") || host.contains("kakao.com") || host.contains("kakaocorp.com") -> "com.kakao.talk"
+            host.contains("tiktok.com") -> "com.zhiliaoapp.musically"
+            host.contains("reddit.com") -> "com.reddit.frontpage"
+            host.contains("twitch.tv") -> "tv.twitch.android.app"
+            host.contains("discord.com") || host.contains("discord.gg") -> "com.discord"
+            host.contains("spotify.com") -> "com.spotify.music"
+            host.contains("netflix.com") -> "com.netflix.mediaclient"
+            host.contains("coupang.com") -> "com.coupang.mobile"
+            host.contains("baemin") || host.contains("woowahan") -> "com.sampleapp.baemin"
+            host.contains("daum.net") -> "net.daum.android.daum"
+            host.contains("toss") -> "viva.republica.toss"
+            else -> null
+        }
     }
 }

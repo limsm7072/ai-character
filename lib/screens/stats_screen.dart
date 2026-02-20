@@ -210,12 +210,7 @@ class _StatsScreenState extends State<StatsScreen> {
   // --- 근무형태 인디케이터 ---
 
   Widget _buildWorkTypeIndicator(dynamic workType) {
-    Color wtColor;
-    try {
-      wtColor = Color(int.parse(workType.color.replaceFirst('#', '0xFF')));
-    } catch (_) {
-      wtColor = AppColors.primary;
-    }
+    final wtColor = AppColors.primary;
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 10),

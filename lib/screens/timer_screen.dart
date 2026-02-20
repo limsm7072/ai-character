@@ -255,25 +255,7 @@ class TimerRunScreen extends StatefulWidget {
   State<TimerRunScreen> createState() => _TimerRunScreenState();
 }
 
-class _TimerRunScreenState extends State<TimerRunScreen> with SingleTickerProviderStateMixin {
-  late TabController _tabController;
-
-  @override
-  void initState() {
-    super.initState();
-    final startPomodoro = widget.initialPreset?.isPomodoro == true;
-    _tabController = TabController(
-      length: 2, vsync: this,
-      initialIndex: startPomodoro ? 1 : 0,
-    );
-  }
-
-  @override
-  void dispose() {
-    _tabController.dispose();
-    super.dispose();
-  }
-
+class _TimerRunScreenState extends State<TimerRunScreen> {
   void _confirmDelete() {
     final preset = widget.initialPreset;
     if (preset == null) return;
@@ -303,6 +285,7 @@ class _TimerRunScreenState extends State<TimerRunScreen> with SingleTickerProvid
   Widget build(BuildContext context) {
     final preset = widget.initialPreset;
     final canDelete = preset != null;
+    final isPomodoro = preset?.isPomodoro == true;
     return Scaffold(
       appBar: AppBar(
         title: Text(preset?.label ?? '타이머'),
@@ -314,29 +297,18 @@ class _TimerRunScreenState extends State<TimerRunScreen> with SingleTickerProvid
               onPressed: _confirmDelete,
             ),
         ],
-        bottom: TabBar(
-          controller: _tabController,
-          tabs: const [
-            Tab(text: '카운트다운'),
-            Tab(text: '뽀모도로'),
-          ],
-        ),
       ),
-      body: TabBarView(
-        controller: _tabController,
-        children: [
-          _CountdownTab(
-            timerService: widget.timerService,
-            initialDurationSeconds: preset?.isPomodoro == false ? preset?.durationSeconds : null,
-          ),
-          _PomodoroTab(
-            timerService: widget.timerService,
-            initialFocusMinutes: preset?.isPomodoro == true ? preset?.focusMinutes : null,
-            initialBreakMinutes: preset?.isPomodoro == true ? preset?.breakMinutes : null,
-            initialTargetSessions: preset?.isPomodoro == true ? preset?.targetSessions : null,
-          ),
-        ],
-      ),
+      body: isPomodoro
+          ? _PomodoroTab(
+              timerService: widget.timerService,
+              initialFocusMinutes: preset?.focusMinutes,
+              initialBreakMinutes: preset?.breakMinutes,
+              initialTargetSessions: preset?.targetSessions,
+            )
+          : _CountdownTab(
+              timerService: widget.timerService,
+              initialDurationSeconds: preset?.durationSeconds,
+            ),
     );
   }
 }

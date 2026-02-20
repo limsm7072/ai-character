@@ -33,6 +33,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
   DateTime _selectedDay = DateTime.now();
   late bool _showLunar;
   late bool _showDDay;
+  String? _activeWorkTypeId; // active work type for tap-to-assign
 
   @override
   void initState() {
@@ -100,7 +101,11 @@ class _CalendarScreenState extends State<CalendarScreen> {
           ),
           // Work type management
           IconButton(
-            icon: const Icon(Icons.work_outline, size: 22),
+            icon: Icon(
+              Icons.work_outline,
+              size: 22,
+              color: _activeWorkTypeId != null ? theme.colorScheme.primary : null,
+            ),
             tooltip: '근무형태 관리',
             onPressed: () => _showWorkTypeManager(context),
           ),
@@ -166,6 +171,16 @@ class _CalendarScreenState extends State<CalendarScreen> {
                 titleCentered: true,
               ),
               onDaySelected: (selected, focused) {
+                if (_activeWorkTypeId != null) {
+                  // Tap-to-assign mode
+                  final dateStr = _formatDate(selected);
+                  final currentWtId = widget.calendarService.getDateWorkType(dateStr);
+                  if (currentWtId == _activeWorkTypeId) {
+                    widget.calendarService.setDateWorkType(dateStr, null);
+                  } else {
+                    widget.calendarService.setDateWorkType(dateStr, _activeWorkTypeId);
+                  }
+                }
                 setState(() {
                   _selectedDay = selected;
                   _focusedDay = focused;
@@ -203,7 +218,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
                   if (wtId != null) {
                     final wt = widget.calendarService.getWorkTypeById(wtId);
                     if (wt != null) {
-                      markers.add(_dot(_parseColor(wt.color)));
+                      markers.add(_dot(Theme.of(context).colorScheme.primary));
                     }
                   }
 
@@ -239,6 +254,31 @@ class _CalendarScreenState extends State<CalendarScreen> {
                 },
               ),
             ),
+            // Active work type banner
+            if (_activeWorkTypeId != null)
+              Builder(builder: (_) {
+                final wt = widget.calendarService.getWorkTypeById(_activeWorkTypeId!);
+                if (wt == null) return const SizedBox.shrink();
+                return Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                  color: theme.colorScheme.primary.withValues(alpha: 0.08),
+                  child: Row(
+                    children: [
+                      Icon(Icons.touch_app, size: 16, color: theme.colorScheme.primary),
+                      const SizedBox(width: 8),
+                      Text(
+                        '${wt.name} · 날짜를 눌러 배정',
+                        style: TextStyle(fontSize: 13, color: theme.colorScheme.primary, fontWeight: FontWeight.w600),
+                      ),
+                      const Spacer(),
+                      GestureDetector(
+                        onTap: () => setState(() => _activeWorkTypeId = null),
+                        child: Icon(Icons.close, size: 18, color: theme.colorScheme.primary),
+                      ),
+                    ],
+                  ),
+                );
+              }),
             const Divider(height: 1),
             // Content below calendar
             Padding(
@@ -527,112 +567,57 @@ class _CalendarScreenState extends State<CalendarScreen> {
     final wtId = widget.calendarService.getDateWorkType(dateStr);
     final wt = wtId != null ? widget.calendarService.getWorkTypeById(wtId) : null;
 
-    return InkWell(
-      borderRadius: BorderRadius.circular(8),
-      onTap: () => _showWorkTypeDatePicker(dateStr),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-        decoration: BoxDecoration(
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+      decoration: BoxDecoration(
+        color: wt != null
+            ? theme.colorScheme.primary.withValues(alpha: 0.1)
+            : theme.colorScheme.surfaceContainerLow,
+        borderRadius: BorderRadius.circular(8),
+        border: Border.all(
           color: wt != null
-              ? _parseColor(wt.color).withValues(alpha: 0.1)
-              : theme.colorScheme.surfaceContainerLow,
-          borderRadius: BorderRadius.circular(8),
-          border: Border.all(
-            color: wt != null
-                ? _parseColor(wt.color).withValues(alpha: 0.3)
-                : theme.colorScheme.outline.withValues(alpha: 0.2),
+              ? theme.colorScheme.primary.withValues(alpha: 0.3)
+              : theme.colorScheme.outline.withValues(alpha: 0.2),
+        ),
+      ),
+      child: Row(
+        children: [
+          Icon(Icons.work_outline, size: 16,
+            color: wt != null ? theme.colorScheme.primary : AppColors.grey500,
           ),
-        ),
-        child: Row(
-          children: [
-            Icon(Icons.work_outline, size: 16,
-              color: wt != null ? _parseColor(wt.color) : AppColors.grey500,
+          const SizedBox(width: 8),
+          Text(
+            wt?.name ?? '근무형태 없음',
+            style: TextStyle(
+              fontSize: 13,
+              color: wt != null ? theme.colorScheme.primary : AppColors.grey500,
+              fontWeight: wt != null ? FontWeight.w600 : FontWeight.normal,
             ),
-            const SizedBox(width: 8),
-            Text(
-              wt?.name ?? '근무형태 없음',
-              style: TextStyle(
-                fontSize: 13,
-                color: wt != null ? _parseColor(wt.color) : AppColors.grey500,
-                fontWeight: wt != null ? FontWeight.w600 : FontWeight.normal,
-              ),
-            ),
-            const Spacer(),
-            Icon(Icons.edit_outlined, size: 14, color: AppColors.grey500),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
 
-  void _showWorkTypeDatePicker(String dateStr) {
-    final workTypes = widget.calendarService.getWorkTypes();
-    final currentId = widget.calendarService.getDateWorkType(dateStr);
-    if (workTypes.isEmpty) {
-      ScaffoldMessenger.of(context).showSnackBar(
-        SnackBar(
-          content: const Text('근무형태를 먼저 추가해주세요'),
-          action: SnackBarAction(label: '추가', onPressed: () => _showWorkTypeManager(context)),
-        ),
-      );
-      return;
-    }
-    showModalBottomSheet(
-      context: context,
-      builder: (ctx) {
-        final theme = Theme.of(ctx);
-        return SafeArea(
-          child: Padding(
-            padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Container(width: 40, height: 4, decoration: BoxDecoration(color: theme.colorScheme.outline.withValues(alpha: 0.3), borderRadius: BorderRadius.circular(2))),
-                const SizedBox(height: 16),
-                Text('근무형태 지정', style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
-                const SizedBox(height: 16),
-                // "없음" option
-                ListTile(
-                  leading: Icon(Icons.remove_circle_outline, color: AppColors.grey500),
-                  title: const Text('없음'),
-                  trailing: currentId == null ? Icon(Icons.check, color: theme.colorScheme.primary) : null,
-                  onTap: () async {
-                    await widget.calendarService.setDateWorkType(dateStr, null);
-                    if (ctx.mounted) Navigator.pop(ctx);
-                    setState(() {});
-                  },
-                ),
-                ...workTypes.map((wt) => ListTile(
-                  leading: Container(
-                    width: 24, height: 24,
-                    decoration: BoxDecoration(
-                      color: _parseColor(wt.color),
-                      borderRadius: BorderRadius.circular(6),
-                    ),
-                  ),
-                  title: Text(wt.name),
-                  trailing: currentId == wt.id ? Icon(Icons.check, color: theme.colorScheme.primary) : null,
-                  onTap: () async {
-                    await widget.calendarService.setDateWorkType(dateStr, wt.id);
-                    if (ctx.mounted) Navigator.pop(ctx);
-                    setState(() {});
-                  },
-                )),
-                const SizedBox(height: 8),
-              ],
-            ),
-          ),
-        );
-      },
-    );
-  }
-
   void _showWorkTypeManager(BuildContext context) {
-    showModalBottomSheet(
+    showModalBottomSheet<String?>(
       context: context,
       isScrollControlled: true,
-      builder: (ctx) => _WorkTypeManagerSheet(calendarService: widget.calendarService),
-    ).then((_) => setState(() {}));
+      builder: (ctx) => _WorkTypeManagerSheet(
+        calendarService: widget.calendarService,
+        settingsService: widget.settingsService,
+        activeWorkTypeId: _activeWorkTypeId,
+      ),
+    ).then((activatedId) {
+      // activatedId: 'none' = deactivate, null = no change, otherwise = activated id
+      if (activatedId == 'none') {
+        setState(() => _activeWorkTypeId = null);
+      } else if (activatedId != null) {
+        setState(() => _activeWorkTypeId = activatedId);
+      } else {
+        setState(() {}); // refresh for any work type changes
+      }
+    });
   }
 
   Future<void> _showEditSheet(BuildContext context, {CalendarEvent? event}) async {
@@ -900,24 +885,42 @@ class _EventEditSheetState extends State<_EventEditSheet> {
 
 class _WorkTypeManagerSheet extends StatefulWidget {
   final CalendarService calendarService;
-  const _WorkTypeManagerSheet({required this.calendarService});
+  final SettingsService? settingsService;
+  final String? activeWorkTypeId;
+
+  const _WorkTypeManagerSheet({
+    required this.calendarService,
+    this.settingsService,
+    this.activeWorkTypeId,
+  });
 
   @override
   State<_WorkTypeManagerSheet> createState() => _WorkTypeManagerSheetState();
 }
 
 class _WorkTypeManagerSheetState extends State<_WorkTypeManagerSheet> {
-  static const _colorOptions = [
-    '#2196F3', '#4CAF50', '#FF9800', '#E91E63', '#9C27B0',
-    '#00BCD4', '#795548', '#607D8B', '#FF5722', '#3F51B5',
-  ];
+  late String? _activeId;
 
-  Color _parseColor(String hex) {
-    try {
-      return Color(int.parse(hex.replaceFirst('#', '0xFF')));
-    } catch (_) {
-      return const Color(0xFF2196F3);
+  @override
+  void initState() {
+    super.initState();
+    _activeId = widget.activeWorkTypeId;
+  }
+
+  /// Get all routine section IDs from dashboard order.
+  List<_RoutineSectionInfo> _getRoutineSections() {
+    final ss = widget.settingsService;
+    if (ss == null) return [];
+    final order = ss.dashboardOrder;
+    final sections = <_RoutineSectionInfo>[];
+    for (final id in order) {
+      if (SettingsService.sectionBaseId(id) == 'routine') {
+        if (ss.isDashboardSectionHidden(id)) continue;
+        final label = ss.getSectionLabel(id) ?? '루틴';
+        sections.add(_RoutineSectionInfo(id: id, label: label));
+      }
     }
+    return sections;
   }
 
   @override
@@ -935,7 +938,7 @@ class _WorkTypeManagerSheetState extends State<_WorkTypeManagerSheet> {
             const SizedBox(height: 16),
             Row(
               children: [
-                Text('근무형태 관리', style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
+                Flexible(child: Text('근무형태 관리', style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600), overflow: TextOverflow.ellipsis)),
                 const Spacer(),
                 TextButton.icon(
                   onPressed: () => _showAddEdit(context),
@@ -944,6 +947,14 @@ class _WorkTypeManagerSheetState extends State<_WorkTypeManagerSheet> {
                 ),
               ],
             ),
+            if (_activeId != null)
+              Padding(
+                padding: const EdgeInsets.only(top: 4, bottom: 4),
+                child: Text(
+                  '날짜를 눌러 배정하세요',
+                  style: TextStyle(fontSize: 12, color: AppColors.grey500),
+                ),
+              ),
             const SizedBox(height: 8),
             if (workTypes.isEmpty)
               Padding(
@@ -951,31 +962,59 @@ class _WorkTypeManagerSheetState extends State<_WorkTypeManagerSheet> {
                 child: Text('근무형태를 추가해보세요', style: TextStyle(color: AppColors.grey500, fontSize: 14)),
               )
             else
-              ...workTypes.map((wt) => ListTile(
-                contentPadding: EdgeInsets.zero,
-                leading: Container(
-                  width: 32, height: 32,
-                  decoration: BoxDecoration(
-                    color: _parseColor(wt.color),
-                    borderRadius: BorderRadius.circular(8),
+              ...workTypes.map((wt) {
+                final isActive = _activeId == wt.id;
+                final linkedSections = widget.settingsService?.getSectionsForWorkType(wt.id) ?? [];
+                return ListTile(
+                  contentPadding: EdgeInsets.zero,
+                  leading: Container(
+                    width: 32, height: 32,
+                    decoration: BoxDecoration(
+                      color: isActive
+                          ? theme.colorScheme.primary
+                          : theme.colorScheme.primary.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Icon(
+                      Icons.work,
+                      size: 18,
+                      color: isActive ? Colors.white : theme.colorScheme.primary,
+                    ),
                   ),
-                  child: const Icon(Icons.work, size: 18, color: Colors.white),
-                ),
-                title: Text(wt.name),
-                trailing: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    IconButton(
-                      icon: const Icon(Icons.edit_outlined, size: 20),
-                      onPressed: () => _showAddEdit(context, existing: wt),
-                    ),
-                    IconButton(
-                      icon: Icon(Icons.delete_outline, size: 20, color: AppColors.error),
-                      onPressed: () => _confirmDelete(context, wt),
-                    ),
-                  ],
-                ),
-              )),
+                  title: Text(wt.name, overflow: TextOverflow.ellipsis),
+                  subtitle: linkedSections.isNotEmpty
+                      ? Text(
+                          '섹션 ${linkedSections.length}개 연동',
+                          style: TextStyle(fontSize: 12, color: AppColors.grey500),
+                          overflow: TextOverflow.ellipsis,
+                        )
+                      : null,
+                  onTap: () => _showAddEdit(context, existing: wt),
+                  trailing: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      IconButton(
+                        icon: Icon(
+                          isActive ? Icons.radio_button_checked : Icons.radio_button_unchecked,
+                          size: 22,
+                          color: isActive ? theme.colorScheme.primary : AppColors.grey500,
+                        ),
+                        tooltip: isActive ? '배정모드 해제' : '배정모드 활성',
+                        onPressed: () {
+                          setState(() {
+                            _activeId = isActive ? null : wt.id;
+                          });
+                          Navigator.pop(context, isActive ? 'none' : wt.id);
+                        },
+                      ),
+                      IconButton(
+                        icon: Icon(Icons.delete_outline, size: 20, color: AppColors.error),
+                        onPressed: () => _confirmDelete(context, wt),
+                      ),
+                    ],
+                  ),
+                );
+              }),
             const SizedBox(height: 8),
           ],
         ),
@@ -985,50 +1024,76 @@ class _WorkTypeManagerSheetState extends State<_WorkTypeManagerSheet> {
 
   void _showAddEdit(BuildContext context, {WorkType? existing}) {
     final nameController = TextEditingController(text: existing?.name ?? '');
-    String selectedColor = existing?.color ?? '#2196F3';
+    final routineSections = _getRoutineSections();
+    // Get currently linked section IDs for this work type
+    final linkedSectionIds = <String>{};
+    if (existing != null) {
+      linkedSectionIds.addAll(
+        widget.settingsService?.getSectionsForWorkType(existing.id) ?? [],
+      );
+    }
 
     showDialog(
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, setDialogState) {
-          final theme = Theme.of(ctx);
           return AlertDialog(
             title: Text(existing == null ? '근무형태 추가' : '근무형태 수정'),
-            content: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                TextField(
-                  controller: nameController,
-                  autofocus: true,
-                  decoration: const InputDecoration(
-                    labelText: '이름',
-                    hintText: '예: 오전근무, 야간, 휴가',
-                    border: OutlineInputBorder(),
-                  ),
-                ),
-                const SizedBox(height: 16),
-                Text('색상', style: TextStyle(fontSize: 13, color: theme.colorScheme.onSurfaceVariant)),
-                const SizedBox(height: 8),
-                Wrap(
-                  spacing: 8,
-                  runSpacing: 8,
-                  children: _colorOptions.map((c) {
-                    final isSelected = c == selectedColor;
-                    return GestureDetector(
-                      onTap: () => setDialogState(() => selectedColor = c),
-                      child: Container(
-                        width: 32, height: 32,
-                        decoration: BoxDecoration(
-                          color: _parseColor(c),
-                          shape: BoxShape.circle,
-                          border: isSelected ? Border.all(color: theme.colorScheme.onSurface, width: 3) : null,
-                        ),
+            content: SizedBox(
+              width: double.maxFinite,
+              child: SingleChildScrollView(
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    TextField(
+                      controller: nameController,
+                      autofocus: existing == null,
+                      decoration: const InputDecoration(
+                        labelText: '이름',
+                        hintText: '예: 오전근무, 야간, 휴가',
+                        border: OutlineInputBorder(),
                       ),
-                    );
-                  }).toList(),
+                    ),
+                    if (routineSections.isNotEmpty) ...[
+                      const SizedBox(height: 16),
+                      Text('루틴 섹션 연동', style: TextStyle(fontSize: 13, color: Theme.of(ctx).colorScheme.onSurfaceVariant)),
+                      const SizedBox(height: 4),
+                      Text(
+                        '이 근무형태일 때 표시할 루틴 섹션',
+                        style: TextStyle(fontSize: 11, color: AppColors.grey500),
+                      ),
+                      const SizedBox(height: 8),
+                      ...routineSections.map((s) {
+                        final isLinked = linkedSectionIds.contains(s.id);
+                        // Check if another work type already links this section
+                        final currentWtId = widget.settingsService?.getSectionWorkType(s.id);
+                        final otherWtName = (currentWtId != null && currentWtId != existing?.id)
+                            ? widget.calendarService.getWorkTypeById(currentWtId)?.name
+                            : null;
+                        return CheckboxListTile(
+                          dense: true,
+                          contentPadding: EdgeInsets.zero,
+                          value: isLinked,
+                          title: Text(s.label, style: const TextStyle(fontSize: 14), overflow: TextOverflow.ellipsis),
+                          subtitle: otherWtName != null
+                              ? Text('현재: $otherWtName', style: TextStyle(fontSize: 11, color: AppColors.grey500))
+                              : null,
+                          onChanged: (v) {
+                            setDialogState(() {
+                              if (v == true) {
+                                linkedSectionIds.add(s.id);
+                              } else {
+                                linkedSectionIds.remove(s.id);
+                              }
+                            });
+                          },
+                        );
+                      }),
+                    ],
+                  ],
                 ),
-              ],
+              ),
             ),
             actions: [
               TextButton(
@@ -1039,16 +1104,31 @@ class _WorkTypeManagerSheetState extends State<_WorkTypeManagerSheet> {
                 onPressed: () async {
                   final name = nameController.text.trim();
                   if (name.isEmpty) return;
+                  String wtId;
                   if (existing != null) {
                     existing.name = name;
-                    existing.color = selectedColor;
                     await widget.calendarService.updateWorkType(existing);
+                    wtId = existing.id;
                   } else {
+                    wtId = DateTime.now().millisecondsSinceEpoch.toString();
                     await widget.calendarService.addWorkType(WorkType(
-                      id: DateTime.now().millisecondsSinceEpoch.toString(),
+                      id: wtId,
                       name: name,
-                      color: selectedColor,
                     ));
+                  }
+                  // Update section links
+                  if (widget.settingsService != null) {
+                    for (final s in routineSections) {
+                      if (linkedSectionIds.contains(s.id)) {
+                        await widget.settingsService!.setSectionWorkType(s.id, wtId);
+                      } else {
+                        // Only clear if this section was linked to this work type
+                        final cur = widget.settingsService!.getSectionWorkType(s.id);
+                        if (cur == wtId) {
+                          await widget.settingsService!.setSectionWorkType(s.id, null);
+                        }
+                      }
+                    }
                   }
                   if (ctx.mounted) Navigator.pop(ctx);
                   setState(() {});
@@ -1067,7 +1147,7 @@ class _WorkTypeManagerSheetState extends State<_WorkTypeManagerSheet> {
       context: context,
       builder: (ctx) => AlertDialog(
         title: const Text('근무형태 삭제'),
-        content: Text('"${wt.name}"을(를) 삭제하시겠습니까?\n연결된 날짜 배정과 루틴 연결도 해제됩니다.'),
+        content: Text('"${wt.name}"을(를) 삭제하시겠습니까?\n연결된 날짜 배정도 해제됩니다.'),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),
@@ -1075,7 +1155,15 @@ class _WorkTypeManagerSheetState extends State<_WorkTypeManagerSheet> {
           ),
           TextButton(
             onPressed: () async {
+              // Unlink sections
+              if (widget.settingsService != null) {
+                final linked = widget.settingsService!.getSectionsForWorkType(wt.id);
+                for (final sId in linked) {
+                  await widget.settingsService!.setSectionWorkType(sId, null);
+                }
+              }
               await widget.calendarService.deleteWorkType(wt.id);
+              if (_activeId == wt.id) _activeId = null;
               if (ctx.mounted) Navigator.pop(ctx);
               setState(() {});
             },
@@ -1085,4 +1173,10 @@ class _WorkTypeManagerSheetState extends State<_WorkTypeManagerSheet> {
       ),
     );
   }
+}
+
+class _RoutineSectionInfo {
+  final String id;
+  final String label;
+  _RoutineSectionInfo({required this.id, required this.label});
 }

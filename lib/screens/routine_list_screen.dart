@@ -296,7 +296,6 @@ class _RoutineListScreenState extends State<RoutineListScreen> {
   }
 
   Widget _buildFab() {
-    final theme = Theme.of(context);
     return Column(
       mainAxisSize: MainAxisSize.min,
       crossAxisAlignment: CrossAxisAlignment.end,
@@ -310,7 +309,6 @@ class _RoutineListScreenState extends State<RoutineListScreen> {
               setState(() => _isFabExpanded = false);
               _enterGroupMode();
             },
-            theme: theme,
           ),
           const SizedBox(height: 8),
           _buildMiniFabOption(
@@ -320,7 +318,6 @@ class _RoutineListScreenState extends State<RoutineListScreen> {
               setState(() => _isFabExpanded = false);
               _addRoutine();
             },
-            theme: theme,
           ),
           const SizedBox(height: 12),
         ],
@@ -342,33 +339,12 @@ class _RoutineListScreenState extends State<RoutineListScreen> {
     required IconData icon,
     required String label,
     required VoidCallback onTap,
-    required ThemeData theme,
   }) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Container(
-          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
-          decoration: BoxDecoration(
-            color: theme.colorScheme.surface,
-            borderRadius: BorderRadius.circular(8),
-            boxShadow: [
-              BoxShadow(
-                color: Colors.black.withValues(alpha: 0.1),
-                blurRadius: 4,
-                offset: const Offset(0, 2),
-              ),
-            ],
-          ),
-          child: Text(label, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w500, color: theme.colorScheme.onSurface)),
-        ),
-        const SizedBox(width: 10),
-        FloatingActionButton.small(
-          heroTag: label,
-          onPressed: onTap,
-          child: Icon(icon, size: 20),
-        ),
-      ],
+    return FloatingActionButton.small(
+      heroTag: label,
+      onPressed: onTap,
+      tooltip: label,
+      child: Icon(icon, size: 20),
     );
   }
 
@@ -621,8 +597,8 @@ class _RoutineListScreenState extends State<RoutineListScreen> {
     // Group mode selection
     final isSelected = _isGroupMode && _selectedRoutineIds.contains(routine.id);
 
-    final topPadding = isGroupStart ? 8.0 : 0.0;
-    final bottomPadding = isGroupEnd ? 8.0 : 0.0;
+    final topPadding = 0.0;
+    final bottomPadding = 0.0;
 
     final groupBgColor = isInGroup
         ? theme.colorScheme.primary.withValues(alpha: 0.04)
@@ -691,41 +667,7 @@ class _RoutineListScreenState extends State<RoutineListScreen> {
       ),
     );
 
-    // Group header row (ungroup button) shown at group start
-    Widget? groupHeader;
-    if (isGroupStart && !_isGroupMode) {
-      final group = widget.routineGroupService.groupForRoutine(routine.id);
-      groupHeader = Container(
-        padding: const EdgeInsets.fromLTRB(12, 6, 4, 0),
-        child: Row(
-          children: [
-            Icon(Icons.workspaces_outline, size: 13, color: theme.colorScheme.primary.withValues(alpha: 0.6)),
-            const SizedBox(width: 4),
-            Text('그룹', style: TextStyle(fontSize: 11, color: theme.colorScheme.primary.withValues(alpha: 0.6), fontWeight: FontWeight.w600)),
-            const Spacer(),
-            GestureDetector(
-              onTap: () {
-                if (group != null) _showUngroupDialog(group);
-              },
-              child: Padding(
-                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
-                child: Text('해제', style: TextStyle(fontSize: 11, color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.6))),
-              ),
-            ),
-          ],
-        ),
-      );
-    }
-
-    // Right side content with group header
-    final rightContent = Column(
-      mainAxisSize: MainAxisSize.min,
-      crossAxisAlignment: CrossAxisAlignment.stretch,
-      children: [
-        if (groupHeader != null) groupHeader,
-        contentWidget,
-      ],
-    );
+    final rightContent = contentWidget;
 
     // Build the full row with group background spanning from left edge
     Widget buildRow(Widget dot, {VoidCallback? onTap, VoidCallback? onLongPress}) {

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:speech_to_text/speech_to_text.dart' as stt;
 import '../models/character_state.dart';
 import '../models/character_registry.dart';
@@ -100,6 +101,14 @@ class _CharacterChatScreenState extends State<CharacterChatScreen> {
         calendarService: widget.calendarService,
         settingsService: widget.settingsService,
         ttsService: _tts,
+        onOpenUrl: (url) async {
+          const channel = MethodChannel('com.aicharacter.ai_character/usage_stats');
+          await channel.invokeMethod('openUrl', {'url': url});
+        },
+        onPlayMusic: (query) async {
+          const channel = MethodChannel('com.aicharacter.ai_character/usage_stats');
+          await channel.invokeMethod('playMusic', {'query': query});
+        },
       );
       _gemini.initializeAgent(apiKey, agentTools: agentTools, characterName: _charName);
     }
@@ -776,6 +785,10 @@ class _CharacterChatScreenState extends State<CharacterChatScreen> {
         return '캐릭터 이름을 변경했어요: ${action.result['character_name'] ?? ''}';
       case 'set_routine_check_interval':
         return '루틴 확인 간격을 변경했어요';
+      case 'open_url':
+        return '${action.result['url'] ?? '웹사이트'}를 열었어요';
+      case 'play_music':
+        return '${action.result['query'] ?? '음악'}을(를) 재생했어요';
       default:
         return '${action.name} 실행';
     }

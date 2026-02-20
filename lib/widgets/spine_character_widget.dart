@@ -61,8 +61,6 @@ class _SpineCharacterWidgetState extends State<SpineCharacterWidget> {
   // Available animations (cached)
   List<String> _availableAnimations = [];
 
-  // Elapsed time for bone overlay oscillation
-  double _elapsedTime = 0;
 
   @override
   void initState() {
@@ -175,8 +173,6 @@ class _SpineCharacterWidgetState extends State<SpineCharacterWidget> {
 
   void _onBeforeUpdate(SpineWidgetController controller) {
     const dt = 0.016;
-    _elapsedTime += dt;
-
     // Lip sync
     if (widget.config.supportsLipSync &&
         _lipSyncTimer != null && _lipSyncTimer!.isActive) {
@@ -193,9 +189,6 @@ class _SpineCharacterWidgetState extends State<SpineCharacterWidget> {
 
     // Slot color tinting
     _applySlotColors(controller);
-
-    // Emotion bone overlay
-    _applyEmotionBoneOverlay(controller);
   }
 
   // --- Slot color tinting ---
@@ -239,62 +232,6 @@ class _SpineCharacterWidgetState extends State<SpineCharacterWidget> {
       final g = ((colorInt >> 8) & 0xFF) / 255.0;
       final b = (colorInt & 0xFF) / 255.0;
       slot.pose.color.set(r, g, b, slot.pose.color.a);
-    }
-  }
-
-  // --- Emotion bone overlay ---
-
-  void _applyEmotionBoneOverlay(SpineWidgetController controller) {
-    final skeleton = controller.skeleton;
-    final head = skeleton.findBone('head');
-    final body = skeleton.findBone('body');
-    if (head == null && body == null) return;
-
-    final t = _elapsedTime;
-
-    // Breathing (always active): body scaleY oscillation
-    if (body != null) {
-      final breathe = sin(t * 2.094) * 0.01; // period ~3s
-      body.pose.scaleY += breathe;
-    }
-
-    // Subtle idle sway: head rotation
-    if (head != null) {
-      final sway = sin(t * 1.257) * 1.5; // period ~5s, ±1.5 degrees
-      head.pose.rotation += sway;
-    }
-
-    // Emotion-specific overlay
-    final emotion = widget.state.emotion;
-    switch (emotion) {
-      case 'happy':
-        head?.pose.rotation += 5;
-        break;
-      case 'sad':
-        head?.pose.rotation -= 8;
-        head?.pose.y -= 3;
-        break;
-      case 'angry':
-        body?.pose.scaleX *= 1.02;
-        head?.pose.rotation += 3;
-        break;
-      case 'surprised':
-        body?.pose.scaleY *= 1.03;
-        break;
-      case 'annoyed':
-        head?.pose.rotation -= 5;
-        break;
-      case 'disappointed':
-        head?.pose.y -= 5;
-        break;
-      case 'worried':
-        final worry = sin(t * 4.189) * 2; // period ~1.5s
-        head?.pose.x += worry;
-        break;
-      case 'proud':
-        body?.pose.scaleY *= 1.02;
-        head?.pose.rotation += 3;
-        break;
     }
   }
 
