@@ -119,6 +119,7 @@ class _HomeScreenState extends State<HomeScreen> {
             newsService: widget.newsService,
             cardService: widget.cardService,
             timerService: widget.timerService,
+            diaryService: widget.diaryService,
             onRoutinesChanged: () => _dashboardKey.currentState?.refresh(),
           ),
           SettingsScreen(

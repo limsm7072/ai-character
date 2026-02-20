@@ -148,7 +148,8 @@ class DashboardScreenState extends State<DashboardScreen> {
   // 섹션 빌더는 외부 Padding 없이 반환 → 레이아웃에서 패딩 적용
   Widget? _buildSection(String id, BuildContext context, DateTime now, String todayStr, ThemeData theme) {
     final large = widget.settingsService.isDashboardSectionLarge(id);
-    switch (id) {
+    final baseId = SettingsService.sectionBaseId(id);
+    switch (baseId) {
       case 'recommend':
         return large ? _buildRecommendLarge(theme) : _buildRecommendSmall(theme);
       case 'news':
@@ -1262,13 +1263,15 @@ class DashboardScreenState extends State<DashboardScreen> {
 
   // ─── Layout helpers ───────────────────────────────
 
+  static const _defaultLabels = {
+    'recommend': '맞춤 정보', 'news': '뉴스', 'weather': '날씨', 'routine': '루틴', 'todo': '할 일',
+    'diary': '일기장', 'card': '명함', 'calendar': '캘린더', 'stats': '통계', 'alarm': '알람',
+    'timer': '타이머', 'memo': '메모', 'dday': 'D-Day',
+  };
+
   String _sectionLabel(String id) {
-    const labels = {
-      'recommend': '맞춤 정보', 'news': '뉴스', 'weather': '날씨', 'routine': '루틴', 'todo': '할 일',
-      'card': '명함', 'calendar': '캘린더', 'stats': '통계', 'alarm': '알람',
-      'timer': '타이머', 'memo': '메모', 'dday': 'D-Day',
-    };
-    return labels[id] ?? id;
+    final baseId = SettingsService.sectionBaseId(id);
+    return widget.settingsService.getSectionLabel(id) ?? _defaultLabels[baseId] ?? baseId;
   }
 
   IconData _sectionIcon(String id) {
@@ -1278,14 +1281,16 @@ class DashboardScreenState extends State<DashboardScreen> {
       'card': Icons.badge_outlined, 'calendar': Icons.calendar_month_outlined,
       'stats': Icons.bar_chart_rounded, 'alarm': Icons.alarm_rounded,
       'timer': Icons.timer_outlined, 'memo': Icons.note_alt_outlined,
-      'dday': Icons.event_outlined,
+      'dday': Icons.event_outlined, 'diary': Icons.auto_stories,
     };
-    return icons[id] ?? Icons.widgets_outlined;
+    final baseId = SettingsService.sectionBaseId(id);
+    return icons[baseId] ?? Icons.widgets_outlined;
   }
 
   void _showSectionOptions(String id) {
     final theme = Theme.of(context);
     final isHalf = widget.settingsService.isDashboardSectionHalf(id);
+    final isDuplicate = SettingsService.isDuplicate(id);
     showModalBottomSheet(
       context: context,
       builder: (ctx) => SafeArea(
@@ -1321,19 +1326,121 @@ class DashboardScreenState extends State<DashboardScreen> {
               SizedBox(
                 width: double.infinity,
                 child: TextButton.icon(
+                  onPressed: () {
+                    Navigator.pop(ctx);
+                    _showRenameDialog(id);
+                  },
+                  icon: const Icon(Icons.edit, size: 18),
+                  label: const Text('이름 변경'),
+                ),
+              ),
+              if (_editMode)
+                SizedBox(
+                  width: double.infinity,
+                  child: TextButton.icon(
+                    onPressed: () async {
+                      final baseId = SettingsService.sectionBaseId(id);
+                      final newId = '$baseId:${DateTime.now().millisecondsSinceEpoch}';
+                      final order = widget.settingsService.dashboardOrder;
+                      final idx = order.indexOf(id);
+                      if (idx >= 0) {
+                        order.insert(idx + 1, newId);
+                      } else {
+                        order.add(newId);
+                      }
+                      await widget.settingsService.setDashboardOrder(order);
+                      if (ctx.mounted) Navigator.pop(ctx);
+                      setState(() {});
+                    },
+                    icon: const Icon(Icons.copy, size: 18),
+                    label: const Text('복제'),
+                  ),
+                ),
+              SizedBox(
+                width: double.infinity,
+                child: TextButton.icon(
                   onPressed: () async {
                     await widget.settingsService.setDashboardSectionHidden(id, true);
                     if (ctx.mounted) Navigator.pop(ctx);
                     setState(() {});
                   },
-                  icon: Icon(Icons.visibility_off, size: 18, color: theme.colorScheme.error),
-                  label: Text('숨기기', style: TextStyle(color: theme.colorScheme.error)),
+                  icon: Icon(Icons.visibility_off, size: 18, color: theme.colorScheme.onSurfaceVariant),
+                  label: Text('숨기기', style: TextStyle(color: theme.colorScheme.onSurfaceVariant)),
                 ),
               ),
+              if (isDuplicate)
+                SizedBox(
+                  width: double.infinity,
+                  child: TextButton.icon(
+                    onPressed: () async {
+                      final order = widget.settingsService.dashboardOrder;
+                      order.remove(id);
+                      await widget.settingsService.setDashboardOrder(order);
+                      // Clean up related settings
+                      await widget.settingsService.setSectionLabel(id, '');
+                      await widget.settingsService.setDashboardSectionHidden(id, false);
+                      if (ctx.mounted) Navigator.pop(ctx);
+                      setState(() {});
+                    },
+                    icon: Icon(Icons.delete_outline, size: 18, color: theme.colorScheme.error),
+                    label: Text('삭제', style: TextStyle(color: theme.colorScheme.error)),
+                  ),
+                ),
               const SizedBox(height: 8),
             ],
           ),
         ),
+      ),
+    );
+  }
+
+  void _showRenameDialog(String id) {
+    final controller = TextEditingController(text: _sectionLabel(id));
+    final baseId = SettingsService.sectionBaseId(id);
+    final defaultLabel = _defaultLabels[baseId] ?? baseId;
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('이름 변경'),
+        content: TextField(
+          controller: controller,
+          autofocus: true,
+          decoration: InputDecoration(
+            hintText: defaultLabel,
+            border: const OutlineInputBorder(),
+          ),
+          onSubmitted: (_) async {
+            final name = controller.text.trim();
+            await widget.settingsService.setSectionLabel(
+              id,
+              name == defaultLabel ? '' : name,
+            );
+            if (ctx.mounted) Navigator.pop(ctx);
+            setState(() {});
+          },
+        ),
+        actions: [
+          TextButton(
+            onPressed: () async {
+              await widget.settingsService.setSectionLabel(id, '');
+              if (ctx.mounted) Navigator.pop(ctx);
+              setState(() {});
+            },
+            child: const Text('기본값'),
+          ),
+          TextButton(
+            onPressed: () async {
+              final name = controller.text.trim();
+              await widget.settingsService.setSectionLabel(
+                id,
+                name == defaultLabel ? '' : name,
+              );
+              if (ctx.mounted) Navigator.pop(ctx);
+              setState(() {});
+            },
+            child: const Text('확인'),
+          ),
+        ],
       ),
     );
   }

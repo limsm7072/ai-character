@@ -78,11 +78,14 @@ class GeminiService {
   }
 
   void _buildAgentModel() {
+    final contextBlock = _appContext.isNotEmpty
+        ? '\n\n현재 앱 상태 (사용자의 등록된 정보):\n$_appContext'
+        : '';
     _agentModel = GenerativeModel(
       model: _agentModels[_agentModelIndex],
       apiKey: _apiKey!,
       tools: _agentTools!.tools,
-      systemInstruction: Content.text(_buildAgentSystemPrompt(_characterName)),
+      systemInstruction: Content.text(_buildAgentSystemPrompt(_characterName) + contextBlock),
       generationConfig: GenerationConfig(
         temperature: 0.9,
         maxOutputTokens: 512,
@@ -172,6 +175,9 @@ class GeminiService {
     _appContext = context;
     if (_model != null) {
       _startChatWithPrompt();
+    }
+    if (_agentModel != null && _agentTools != null) {
+      _buildAgentModel();
     }
   }
 

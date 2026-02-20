@@ -18,6 +18,7 @@ import '../services/weather_service.dart';
 import '../services/news_service.dart';
 import '../services/card_service.dart';
 import '../services/timer_service.dart';
+import '../services/diary_service.dart';
 import '../widgets/spine_character_widget.dart';
 import '../theme/app_colors.dart';
 import 'dress_up_screen.dart';
@@ -36,6 +37,7 @@ class CharacterChatScreen extends StatefulWidget {
   final NewsService? newsService;
   final CardService? cardService;
   final TimerService? timerService;
+  final DiaryService? diaryService;
   final VoidCallback? onRoutinesChanged;
 
   const CharacterChatScreen({
@@ -53,6 +55,7 @@ class CharacterChatScreen extends StatefulWidget {
     this.newsService,
     this.cardService,
     this.timerService,
+    this.diaryService,
     this.onRoutinesChanged,
   });
 
@@ -209,13 +212,35 @@ class _CharacterChatScreenState extends State<CharacterChatScreen> {
         cardParts.add('이름=${card.name}');
         if (card.company.isNotEmpty) cardParts.add('회사=${card.company}');
         if (card.position.isNotEmpty) cardParts.add('직책=${card.position}');
+        if (card.phone.isNotEmpty) cardParts.add('전화=${card.phone}');
+        if (card.email.isNotEmpty) cardParts.add('이메일=${card.email}');
         if (card.city.isNotEmpty || card.province.isNotEmpty) {
           cardParts.add('지역=${card.province} ${card.city}'.trim());
         }
+        if (card.gender.isNotEmpty) cardParts.add('성별=${card.gender}');
+        if (card.birthYear.isNotEmpty) cardParts.add('출생년도=${card.birthYear}');
+        if (card.bio.isNotEmpty) cardParts.add('자기소개=${card.bio}');
         final interests = [card.interest1, card.interest2, card.interest3]
             .where((i) => i.isNotEmpty).toList();
         if (interests.isNotEmpty) cardParts.add('관심사=${interests.join(",")}');
         parts.add('사용자 명함: ${cardParts.join(", ")}');
+      }
+    }
+
+    // 일기
+    if (widget.diaryService != null) {
+      final todayDiary = widget.diaryService!.getByDate(todayStr);
+      final streak = widget.diaryService!.getCurrentStreak();
+      if (todayDiary != null) {
+        parts.add('오늘 일기: ${todayDiary.moodLabel} - ${todayDiary.content.isNotEmpty ? todayDiary.content : "(내용 없음)"}');
+      }
+      if (streak > 0) {
+        parts.add('일기 연속 작성: ${streak}일');
+      }
+      final recent = widget.diaryService!.getRecent(limit: 3);
+      if (recent.isNotEmpty) {
+        final recentStr = recent.where((d) => d.date != todayStr).take(2).map((d) => '${d.date}: ${d.moodLabel}${d.content.isNotEmpty ? " - ${d.content.length > 30 ? d.content.substring(0, 30) + "..." : d.content}" : ""}').join(', ');
+        if (recentStr.isNotEmpty) parts.add('최근 일기: $recentStr');
       }
     }
 

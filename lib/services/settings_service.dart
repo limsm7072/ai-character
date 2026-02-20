@@ -101,11 +101,14 @@ class SettingsService {
           if (!list.contains(s)) list.insert(gridIdx, s);
         }
       }
-      // Ensure all sections present
+      // Ensure all default sections present
       for (final s in defaultDashboardOrder) {
         if (!list.contains(s)) list.add(s);
       }
-      list.removeWhere((s) => !defaultDashboardOrder.contains(s));
+      // Keep default sections + duplicates (format: baseId:suffix)
+      list.removeWhere((s) =>
+          !defaultDashboardOrder.contains(s) &&
+          !defaultDashboardOrder.contains(sectionBaseId(s)));
       return list;
     } catch (_) {
       return List.from(defaultDashboardOrder);
@@ -114,6 +117,16 @@ class SettingsService {
 
   Future<void> setDashboardOrder(List<String> order) =>
       _prefs.setString(_dashboardOrderKey, jsonEncode(order));
+
+  /// Extract base section type from an instance ID.
+  /// e.g. 'weather:123' → 'weather', 'weather' → 'weather'
+  static String sectionBaseId(String id) {
+    final idx = id.indexOf(':');
+    return idx >= 0 ? id.substring(0, idx) : id;
+  }
+
+  /// Whether this ID is a duplicate (has :suffix).
+  static bool isDuplicate(String id) => id.contains(':');
 
   // Dashboard section sizes (true=large, false=small)
   static const _dashboardSizesKey = 'dashboard_sizes';
@@ -190,6 +203,34 @@ class SettingsService {
       set.remove(id);
     }
     await _prefs.setString(_dashboardHiddenKey, jsonEncode(set.toList()));
+  }
+
+  // Dashboard custom section labels
+  static const _sectionLabelsKey = 'dashboard_section_labels';
+
+  String? getSectionLabel(String id) {
+    final raw = _prefs.getString(_sectionLabelsKey);
+    if (raw == null) return null;
+    try {
+      final map = (jsonDecode(raw) as Map).cast<String, dynamic>();
+      return map[id] as String?;
+    } catch (_) {
+      return null;
+    }
+  }
+
+  Future<void> setSectionLabel(String id, String label) async {
+    final raw = _prefs.getString(_sectionLabelsKey);
+    Map<String, dynamic> map = {};
+    if (raw != null) {
+      try { map = (jsonDecode(raw) as Map).cast<String, dynamic>(); } catch (_) {}
+    }
+    if (label.isEmpty) {
+      map.remove(id);
+    } else {
+      map[id] = label;
+    }
+    await _prefs.setString(_sectionLabelsKey, jsonEncode(map));
   }
 
   // App lock
