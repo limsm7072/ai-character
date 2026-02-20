@@ -103,6 +103,42 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 onTap: _testDetection,
               ),
               ListTile(
+                title: const Text('위젯 데이터 테스트'),
+                subtitle: const Text('위젯이 읽는 SharedPreferences 확인'),
+                trailing: const Icon(Icons.widgets),
+                onTap: () async {
+                  try {
+                    final result = await _channel.invokeMethod('debugWidgetData');
+                    if (mounted) {
+                      showDialog(
+                        context: context,
+                        builder: (_) => AlertDialog(
+                          title: const Text('위젯 데이터'),
+                          content: SingleChildScrollView(
+                            child: Text(
+                              result?.toString() ?? '결과 없음',
+                              style: const TextStyle(fontSize: 11, fontFamily: 'monospace'),
+                            ),
+                          ),
+                          actions: [
+                            TextButton(
+                              onPressed: () => Navigator.pop(context),
+                              child: const Text('확인'),
+                            ),
+                          ],
+                        ),
+                      );
+                    }
+                  } catch (e) {
+                    if (mounted) {
+                      ScaffoldMessenger.of(context).showSnackBar(
+                        SnackBar(content: Text('오류: $e')),
+                      );
+                    }
+                  }
+                },
+              ),
+              ListTile(
                 title: const Text('모니터링 서비스 시작'),
                 subtitle: const Text('백그라운드 감시 수동 시작'),
                 trailing: const Icon(Icons.play_arrow),

@@ -15,10 +15,11 @@ import android.hardware.Sensor
 import android.hardware.SensorEvent
 import android.hardware.SensorEventListener
 import android.hardware.SensorManager
-import android.app.SearchManager
 import android.media.AudioAttributes
 import android.media.MediaPlayer
 import android.media.RingtoneManager
+import android.view.WindowManager
+import android.app.KeyguardManager
 import io.flutter.embedding.android.FlutterFragmentActivity
 import io.flutter.embedding.engine.FlutterEngine
 import io.flutter.plugin.common.EventChannel
@@ -47,6 +48,10 @@ class MainActivity : FlutterFragmentActivity() {
     private val SHAKE_THRESHOLD = 12.0
     private val SHAKE_DEBOUNCE_MS = 300L
 
+    // Alarm: pending alarm data from fullScreenIntent
+    private var usageStatsChannel: MethodChannel? = null
+    private var pendingAlarmData: Map<String, String>? = null
+
     private val distractionReceiver = object : BroadcastReceiver() {
         override fun onReceive(context: Context?, intent: Intent?) {
             if (intent?.action == "com.aicharacter.DISTRACTION_DETECTED") {
@@ -63,7 +68,8 @@ class MainActivity : FlutterFragmentActivity() {
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
 
-        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL).setMethodCallHandler { call, result ->
+        usageStatsChannel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL)
+        usageStatsChannel!!.setMethodCallHandler { call, result ->
             when (call.method) {
                 "hasUsageStatsPermission" -> result.success(hasUsageStatsPermission())
                 "requestUsageStatsPermission" -> {
@@ -158,33 +164,31 @@ class MainActivity : FlutterFragmentActivity() {
                     }
                     startActivityForResult(intent, PICK_IMAGE_REQUEST)
                 }
-                "playMusic" -> {
-                    val query = call.argument<String>("query") ?: "음악"
-                    try {
-                        val intent = Intent(android.provider.MediaStore.INTENT_ACTION_MEDIA_PLAY_FROM_SEARCH).apply {
-                            putExtra(android.provider.MediaStore.EXTRA_MEDIA_FOCUS, "vnd.android.cursor.item/*")
-                            putExtra(SearchManager.QUERY, query)
-                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                        }
-                        startActivity(intent)
-                        result.success(true)
-                    } catch (e: Exception) {
-                        result.error("PLAY_MUSIC_ERROR", e.message, null)
-                    }
-                }
                 "openUrl" -> {
                     val url = call.argument<String>("url") ?: ""
                     try {
-                        // Try to launch the app directly if installed
                         val pkg = urlToPackage(url)
                         if (pkg != null) {
-                            val launchIntent = packageManager.getLaunchIntentForPackage(pkg)
-                            if (launchIntent != null) {
-                                launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                                startActivity(launchIntent)
+                            // 1st: try ACTION_VIEW with package (opens URL inside the app)
+                            try {
+                                val appViewIntent = Intent(Intent.ACTION_VIEW, Uri.parse(url)).apply {
+                                    setPackage(pkg)
+                                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                }
+                                startActivity(appViewIntent)
                                 result.success(true)
                                 return@setMethodCallHandler
-                            }
+                            } catch (_: Exception) {}
+                            // 2nd: try launching app directly
+                            try {
+                                val launchIntent = packageManager.getLaunchIntentForPackage(pkg)
+                                if (launchIntent != null) {
+                                    launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                                    startActivity(launchIntent)
+                                    result.success(true)
+                                    return@setMethodCallHandler
+                                }
+                            } catch (_: Exception) {}
                         }
                         // Fallback: open URL in browser
                         val intent = Intent(Intent.ACTION_VIEW, Uri.parse(url)).apply {
@@ -195,6 +199,38 @@ class MainActivity : FlutterFragmentActivity() {
                     } catch (e: Exception) {
                         result.error("OPEN_URL_ERROR", e.message, null)
                     }
+                }
+                "scheduleNativeAlarm" -> {
+                    val requestCode = call.argument<Int>("requestCode")!!
+                    val timeMillis = call.argument<Number>("timeMillis")!!.toLong()
+                    val alarmId = call.argument<String>("alarmId") ?: ""
+                    val label = call.argument<String>("label") ?: "알람"
+                    val repeating = call.argument<Boolean>("repeating") ?: false
+                    AlarmReceiver.scheduleAlarm(this, requestCode, timeMillis, alarmId, label, repeating)
+                    result.success(true)
+                }
+                "cancelNativeAlarm" -> {
+                    val requestCode = call.argument<Int>("requestCode")!!
+                    AlarmReceiver.cancelAlarm(this, requestCode)
+                    result.success(true)
+                }
+                "stopAlarmRing" -> {
+                    stopService(Intent(this, AlarmRingService::class.java))
+                    disableAlarmScreenFlags()
+                    result.success(true)
+                }
+                "checkPendingAlarm" -> {
+                    val data = pendingAlarmData ?: consumeAlarmIntent(intent)
+                    pendingAlarmData = null
+                    if (data != null) {
+                        enableAlarmScreenFlags()
+                    }
+                    result.success(data)
+                }
+                "debugWidgetData" -> {
+                    val dump = WidgetDataHelper.debugDumpKeys(this)
+                    println(dump)
+                    result.success(dump)
                 }
                 "testDetection" -> {
                     val fg = getForegroundApp()
@@ -288,6 +324,69 @@ class MainActivity : FlutterFragmentActivity() {
         } else {
             registerReceiver(distractionReceiver, filter)
         }
+    }
+
+    override fun onResume() {
+        super.onResume()
+        refreshAllWidgets()
+    }
+
+    private fun refreshAllWidgets() {
+        RoutineWidgetProvider.updateAllWidgets(this)
+        BookmarkWidgetProvider.updateAllWidgets(this)
+        TodoWidgetProvider.updateAllWidgets(this)
+        MemoWidgetProvider.updateAllWidgets(this)
+    }
+
+    override fun onNewIntent(intent: Intent) {
+        super.onNewIntent(intent)
+        setIntent(intent) // Update so getIntent() returns latest alarm intent
+        val data = consumeAlarmIntent(intent)
+        if (data != null) {
+            enableAlarmScreenFlags()
+            // Store as pending in case Flutter channel isn't ready yet
+            pendingAlarmData = data
+            // Flutter is already running, send via MethodChannel
+            usageStatsChannel?.invokeMethod("onAlarmRing", data)
+        }
+    }
+
+    private fun enableAlarmScreenFlags() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
+            setShowWhenLocked(true)
+            setTurnScreenOn(true)
+            val km = getSystemService(Context.KEYGUARD_SERVICE) as KeyguardManager
+            km.requestDismissKeyguard(this, null)
+        } else {
+            @Suppress("DEPRECATION")
+            window.addFlags(
+                WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or
+                WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON or
+                WindowManager.LayoutParams.FLAG_DISMISS_KEYGUARD
+            )
+        }
+    }
+
+    private fun disableAlarmScreenFlags() {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O_MR1) {
+            setShowWhenLocked(false)
+            setTurnScreenOn(false)
+        } else {
+            @Suppress("DEPRECATION")
+            window.clearFlags(
+                WindowManager.LayoutParams.FLAG_SHOW_WHEN_LOCKED or
+                WindowManager.LayoutParams.FLAG_TURN_SCREEN_ON or
+                WindowManager.LayoutParams.FLAG_DISMISS_KEYGUARD
+            )
+        }
+    }
+
+    private fun consumeAlarmIntent(intent: Intent?): Map<String, String>? {
+        if (intent?.getBooleanExtra("from_alarm", false) != true) return null
+        val alarmId = intent.getStringExtra("alarm_id") ?: ""
+        val label = intent.getStringExtra("alarm_label") ?: "알람"
+        intent.removeExtra("from_alarm") // consume
+        return mapOf("alarmId" to alarmId, "label" to label)
     }
 
     override fun onActivityResult(requestCode: Int, resultCode: Int, data: Intent?) {
