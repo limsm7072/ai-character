@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="widget_routine_label">루틴</string>
+    <string name="widget_routine_desc">오늘의 루틴 확인 및 완료 체크</string>
+    <string name="widget_bookmark_label">바로가기</string>
+    <string name="widget_bookmark_desc">자주 방문하는 사이트 바로가기</string>
+    <string name="widget_todo_label">할 일</string>
+    <string name="widget_todo_desc">할 일 목록 확인 및 완료 체크</string>
+    <string name="widget_memo_label">메모</string>
+    <string name="widget_memo_desc">최근 메모 빠르게 확인</string>
+</resources>
