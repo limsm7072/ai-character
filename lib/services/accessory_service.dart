@@ -28,4 +28,22 @@ class AccessoryService {
   bool hasCustomSkins(String characterId) {
     return _prefs.containsKey(_key(characterId));
   }
+
+  // --- Slot color tinting ---
+
+  String _colorKey(String characterId) => 'character_colors_$characterId';
+
+  /// Get saved slot colors for a character.
+  /// Returns map of category ('hair','clothes','skin','eyes') -> color as 0xAARRGGBB int.
+  Map<String, int> getSlotColors(String characterId) {
+    final raw = _prefs.getString(_colorKey(characterId));
+    if (raw == null) return {};
+    final map = jsonDecode(raw) as Map<String, dynamic>;
+    return map.map((k, v) => MapEntry(k, v as int));
+  }
+
+  /// Save slot colors for a character.
+  Future<void> setSlotColors(String characterId, Map<String, int> colors) async {
+    await _prefs.setString(_colorKey(characterId), jsonEncode(colors));
+  }
 }

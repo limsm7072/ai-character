@@ -30,6 +30,7 @@ class _OverlayCharacterState extends State<OverlayCharacter>
   CharacterState _state = const CharacterState();
   late CharacterConfig _config;
   List<String>? _customSkins;
+  Map<String, int>? _customColors;
   late AnimationController _entranceController;
   late Animation<Offset> _slideAnimation;
   late Animation<double> _fadeAnimation;
@@ -106,16 +107,31 @@ class _OverlayCharacterState extends State<OverlayCharacter>
         }
       }
 
-      // Load custom skins
+      // Load custom skins and colors
       final accessory = AccessoryService(prefs);
       final skins = accessory.getSelectedSkins(_config.id);
-      if (mounted && skins.isNotEmpty) {
-        final changed = _customSkins == null ||
-            _customSkins!.length != skins.length ||
-            _customSkins!.join(',') != skins.join(',');
-        if (changed) {
-          setState(() => _customSkins = skins);
+      final colors = accessory.getSlotColors(_config.id);
+      if (mounted) {
+        bool needsUpdate = false;
+        if (skins.isNotEmpty) {
+          final changed = _customSkins == null ||
+              _customSkins!.length != skins.length ||
+              _customSkins!.join(',') != skins.join(',');
+          if (changed) {
+            _customSkins = skins;
+            needsUpdate = true;
+          }
         }
+        if (colors.isNotEmpty || _customColors != null) {
+          final colorsChanged = _customColors == null ||
+              _customColors!.length != colors.length ||
+              _customColors.toString() != colors.toString();
+          if (colorsChanged) {
+            _customColors = colors.isNotEmpty ? colors : null;
+            needsUpdate = true;
+          }
+        }
+        if (needsUpdate) setState(() {});
       }
     } catch (_) {}
   }
@@ -161,11 +177,12 @@ class _OverlayCharacterState extends State<OverlayCharacter>
             child: Padding(
               padding: const EdgeInsets.all(16),
               child: SpineCharacterWidget(
-                key: ValueKey('${_config.id}_${_customSkins?.join("_") ?? ""}'),
+                key: ValueKey('${_config.id}_${_customSkins?.join("_") ?? ""}_${_customColors?.hashCode ?? 0}'),
                 config: _config,
                 state: _state,
                 showBubble: false,
                 customSkins: _customSkins,
+                customColors: _customColors,
               ),
             ),
           ),

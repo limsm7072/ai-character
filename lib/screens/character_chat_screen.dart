@@ -331,11 +331,14 @@ class _CharacterChatScreenState extends State<CharacterChatScreen> {
                     widget.settingsService.selectedCharacter);
                 final customSkins = widget.accessoryService
                     .getSelectedSkins(config.id);
+                final customColors = widget.accessoryService
+                    .getSlotColors(config.id);
                 return SpineCharacterWidget(
-                  key: ValueKey('${config.id}_${customSkins.join("_")}'),
+                  key: ValueKey('${config.id}_${customSkins.join("_")}_${customColors.hashCode}'),
                   config: config,
                   state: _characterState,
                   customSkins: customSkins.isNotEmpty ? customSkins : null,
+                  customColors: customColors.isNotEmpty ? customColors : null,
                   showBubble: false,
                   interactive: true,
                 );

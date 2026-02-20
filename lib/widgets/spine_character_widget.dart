@@ -13,6 +13,7 @@ class SpineCharacterWidget extends StatefulWidget {
   final VoidCallback? onTap;
   final bool showBubble;
   final List<String>? customSkins;
+  final Map<String, int>? customColors;
   final bool interactive;
   final String? previewAnimation;
 
@@ -23,6 +24,7 @@ class SpineCharacterWidget extends StatefulWidget {
     this.onTap,
     this.showBubble = true,
     this.customSkins,
+    this.customColors,
     this.interactive = false,
     this.previewAnimation,
   });
@@ -58,6 +60,9 @@ class _SpineCharacterWidgetState extends State<SpineCharacterWidget> {
 
   // Available animations (cached)
   List<String> _availableAnimations = [];
+
+  // Elapsed time for bone overlay oscillation
+  double _elapsedTime = 0;
 
   @override
   void initState() {
@@ -169,6 +174,9 @@ class _SpineCharacterWidgetState extends State<SpineCharacterWidget> {
   }
 
   void _onBeforeUpdate(SpineWidgetController controller) {
+    const dt = 0.016;
+    _elapsedTime += dt;
+
     // Lip sync
     if (widget.config.supportsLipSync &&
         _lipSyncTimer != null && _lipSyncTimer!.isActive) {
@@ -180,8 +188,114 @@ class _SpineCharacterWidgetState extends State<SpineCharacterWidget> {
       }
     }
 
-    // Auto-blink (approximate delta from system time)
+    // Auto-blink
     _updateBlink(controller);
+
+    // Slot color tinting
+    _applySlotColors(controller);
+
+    // Emotion bone overlay
+    _applyEmotionBoneOverlay(controller);
+  }
+
+  // --- Slot color tinting ---
+
+  static String? _categorizeSlot(String slotName) {
+    final lower = slotName.toLowerCase();
+    if (lower.contains('eye-iris')) return 'eyes';
+    // Skip eye-white, eyelid, eyebrow, pupil — tinting looks wrong
+    if (lower.contains('eye')) return null;
+    if (lower.contains('hair')) return 'hair';
+    if (lower.contains('arm') || lower.contains('leg') ||
+        lower.contains('head') || lower.contains('hand') ||
+        lower.contains('ear') || lower.contains('nose') ||
+        lower.contains('neck') || lower.contains('finger')) return 'skin';
+    if (lower.contains('body') || lower.contains('dress') ||
+        lower.contains('sleeve') || lower.contains('collar') ||
+        lower.contains('cape') || lower.contains('skirt') ||
+        lower.contains('bag') || lower.contains('scarf') ||
+        lower.contains('zip') || lower.contains('ribbon') ||
+        lower.contains('cloak') || lower.contains('boot') ||
+        lower.contains('hat') || lower.contains('pompom') ||
+        lower.contains('backpack') || lower.contains('pocket')) return 'clothes';
+    return null;
+  }
+
+  void _applySlotColors(SpineWidgetController controller) {
+    final colors = widget.customColors;
+    if (colors == null || colors.isEmpty) return;
+
+    final skeleton = controller.skeleton;
+    final slots = skeleton.slots;
+    for (int i = 0; i < slots.length; i++) {
+      final slot = slots[i];
+      if (slot == null) continue;
+      final category = _categorizeSlot(slot.data.name);
+      if (category == null) continue;
+      final colorInt = colors[category];
+      if (colorInt == null) continue;
+
+      final r = ((colorInt >> 16) & 0xFF) / 255.0;
+      final g = ((colorInt >> 8) & 0xFF) / 255.0;
+      final b = (colorInt & 0xFF) / 255.0;
+      slot.pose.color.set(r, g, b, slot.pose.color.a);
+    }
+  }
+
+  // --- Emotion bone overlay ---
+
+  void _applyEmotionBoneOverlay(SpineWidgetController controller) {
+    final skeleton = controller.skeleton;
+    final head = skeleton.findBone('head');
+    final body = skeleton.findBone('body');
+    if (head == null && body == null) return;
+
+    final t = _elapsedTime;
+
+    // Breathing (always active): body scaleY oscillation
+    if (body != null) {
+      final breathe = sin(t * 2.094) * 0.01; // period ~3s
+      body.pose.scaleY += breathe;
+    }
+
+    // Subtle idle sway: head rotation
+    if (head != null) {
+      final sway = sin(t * 1.257) * 1.5; // period ~5s, ±1.5 degrees
+      head.pose.rotation += sway;
+    }
+
+    // Emotion-specific overlay
+    final emotion = widget.state.emotion;
+    switch (emotion) {
+      case 'happy':
+        head?.pose.rotation += 5;
+        break;
+      case 'sad':
+        head?.pose.rotation -= 8;
+        head?.pose.y -= 3;
+        break;
+      case 'angry':
+        body?.pose.scaleX *= 1.02;
+        head?.pose.rotation += 3;
+        break;
+      case 'surprised':
+        body?.pose.scaleY *= 1.03;
+        break;
+      case 'annoyed':
+        head?.pose.rotation -= 5;
+        break;
+      case 'disappointed':
+        head?.pose.y -= 5;
+        break;
+      case 'worried':
+        final worry = sin(t * 4.189) * 2; // period ~1.5s
+        head?.pose.x += worry;
+        break;
+      case 'proud':
+        body?.pose.scaleY *= 1.02;
+        head?.pose.rotation += 3;
+        break;
+    }
   }
 
   void _updateBlink(SpineWidgetController controller) {
