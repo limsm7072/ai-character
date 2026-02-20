@@ -60,18 +60,5 @@ class TimerPreset {
   static List<TimerPreset> decode(String source) =>
       (jsonDecode(source) as List).map((j) => TimerPreset.fromJson(j)).toList();
 
-  static List<TimerPreset> defaults() => [
-        TimerPreset(id: 'default_5', label: '5분', durationSeconds: 300),
-        TimerPreset(id: 'default_10', label: '10분', durationSeconds: 600),
-        TimerPreset(id: 'default_30', label: '30분', durationSeconds: 1800),
-        TimerPreset(
-          id: 'default_pomo',
-          label: '뽀모도로',
-          durationSeconds: 1500,
-          isPomodoro: true,
-          focusMinutes: 25,
-          breakMinutes: 5,
-          targetSessions: 4,
-        ),
-      ];
+  static List<TimerPreset> defaults() => [];
 }
