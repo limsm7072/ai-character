@@ -18,6 +18,8 @@ import '../services/recommendation_service.dart';
 import '../services/routine_group_service.dart';
 import '../services/diary_service.dart';
 import '../services/bookmark_service.dart';
+import '../services/fortune_service.dart';
+import '../models/fortune_data.dart';
 import '../models/weather_data.dart';
 import '../models/recommendation_data.dart';
 import 'package:geolocator/geolocator.dart';
@@ -36,6 +38,7 @@ import 'recommendation_screen.dart';
 import 'diary_screen.dart';
 import 'nature_scene_screen.dart';
 import 'bookmark_screen.dart';
+import 'fortune_screen.dart';
 import '../theme/app_colors.dart';
 
 class DashboardScreen extends StatefulWidget {
@@ -57,6 +60,7 @@ class DashboardScreen extends StatefulWidget {
   final RoutineGroupService routineGroupService;
   final DiaryService diaryService;
   final BookmarkService bookmarkService;
+  final FortuneService fortuneService;
   final VoidCallback? onCompletionUnchecked;
 
   const DashboardScreen({
@@ -79,6 +83,7 @@ class DashboardScreen extends StatefulWidget {
     required this.routineGroupService,
     required this.diaryService,
     required this.bookmarkService,
+    required this.fortuneService,
     this.onCompletionUnchecked,
   });
 
@@ -90,6 +95,7 @@ class DashboardScreenState extends State<DashboardScreen> {
   List<String> _headlines = [];
   WeatherData? _weather;
   RecommendationData? _recommendation;
+  FortuneData? _fortune;
   bool _editMode = false;
 
   @override
@@ -98,6 +104,7 @@ class DashboardScreenState extends State<DashboardScreen> {
     _headlines = widget.newsService.getCached();
     _weather = widget.weatherService.getCached();
     _recommendation = widget.recommendationService.getCached();
+    _fortune = widget.fortuneService.getCached() ?? widget.fortuneService.generateTodayFortune();
     _loadNews();
     _loadWeather();
     _loadRecommendation();
@@ -141,6 +148,7 @@ class DashboardScreenState extends State<DashboardScreen> {
   }
 
   void refresh() {
+    _fortune = widget.fortuneService.generateTodayFortune();
     if (mounted) setState(() {});
     _loadNews();
     _loadWeather();
@@ -195,6 +203,8 @@ class DashboardScreenState extends State<DashboardScreen> {
         return large ? _buildNatureLarge(context, label) : _buildNatureSmall(context, label);
       case 'bookmark':
         return large ? _buildBookmarkLarge(context, label) : _buildBookmarkSmall(context, label);
+      case 'fortune':
+        return large ? _buildFortuneLarge(context, theme, label) : _buildFortuneSmall(context, theme, label);
       default:
         return null;
     }
@@ -1500,7 +1510,7 @@ class DashboardScreenState extends State<DashboardScreen> {
   static const _defaultLabels = {
     'recommend': '맞춤 정보', 'news': '뉴스', 'weather': '날씨', 'routine': '루틴', 'todo': '할 일',
     'diary': '일기장', 'card': '명함', 'calendar': '캘린더', 'stats': '통계', 'alarm': '알람',
-    'timer': '타이머', 'memo': '메모', 'dday': 'D-Day', 'nature': '자연소리', 'bookmark': '바로가기',
+    'timer': '타이머', 'memo': '메모', 'dday': 'D-Day', 'nature': '자연소리', 'bookmark': '바로가기', 'fortune': '오늘의 운세',
   };
 
   String _sectionLabel(String id) {
@@ -1516,10 +1526,164 @@ class DashboardScreenState extends State<DashboardScreen> {
       'stats': Icons.bar_chart_rounded, 'alarm': Icons.alarm_rounded,
       'timer': Icons.timer_outlined, 'memo': Icons.note_alt_outlined,
       'dday': Icons.event_outlined, 'diary': Icons.auto_stories, 'nature': Icons.spa,
-      'bookmark': Icons.language,
+      'bookmark': Icons.language, 'fortune': Icons.auto_awesome,
     };
     final baseId = SettingsService.sectionBaseId(id);
     return icons[baseId] ?? Icons.widgets_outlined;
+  }
+
+  // ─── 오늘의 운세 ────────────────────────────────────
+
+  void _openFortune(BuildContext context, String label) {
+    Navigator.of(context).push(MaterialPageRoute(
+      builder: (_) => FortuneScreen(fortuneService: widget.fortuneService, title: label),
+    )).then((_) {
+      // Refresh after returning (user may have set profile)
+      final newFortune = widget.fortuneService.generateTodayFortune();
+      if (mounted && newFortune != null) setState(() => _fortune = newFortune);
+    });
+  }
+
+  Color _fortuneScoreColor(int score, ThemeData theme) {
+    if (score >= 80) return const Color(0xFF4CAF50);
+    if (score >= 60) return theme.colorScheme.primary;
+    if (score >= 45) return const Color(0xFFFF9800);
+    return const Color(0xFFE53935);
+  }
+
+  Widget? _buildFortuneSmall(BuildContext context, ThemeData theme, String label) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(12),
+      onTap: () => _openFortune(context, label),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        decoration: BoxDecoration(
+          color: theme.colorScheme.surfaceContainerLow,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Row(
+          children: [
+            Icon(Icons.auto_awesome, size: 18, color: theme.colorScheme.primary),
+            const SizedBox(width: 10),
+            Text(label, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: theme.colorScheme.onSurface)),
+            const Spacer(),
+            if (_fortune != null) ...[
+              Text(_fortune!.overallLabel,
+                style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700,
+                  color: _fortuneScoreColor(_fortune!.overallScore, theme))),
+              const SizedBox(width: 4),
+              Text('${_fortune!.overallScore}점',
+                style: TextStyle(fontSize: 13, color: theme.colorScheme.onSurfaceVariant)),
+            ] else
+              Text('설정하기', style: TextStyle(fontSize: 13, color: theme.colorScheme.primary)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget? _buildFortuneLarge(BuildContext context, ThemeData theme, String label) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(16),
+      onTap: () => _openFortune(context, label),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: theme.colorScheme.surfaceContainerLow,
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: _fortune != null ? _buildFortuneLargeContent(theme, label) : _buildFortuneSetup(theme, label),
+      ),
+    );
+  }
+
+  Widget _buildFortuneSetup(ThemeData theme, String label) {
+    return Column(
+      children: [
+        Row(
+          children: [
+            Icon(Icons.auto_awesome, size: 18, color: theme.colorScheme.primary),
+            const SizedBox(width: 8),
+            Text(label, style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600)),
+          ],
+        ),
+        const SizedBox(height: 16),
+        Icon(Icons.auto_awesome, size: 40, color: theme.colorScheme.primary.withValues(alpha: 0.4)),
+        const SizedBox(height: 8),
+        Text('생년월일을 입력하고\n오늘의 운세를 확인하세요',
+          textAlign: TextAlign.center,
+          style: TextStyle(fontSize: 13, color: theme.colorScheme.onSurfaceVariant)),
+      ],
+    );
+  }
+
+  Widget _buildFortuneLargeContent(ThemeData theme, String label) {
+    final f = _fortune!;
+    final color = _fortuneScoreColor(f.overallScore, theme);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Icon(Icons.auto_awesome, size: 18, color: theme.colorScheme.primary),
+            const SizedBox(width: 8),
+            Text(label, style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600)),
+            const Spacer(),
+            if (f.lunarDateStr.isNotEmpty)
+              Text(f.lunarDateStr, style: TextStyle(fontSize: 12, color: theme.colorScheme.onSurfaceVariant)),
+          ],
+        ),
+        const SizedBox(height: 12),
+        // Score + label
+        Row(
+          children: [
+            Container(
+              width: 52, height: 52,
+              decoration: BoxDecoration(
+                shape: BoxShape.circle,
+                color: color.withValues(alpha: 0.12),
+              ),
+              child: Center(
+                child: Text('${f.overallScore}', style: TextStyle(
+                  fontSize: 20, fontWeight: FontWeight.w700, color: color)),
+              ),
+            ),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Text(f.overallLabel, style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: color)),
+                  const SizedBox(height: 2),
+                  Text(f.todayAdvice,
+                    style: TextStyle(fontSize: 12, color: theme.colorScheme.onSurfaceVariant),
+                    maxLines: 2, overflow: TextOverflow.ellipsis),
+                ],
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        // Category mini bars
+        Wrap(
+          spacing: 8,
+          runSpacing: 4,
+          children: f.categoryScores.entries.map((e) {
+            final catColor = _fortuneScoreColor(e.value, theme);
+            return SizedBox(
+              width: 80,
+              child: Row(
+                children: [
+                  Text(e.key, style: TextStyle(fontSize: 11, color: theme.colorScheme.onSurfaceVariant)),
+                  const SizedBox(width: 4),
+                  Text('${e.value}', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: catColor)),
+                ],
+              ),
+            );
+          }).toList(),
+        ),
+      ],
+    );
   }
 
   void _showSectionOptions(String id) {

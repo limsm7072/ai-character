@@ -19,6 +19,7 @@ import '../services/recommendation_service.dart';
 import '../services/routine_group_service.dart';
 import '../services/diary_service.dart';
 import '../services/bookmark_service.dart';
+import '../services/fortune_service.dart';
 import 'dashboard_screen.dart';
 import 'settings_screen.dart';
 import 'character_chat_screen.dart';
@@ -44,6 +45,7 @@ class HomeScreen extends StatefulWidget {
   final RoutineGroupService routineGroupService;
   final DiaryService diaryService;
   final BookmarkService bookmarkService;
+  final FortuneService fortuneService;
   final VoidCallback? onCompletionUnchecked;
 
   const HomeScreen({
@@ -68,6 +70,7 @@ class HomeScreen extends StatefulWidget {
     required this.routineGroupService,
     required this.diaryService,
     required this.bookmarkService,
+    required this.fortuneService,
     this.onCompletionUnchecked,
   });
 
@@ -107,6 +110,7 @@ class _HomeScreenState extends State<HomeScreen> {
             routineGroupService: widget.routineGroupService,
             diaryService: widget.diaryService,
             bookmarkService: widget.bookmarkService,
+            fortuneService: widget.fortuneService,
             onCompletionUnchecked: widget.onCompletionUnchecked,
           ),
           CharacterChatScreen(
