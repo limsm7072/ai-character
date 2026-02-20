@@ -126,9 +126,9 @@ class _RoutineListScreenState extends State<RoutineListScreen> {
   }
 
   Future<void> _confirmGroup() async {
-    if (_selectedRoutineIds.length < 2) {
+    if (_selectedRoutineIds.isEmpty) {
       ScaffoldMessenger.of(context).showSnackBar(
-        const SnackBar(content: Text('2개 이상 선택해주세요')),
+        const SnackBar(content: Text('루틴을 선택해주세요')),
       );
       return;
     }
@@ -140,27 +140,49 @@ class _RoutineListScreenState extends State<RoutineListScreen> {
   }
 
   Future<void> _showUngroupDialog(RoutineGroup group) async {
-    final confirm = await showDialog<bool>(
+    await widget.routineGroupService.ungroup(group.id);
+    _loadRoutines();
+  }
+
+  Future<void> _showRoutineGroupOptions(model.Routine routine, RoutineGroup group) async {
+    final theme = Theme.of(context);
+    showModalBottomSheet(
       context: context,
-      builder: (_) => AlertDialog(
-        title: const Text('그룹 해제'),
-        content: const Text('이 그룹을 해제하시겠습니까?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(context, false),
-            child: const Text('취소'),
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(width: 40, height: 4, decoration: BoxDecoration(color: theme.colorScheme.outline.withValues(alpha: 0.3), borderRadius: BorderRadius.circular(2))),
+              const SizedBox(height: 16),
+              Text(routine.name, style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
+              const SizedBox(height: 12),
+              ListTile(
+                leading: const Icon(Icons.remove_circle_outline),
+                title: const Text('그룹에서 빼기'),
+                subtitle: const Text('이 루틴만 그룹에서 제거합니다'),
+                onTap: () async {
+                  Navigator.pop(ctx);
+                  await widget.routineGroupService.removeFromGroup(routine.id);
+                  _loadRoutines();
+                },
+              ),
+              ListTile(
+                leading: const Icon(Icons.workspaces_outline),
+                title: const Text('그룹 전체 해제'),
+                subtitle: Text('그룹의 모든 루틴(${group.routineIds.length}개)을 해제합니다'),
+                onTap: () async {
+                  Navigator.pop(ctx);
+                  await _showUngroupDialog(group);
+                },
+              ),
+              const SizedBox(height: 8),
+            ],
           ),
-          TextButton(
-            onPressed: () => Navigator.pop(context, true),
-            child: const Text('해제'),
-          ),
-        ],
+        ),
       ),
     );
-    if (confirm == true) {
-      await widget.routineGroupService.ungroup(group.id);
-      setState(() {});
-    }
   }
 
   /// Build a map: routineId → groupId for filtered routines
@@ -376,7 +398,7 @@ class _RoutineListScreenState extends State<RoutineListScreen> {
       title: Text('${_selectedRoutineIds.length}개 선택'),
       actions: [
         TextButton(
-          onPressed: _selectedRoutineIds.length >= 2 ? _confirmGroup : null,
+          onPressed: _selectedRoutineIds.isNotEmpty ? _confirmGroup : null,
           child: const Text('확인'),
         ),
       ],
@@ -669,20 +691,74 @@ class _RoutineListScreenState extends State<RoutineListScreen> {
       ),
     );
 
-    // Right side wrapped with group background + padding
-    final rightSide = Padding(
-      padding: EdgeInsets.only(top: topPadding, bottom: bottomPadding),
-      child: Container(
-        decoration: BoxDecoration(
-          color: groupBgColor,
-          borderRadius: BorderRadius.vertical(
-            top: isGroupStart ? const Radius.circular(12) : Radius.zero,
-            bottom: isGroupEnd ? const Radius.circular(12) : Radius.zero,
-          ),
+    // Group header row (ungroup button) shown at group start
+    Widget? groupHeader;
+    if (isGroupStart && !_isGroupMode) {
+      final group = widget.routineGroupService.groupForRoutine(routine.id);
+      groupHeader = Container(
+        padding: const EdgeInsets.fromLTRB(12, 6, 4, 0),
+        child: Row(
+          children: [
+            Icon(Icons.workspaces_outline, size: 13, color: theme.colorScheme.primary.withValues(alpha: 0.6)),
+            const SizedBox(width: 4),
+            Text('그룹', style: TextStyle(fontSize: 11, color: theme.colorScheme.primary.withValues(alpha: 0.6), fontWeight: FontWeight.w600)),
+            const Spacer(),
+            GestureDetector(
+              onTap: () {
+                if (group != null) _showUngroupDialog(group);
+              },
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                child: Text('해제', style: TextStyle(fontSize: 11, color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.6))),
+              ),
+            ),
+          ],
         ),
-        child: contentWidget,
-      ),
+      );
+    }
+
+    // Right side content with group header
+    final rightContent = Column(
+      mainAxisSize: MainAxisSize.min,
+      crossAxisAlignment: CrossAxisAlignment.stretch,
+      children: [
+        if (groupHeader != null) groupHeader,
+        contentWidget,
+      ],
     );
+
+    // Build the full row with group background spanning from left edge
+    Widget buildRow(Widget dot, {VoidCallback? onTap, VoidCallback? onLongPress}) {
+      final row = Row(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          _buildTimelineColumn(isFirst, isLast, lineColor, dot),
+          Expanded(child: rightContent),
+        ],
+      );
+
+      final wrappedRow = isInGroup
+          ? Padding(
+              padding: EdgeInsets.only(top: topPadding, bottom: bottomPadding),
+              child: Container(
+                decoration: BoxDecoration(
+                  color: groupBgColor,
+                  borderRadius: BorderRadius.vertical(
+                    top: isGroupStart ? const Radius.circular(12) : Radius.zero,
+                    bottom: isGroupEnd ? const Radius.circular(12) : Radius.zero,
+                  ),
+                ),
+                child: row,
+              ),
+            )
+          : row;
+
+      return InkWell(
+        onTap: onTap,
+        onLongPress: onLongPress,
+        child: wrappedRow,
+      );
+    }
 
     return Material(
       key: ValueKey(routine.id),
@@ -690,36 +766,22 @@ class _RoutineListScreenState extends State<RoutineListScreen> {
         child: _isGroupMode
             ? ReorderableDragStartListener(
                 index: index,
-                child: InkWell(
+                child: buildRow(
+                  _buildSelectionDot(routine.id, isSelected, theme),
                   onTap: () => _toggleSelection(routine.id),
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      _buildTimelineColumn(isFirst, isLast, lineColor,
-                          _buildSelectionDot(routine.id, isSelected, theme)),
-                      Expanded(child: rightSide),
-                    ],
-                  ),
                 ),
               )
             : ReorderableDragStartListener(
                 index: index,
-                child: InkWell(
+                child: buildRow(
+                  _buildCompletionDot(routine, isCompleted, isSkipped, dotColor),
                   onTap: () => _editRoutine(routine),
                   onLongPress: isInGroup
                       ? () {
                           final group = widget.routineGroupService.groupForRoutine(routine.id);
-                          if (group != null) _showUngroupDialog(group);
+                          if (group != null) _showRoutineGroupOptions(routine, group);
                         }
                       : null,
-                  child: Row(
-                    crossAxisAlignment: CrossAxisAlignment.stretch,
-                    children: [
-                      _buildTimelineColumn(isFirst, isLast, lineColor,
-                          _buildCompletionDot(routine, isCompleted, isSkipped, dotColor)),
-                      Expanded(child: rightSide),
-                    ],
-                  ),
                 ),
               ),
       ),

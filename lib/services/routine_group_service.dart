@@ -27,7 +27,7 @@ class RoutineGroupService {
       g.routineIds.removeWhere((id) => routineIds.contains(id));
     }
     // Remove groups that became too small
-    groups.removeWhere((g) => g.routineIds.length < 2);
+    groups.removeWhere((g) => g.routineIds.isEmpty);
 
     final group = RoutineGroup(
       id: DateTime.now().millisecondsSinceEpoch.toString(),
@@ -44,13 +44,23 @@ class RoutineGroupService {
     await saveAll(groups);
   }
 
+  /// Remove a single routine from its group.
+  Future<void> removeFromGroup(String routineId) async {
+    final groups = getAll();
+    for (final g in groups) {
+      g.routineIds.remove(routineId);
+    }
+    groups.removeWhere((g) => g.routineIds.isEmpty);
+    await saveAll(groups);
+  }
+
   Future<void> onRoutineDeleted(String routineId) async {
     final groups = getAll();
     for (final g in groups) {
       g.routineIds.remove(routineId);
     }
     // Remove groups with fewer than 2 members
-    groups.removeWhere((g) => g.routineIds.length < 2);
+    groups.removeWhere((g) => g.routineIds.isEmpty);
     await saveAll(groups);
   }
 
