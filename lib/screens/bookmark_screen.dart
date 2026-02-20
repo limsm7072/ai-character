@@ -6,8 +6,9 @@ import '../services/bookmark_service.dart';
 
 class BookmarkScreen extends StatefulWidget {
   final BookmarkService bookmarkService;
+  final String? title;
 
-  const BookmarkScreen({super.key, required this.bookmarkService});
+  const BookmarkScreen({super.key, required this.bookmarkService, this.title});
 
   @override
   State<BookmarkScreen> createState() => _BookmarkScreenState();
@@ -251,6 +252,44 @@ class _BookmarkScreenState extends State<BookmarkScreen> {
     );
   }
 
+  void _showBookmarkOptions(Bookmark bm) {
+    final theme = Theme.of(context);
+    showModalBottomSheet(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: Padding(
+          padding: const EdgeInsets.fromLTRB(16, 16, 16, 8),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(width: 40, height: 4, decoration: BoxDecoration(color: theme.colorScheme.outline.withValues(alpha: 0.3), borderRadius: BorderRadius.circular(2))),
+              const SizedBox(height: 16),
+              Text(bm.name, style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
+              const SizedBox(height: 12),
+              ListTile(
+                leading: const Icon(Icons.edit),
+                title: const Text('수정'),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _showCustomAddDialog(existing: bm);
+                },
+              ),
+              ListTile(
+                leading: Icon(Icons.delete_outline, color: AppColors.error),
+                title: Text('삭제', style: TextStyle(color: AppColors.error)),
+                onTap: () {
+                  Navigator.pop(ctx);
+                  _confirmDelete(bm);
+                },
+              ),
+              const SizedBox(height: 8),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   void _confirmDelete(Bookmark bookmark) {
     showDialog(
       context: context,
@@ -280,7 +319,7 @@ class _BookmarkScreenState extends State<BookmarkScreen> {
     final theme = Theme.of(context);
     return Scaffold(
       appBar: AppBar(
-        title: const Text('바로가기'),
+        title: Text(widget.title ?? '바로가기'),
         actions: [
           IconButton(
             icon: const Icon(Icons.add),
@@ -304,46 +343,41 @@ class _BookmarkScreenState extends State<BookmarkScreen> {
                 ],
               ),
             )
-          : ReorderableListView.builder(
+          : GridView.builder(
               padding: const EdgeInsets.all(16),
+              gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
+                crossAxisCount: 4,
+                mainAxisSpacing: 12,
+                crossAxisSpacing: 8,
+                childAspectRatio: 0.85,
+              ),
               itemCount: _bookmarks.length,
-              onReorder: (oldIdx, newIdx) async {
-                if (newIdx > oldIdx) newIdx--;
-                await widget.bookmarkService.reorder(oldIdx, newIdx);
-                _load();
-              },
               itemBuilder: (context, index) {
                 final bm = _bookmarks[index];
-                return Card(
-                  key: ValueKey(bm.id),
-                  margin: const EdgeInsets.only(bottom: 8),
-                  child: ListTile(
-                    leading: Container(
-                      width: 40,
-                      height: 40,
-                      decoration: BoxDecoration(
-                        color: theme.colorScheme.surfaceContainerHighest,
-                        borderRadius: BorderRadius.circular(10),
+                return GestureDetector(
+                  onTap: () => _openUrl(bm.url),
+                  onLongPress: () => _showBookmarkOptions(bm),
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Container(
+                        width: 52,
+                        height: 52,
+                        decoration: BoxDecoration(
+                          color: theme.colorScheme.surfaceContainerHighest,
+                          borderRadius: BorderRadius.circular(14),
+                        ),
+                        child: Center(child: _faviconWidget(bm.url, size: 32)),
                       ),
-                      child: Center(child: _faviconWidget(bm.url, size: 24)),
-                    ),
-                    title: Text(bm.name, style: const TextStyle(fontWeight: FontWeight.w600)),
-                    subtitle: Text(
-                      bm.url,
-                      style: TextStyle(fontSize: 12, color: theme.colorScheme.onSurfaceVariant),
-                      overflow: TextOverflow.ellipsis,
-                    ),
-                    trailing: PopupMenuButton<String>(
-                      onSelected: (value) {
-                        if (value == 'edit') _showCustomAddDialog(existing: bm);
-                        if (value == 'delete') _confirmDelete(bm);
-                      },
-                      itemBuilder: (_) => [
-                        const PopupMenuItem(value: 'edit', child: Text('수정')),
-                        const PopupMenuItem(value: 'delete', child: Text('삭제')),
-                      ],
-                    ),
-                    onTap: () => _openUrl(bm.url),
+                      const SizedBox(height: 6),
+                      Text(
+                        bm.name,
+                        style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w500),
+                        overflow: TextOverflow.ellipsis,
+                        maxLines: 1,
+                        textAlign: TextAlign.center,
+                      ),
+                    ],
                   ),
                 );
               },
