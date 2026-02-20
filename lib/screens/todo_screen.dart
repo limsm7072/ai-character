@@ -146,6 +146,40 @@ class _TodoScreenState extends State<TodoScreen> {
     );
   }
 
+  Future<void> _pickDueDate(Todo todo) async {
+    final initial = todo.dueDate != null ? DateTime.tryParse(todo.dueDate!) : null;
+    final picked = await showDatePicker(
+      context: context,
+      initialDate: initial ?? DateTime.now(),
+      firstDate: DateTime(2020),
+      lastDate: DateTime(2100),
+    );
+    if (picked != null) {
+      todo.dueDate = '${picked.year}-${picked.month.toString().padLeft(2, '0')}-${picked.day.toString().padLeft(2, '0')}';
+      await widget.todoService.update(todo);
+      _load();
+    } else if (todo.dueDate != null) {
+      // Show option to clear
+      if (!mounted) return;
+      final clear = await showDialog<bool>(
+        context: context,
+        builder: (_) => AlertDialog(
+          title: const Text('마감일'),
+          content: Text('마감일(${todo.dueDateDisplay})을 삭제할까요?'),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('유지')),
+            TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('삭제')),
+          ],
+        ),
+      );
+      if (clear == true) {
+        todo.dueDate = null;
+        await widget.todoService.update(todo);
+        _load();
+      }
+    }
+  }
+
   Widget _buildTodoItem(Todo todo, ThemeData theme) {
     return Dismissible(
       key: ValueKey(todo.id),
@@ -170,10 +204,21 @@ class _TodoScreenState extends State<TodoScreen> {
             color: todo.isCompleted ? AppColors.grey500 : null,
           ),
         ),
+        subtitle: todo.dueDate != null
+            ? Text(
+                todo.dueDateDisplay!,
+                style: TextStyle(
+                  fontSize: 12,
+                  color: todo.isOverdue ? AppColors.error : AppColors.grey500,
+                  fontWeight: todo.isOverdue ? FontWeight.w600 : FontWeight.normal,
+                ),
+              )
+            : null,
         trailing: IconButton(
           icon: Icon(Icons.close, size: 18, color: AppColors.grey400),
           onPressed: () => _deleteTodo(todo),
         ),
+        onLongPress: () => _pickDueDate(todo),
       ),
     );
   }
