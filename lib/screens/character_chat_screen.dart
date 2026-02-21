@@ -20,6 +20,7 @@ import '../services/news_service.dart';
 import '../services/card_service.dart';
 import '../services/timer_service.dart';
 import '../services/diary_service.dart';
+import '../services/auto_page_service.dart';
 import '../widgets/spine_character_widget.dart';
 import '../theme/app_colors.dart';
 import 'dress_up_screen.dart';
@@ -39,6 +40,7 @@ class CharacterChatScreen extends StatefulWidget {
   final CardService? cardService;
   final TimerService? timerService;
   final DiaryService? diaryService;
+  final AutoPageService? autoPageService;
   final VoidCallback? onRoutinesChanged;
 
   const CharacterChatScreen({
@@ -57,6 +59,7 @@ class CharacterChatScreen extends StatefulWidget {
     this.cardService,
     this.timerService,
     this.diaryService,
+    this.autoPageService,
     this.onRoutinesChanged,
   });
 
@@ -101,6 +104,7 @@ class _CharacterChatScreenState extends State<CharacterChatScreen> {
         calendarService: widget.calendarService,
         settingsService: widget.settingsService,
         ttsService: _tts,
+        autoPageService: widget.autoPageService,
         onOpenUrl: (url) async {
           const channel = MethodChannel('com.aicharacter.ai_character/usage_stats');
           await channel.invokeMethod('openUrl', {'url': url});

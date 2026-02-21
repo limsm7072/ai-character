@@ -10,6 +10,7 @@ import 'alarm_service.dart';
 import 'calendar_service.dart';
 import 'settings_service.dart';
 import 'tts_service.dart';
+import 'auto_page_service.dart';
 
 class ToolAction {
   final String name;
@@ -28,6 +29,7 @@ class AgentTools {
   final CalendarService? calendarService;
   final SettingsService? settingsService;
   final TtsService? ttsService;
+  final AutoPageService? autoPageService;
   final Future<void> Function(String url)? onOpenUrl;
 
   AgentTools({
@@ -39,6 +41,7 @@ class AgentTools {
     this.calendarService,
     this.settingsService,
     this.ttsService,
+    this.autoPageService,
     this.onOpenUrl,
   });
 
@@ -411,6 +414,29 @@ class AgentTools {
           requiredProperties: ['url'],
         ),
       ),
+      FunctionDeclaration(
+        'generate_daily_summary',
+        '오늘의 일일 정리 페이지를 워크스페이스에 생성합니다. 사용자가 "오늘 정리해줘", "하루 요약해줘" 같이 요청하면 이 도구를 사용하세요.',
+        Schema(SchemaType.object,
+          properties: {
+            'date': Schema(SchemaType.string, description: '날짜 (yyyy-MM-dd). 미지정시 오늘'),
+          },
+        ),
+      ),
+      FunctionDeclaration(
+        'generate_planning_page',
+        '내일(또는 지정 날짜) 계획 페이지를 워크스페이스에 생성합니다. 사용자가 "내일 계획 세워줘", "계획 정리해줘" 같이 요청하면 이 도구를 사용하세요.',
+        Schema(SchemaType.object,
+          properties: {
+            'date': Schema(SchemaType.string, description: '계획 날짜 (yyyy-MM-dd). 미지정시 내일'),
+          },
+        ),
+      ),
+      FunctionDeclaration(
+        'generate_weekly_review',
+        '이번 주 주간 리뷰 페이지를 워크스페이스에 생성합니다. 사용자가 "이번 주 정리해줘", "주간 리뷰 만들어줘" 같이 요청하면 이 도구를 사용하세요.',
+        Schema(SchemaType.object, properties: {}),
+      ),
     ]),
   ];
 
@@ -486,8 +512,48 @@ class AgentTools {
         return await _setShakeCount(call.args);
       case 'open_url':
         return await _openUrl(call.args);
+      case 'generate_daily_summary':
+        return await _generateDailySummary(call.args);
+      case 'generate_planning_page':
+        return await _generatePlanningPage(call.args);
+      case 'generate_weekly_review':
+        return await _generateWeeklyReview();
       default:
         return {'error': '알 수 없는 함수: ${call.name}'};
+    }
+  }
+
+  Future<Map<String, Object?>> _generateDailySummary(Map<String, Object?> args) async {
+    if (autoPageService == null) return {'error': '워크스페이스 서비스를 사용할 수 없습니다'};
+    final date = args['date'] as String? ?? _todayStr();
+    try {
+      final page = await autoPageService!.generateDailySummary(date);
+      return {'success': true, 'title': page.title, 'page_id': page.id};
+    } catch (e) {
+      return {'error': '페이지 생성 실패: $e'};
+    }
+  }
+
+  Future<Map<String, Object?>> _generatePlanningPage(Map<String, Object?> args) async {
+    if (autoPageService == null) return {'error': '워크스페이스 서비스를 사용할 수 없습니다'};
+    final tomorrow = DateTime.now().add(const Duration(days: 1));
+    final defaultDate = '${tomorrow.year}-${tomorrow.month.toString().padLeft(2, '0')}-${tomorrow.day.toString().padLeft(2, '0')}';
+    final date = args['date'] as String? ?? defaultDate;
+    try {
+      final page = await autoPageService!.generatePlanningPage(date);
+      return {'success': true, 'title': page.title, 'page_id': page.id};
+    } catch (e) {
+      return {'error': '페이지 생성 실패: $e'};
+    }
+  }
+
+  Future<Map<String, Object?>> _generateWeeklyReview() async {
+    if (autoPageService == null) return {'error': '워크스페이스 서비스를 사용할 수 없습니다'};
+    try {
+      final page = await autoPageService!.generateWeeklyReview();
+      return {'success': true, 'title': page.title, 'page_id': page.id};
+    } catch (e) {
+      return {'error': '페이지 생성 실패: $e'};
     }
   }
 
