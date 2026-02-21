@@ -1,0 +1,152 @@
+enum BlockType {
+  text,
+  heading1,
+  heading2,
+  heading3,
+  todo,
+  divider,
+  callout,
+  quote,
+  bulletList,
+  numberList,
+  toggle,
+  table,
+}
+
+class PageBlock {
+  String id;
+  BlockType type;
+  String content;
+  bool? isChecked;
+  bool? isExpanded;
+  String? calloutIcon;
+  List<PageBlock>? children;
+  List<List<String>>? tableData;
+
+  PageBlock({
+    required this.id,
+    required this.type,
+    this.content = '',
+    this.isChecked,
+    this.isExpanded,
+    this.calloutIcon,
+    this.children,
+    this.tableData,
+  });
+
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'type': type.name,
+    'content': content,
+    if (isChecked != null) 'isChecked': isChecked,
+    if (isExpanded != null) 'isExpanded': isExpanded,
+    if (calloutIcon != null) 'calloutIcon': calloutIcon,
+    if (children != null) 'children': children!.map((c) => c.toJson()).toList(),
+    if (tableData != null) 'tableData': tableData,
+  };
+
+  factory PageBlock.fromJson(Map<String, dynamic> json) => PageBlock(
+    id: json['id'] as String,
+    type: BlockType.values.firstWhere(
+      (t) => t.name == json['type'],
+      orElse: () => BlockType.text,
+    ),
+    content: json['content'] as String? ?? '',
+    isChecked: json['isChecked'] as bool?,
+    isExpanded: json['isExpanded'] as bool?,
+    calloutIcon: json['calloutIcon'] as String?,
+    children: (json['children'] as List?)
+        ?.map((e) => PageBlock.fromJson(e as Map<String, dynamic>))
+        .toList(),
+    tableData: (json['tableData'] as List?)
+        ?.map((row) => List<String>.from(row))
+        .toList(),
+  );
+}
+
+class NotionPage {
+  String id;
+  String title;
+  String? icon;
+  List<PageBlock> blocks;
+  int createdAt;
+  int updatedAt;
+  bool isFavorite;
+
+  NotionPage({
+    required this.id,
+    required this.title,
+    this.icon,
+    List<PageBlock>? blocks,
+    required this.createdAt,
+    required this.updatedAt,
+    this.isFavorite = false,
+  }) : blocks = blocks ?? [];
+
+  Map<String, dynamic> toJson() => {
+    'id': id,
+    'title': title,
+    if (icon != null) 'icon': icon,
+    'blocks': blocks.map((b) => b.toJson()).toList(),
+    'createdAt': createdAt,
+    'updatedAt': updatedAt,
+    'isFavorite': isFavorite,
+  };
+
+  factory NotionPage.fromJson(Map<String, dynamic> json) => NotionPage(
+    id: json['id'] as String,
+    title: json['title'] as String? ?? '',
+    icon: json['icon'] as String?,
+    blocks: (json['blocks'] as List?)
+        ?.map((e) => PageBlock.fromJson(e as Map<String, dynamic>))
+        .toList() ?? [],
+    createdAt: json['createdAt'] as int? ?? 0,
+    updatedAt: json['updatedAt'] as int? ?? 0,
+    isFavorite: json['isFavorite'] as bool? ?? false,
+  );
+
+  String toMarkdown() {
+    final sb = StringBuffer();
+    if (icon != null) sb.write('$icon ');
+    sb.writeln('# $title\n');
+    for (final block in blocks) {
+      sb.writeln(_blockToMarkdown(block));
+    }
+    return sb.toString();
+  }
+
+  String _blockToMarkdown(PageBlock block) {
+    switch (block.type) {
+      case BlockType.heading1:
+        return '# ${block.content}\n';
+      case BlockType.heading2:
+        return '## ${block.content}\n';
+      case BlockType.heading3:
+        return '### ${block.content}\n';
+      case BlockType.text:
+        return '${block.content}\n';
+      case BlockType.todo:
+        final check = (block.isChecked ?? false) ? 'x' : ' ';
+        return '- [$check] ${block.content}';
+      case BlockType.divider:
+        return '---\n';
+      case BlockType.callout:
+        return '> ${block.calloutIcon ?? "💡"} ${block.content}\n';
+      case BlockType.quote:
+        return '> ${block.content}\n';
+      case BlockType.bulletList:
+        return '- ${block.content}';
+      case BlockType.numberList:
+        return '1. ${block.content}';
+      case BlockType.toggle:
+        final childMd = block.children?.map((c) => '  ${_blockToMarkdown(c)}').join('\n') ?? '';
+        return '▶ ${block.content}\n$childMd';
+      case BlockType.table:
+        if (block.tableData == null || block.tableData!.isEmpty) return '';
+        final header = '| ${block.tableData!.first.join(' | ')} |';
+        final sep = '| ${block.tableData!.first.map((_) => '---').join(' | ')} |';
+        final rows = block.tableData!.skip(1).map((r) => '| ${r.join(' | ')} |').join('\n');
+        return '$header\n$sep\n$rows\n';
+    }
+  }
+}
