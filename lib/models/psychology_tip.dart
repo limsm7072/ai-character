@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 
 enum PsychologyCategory {
-  cognitiveBias,
-  motivation,
-  social,
-  wellbeing,
-  growth,
+  relationship,
+  mindset,
+  success,
+  emotion,
+  lifestyle,
 }
 
 class PsychologyTip {
@@ -45,7 +45,7 @@ class PsychologyTip {
     title: json['title'] as String,
     category: PsychologyCategory.values.firstWhere(
       (e) => e.name == json['category'],
-      orElse: () => PsychologyCategory.cognitiveBias,
+      orElse: () => PsychologyCategory.mindset,
     ),
     description: json['description'] as String? ?? '',
     dailyTip: json['dailyTip'] as String? ?? '',
@@ -56,31 +56,31 @@ class PsychologyTip {
 
   static String categoryKorean(PsychologyCategory cat) {
     switch (cat) {
-      case PsychologyCategory.cognitiveBias: return '인지편향';
-      case PsychologyCategory.motivation: return '동기/행동';
-      case PsychologyCategory.social: return '관계/사회';
-      case PsychologyCategory.wellbeing: return '감정/웰빙';
-      case PsychologyCategory.growth: return '성장/학습';
+      case PsychologyCategory.relationship: return '인간관계';
+      case PsychologyCategory.mindset: return '마인드셋';
+      case PsychologyCategory.success: return '성공/성장';
+      case PsychologyCategory.emotion: return '감정/심리';
+      case PsychologyCategory.lifestyle: return '라이프스타일';
     }
   }
 
   static IconData categoryIcon(PsychologyCategory cat) {
     switch (cat) {
-      case PsychologyCategory.cognitiveBias: return Icons.visibility;
-      case PsychologyCategory.motivation: return Icons.rocket_launch;
-      case PsychologyCategory.social: return Icons.people;
-      case PsychologyCategory.wellbeing: return Icons.favorite;
-      case PsychologyCategory.growth: return Icons.trending_up;
+      case PsychologyCategory.relationship: return Icons.people;
+      case PsychologyCategory.mindset: return Icons.lightbulb;
+      case PsychologyCategory.success: return Icons.rocket_launch;
+      case PsychologyCategory.emotion: return Icons.favorite;
+      case PsychologyCategory.lifestyle: return Icons.auto_awesome;
     }
   }
 
   static Color categoryColor(PsychologyCategory cat) {
     switch (cat) {
-      case PsychologyCategory.cognitiveBias: return const Color(0xFF5C6BC0);
-      case PsychologyCategory.motivation: return const Color(0xFFFF7043);
-      case PsychologyCategory.social: return const Color(0xFF26A69A);
-      case PsychologyCategory.wellbeing: return const Color(0xFFEC407A);
-      case PsychologyCategory.growth: return const Color(0xFFFFA726);
+      case PsychologyCategory.relationship: return const Color(0xFF26A69A);
+      case PsychologyCategory.mindset: return const Color(0xFF5C6BC0);
+      case PsychologyCategory.success: return const Color(0xFFFF7043);
+      case PsychologyCategory.emotion: return const Color(0xFFEC407A);
+      case PsychologyCategory.lifestyle: return const Color(0xFFFFA726);
     }
   }
 }

@@ -35,19 +35,19 @@ class _PsychologyScreenState extends State<PsychologyScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     return Scaffold(
-      appBar: AppBar(title: Text(widget.title ?? '오늘의 심리학')),
+      appBar: AppBar(title: Text(widget.title ?? '오늘의 인사이트')),
       body: SingleChildScrollView(
         padding: const EdgeInsets.all(16),
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            // ─── 오늘의 개념 카드 ───
+            // ─── 오늘의 인사이트 카드 ───
             if (_todayTip != null) _buildTodayCard(theme),
 
             const SizedBox(height: 24),
 
             // ─── 카테고리 필터 ───
-            Text('지난 심리학 팁', style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
+            Text('지난 인사이트', style: theme.textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w600)),
             const SizedBox(height: 12),
             SizedBox(
               height: 40,
@@ -84,6 +84,8 @@ class _PsychologyScreenState extends State<PsychologyScreen> {
   Widget _buildTodayCard(ThemeData theme) {
     final tip = _todayTip!;
     final catColor = PsychologyTip.categoryColor(tip.category);
+    final descParagraphs = tip.description.split('\n\n');
+
     return Container(
       width: double.infinity,
       padding: const EdgeInsets.all(20),
@@ -120,15 +122,19 @@ class _PsychologyScreenState extends State<PsychologyScreen> {
 
           // 제목
           Text(tip.title,
-            style: theme.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w700)),
-          const SizedBox(height: 12),
-
-          // 설명
-          Text(tip.description,
-            style: TextStyle(fontSize: 14, height: 1.6, color: theme.colorScheme.onSurface)),
+            style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700, height: 1.3)),
           const SizedBox(height: 16),
 
-          // 일상 적용 팁
+          // 본문 (문단별 표시)
+          ...descParagraphs.map((p) => Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: Text(p,
+              style: TextStyle(fontSize: 14, height: 1.7, color: theme.colorScheme.onSurface)),
+          )),
+
+          const SizedBox(height: 4),
+
+          // 실천 포인트
           Container(
             width: double.infinity,
             padding: const EdgeInsets.all(14),
@@ -141,14 +147,14 @@ class _PsychologyScreenState extends State<PsychologyScreen> {
               children: [
                 Row(
                   children: [
-                    Icon(Icons.lightbulb_outline, size: 16, color: AppColors.accent),
+                    Icon(Icons.bolt, size: 16, color: AppColors.accent),
                     const SizedBox(width: 6),
-                    Text('오늘의 적용 팁', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.accent)),
+                    Text('오늘 바로 적용하기', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.accent)),
                   ],
                 ),
                 const SizedBox(height: 8),
                 Text(tip.dailyTip,
-                  style: TextStyle(fontSize: 13, height: 1.5, color: theme.colorScheme.onSurface)),
+                  style: TextStyle(fontSize: 13, height: 1.6, color: theme.colorScheme.onSurface)),
               ],
             ),
           ),
@@ -226,7 +232,8 @@ class _PsychologyScreenState extends State<PsychologyScreen> {
                 child: Column(
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
-                    Text(tip.title, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+                    Text(tip.title, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600),
+                      maxLines: 1, overflow: TextOverflow.ellipsis),
                     const SizedBox(height: 2),
                     Text(PsychologyTip.categoryKorean(tip.category),
                       style: TextStyle(fontSize: 11, color: catColor)),
@@ -245,6 +252,7 @@ class _PsychologyScreenState extends State<PsychologyScreen> {
   void _showTipDetail(PsychologyTip tip) {
     final theme = Theme.of(context);
     final catColor = PsychologyTip.categoryColor(tip.category);
+    final descParagraphs = tip.description.split('\n\n');
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
@@ -275,16 +283,29 @@ class _PsychologyScreenState extends State<PsychologyScreen> {
                   color: catColor.withValues(alpha: 0.2),
                   borderRadius: BorderRadius.circular(12),
                 ),
-                child: Text(PsychologyTip.categoryKorean(tip.category),
-                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: catColor)),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(PsychologyTip.categoryIcon(tip.category), size: 14, color: catColor),
+                    const SizedBox(width: 4),
+                    Text(PsychologyTip.categoryKorean(tip.category),
+                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: catColor)),
+                  ],
+                ),
               ),
               const SizedBox(height: 12),
-              Text(tip.title, style: theme.textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w700)),
+              Text(tip.title, style: theme.textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w700, height: 1.3)),
               const SizedBox(height: 4),
               Text(tip.date, style: TextStyle(fontSize: 12, color: theme.colorScheme.onSurfaceVariant)),
               const SizedBox(height: 16),
-              Text(tip.description, style: TextStyle(fontSize: 14, height: 1.6)),
-              const SizedBox(height: 16),
+
+              // 본문 (문단별)
+              ...descParagraphs.map((p) => Padding(
+                padding: const EdgeInsets.only(bottom: 12),
+                child: Text(p, style: TextStyle(fontSize: 14, height: 1.7)),
+              )),
+
+              const SizedBox(height: 4),
               Container(
                 width: double.infinity,
                 padding: const EdgeInsets.all(14),
@@ -297,13 +318,13 @@ class _PsychologyScreenState extends State<PsychologyScreen> {
                   children: [
                     Row(
                       children: [
-                        Icon(Icons.lightbulb_outline, size: 16, color: AppColors.accent),
+                        Icon(Icons.bolt, size: 16, color: AppColors.accent),
                         const SizedBox(width: 6),
-                        Text('적용 팁', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.accent)),
+                        Text('오늘 바로 적용하기', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.accent)),
                       ],
                     ),
                     const SizedBox(height: 8),
-                    Text(tip.dailyTip, style: TextStyle(fontSize: 13, height: 1.5)),
+                    Text(tip.dailyTip, style: TextStyle(fontSize: 13, height: 1.6)),
                   ],
                 ),
               ),

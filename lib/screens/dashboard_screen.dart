@@ -1506,7 +1506,7 @@ class DashboardScreenState extends State<DashboardScreen> {
     'recommend': '맞춤 정보', 'news': '뉴스', 'weather': '날씨', 'routine': '루틴', 'todo': '할 일',
     'diary': '일기장', 'card': '명함', 'calendar': '캘린더', 'stats': '통계', 'alarm': '알람',
     'timer': '타이머', 'memo': '메모', 'dday': 'D-Day', 'nature': '자연소리', 'bookmark': '바로가기', 'fortune': '오늘의 운세', 'goal': '목표',
-    'psychology': '오늘의 심리학', 'screentime': '스크린타임', 'activity': '활동', 'notion': '워크스페이스',
+    'psychology': '오늘의 인사이트', 'screentime': '스크린타임', 'activity': '활동', 'notion': '워크스페이스',
   };
 
   String _sectionLabel(String id) {
@@ -1523,7 +1523,7 @@ class DashboardScreenState extends State<DashboardScreen> {
       'timer': Icons.timer_outlined, 'memo': Icons.note_alt_outlined,
       'dday': Icons.event_outlined, 'diary': Icons.auto_stories, 'nature': Icons.spa,
       'bookmark': Icons.language, 'fortune': Icons.auto_awesome, 'goal': Icons.track_changes,
-      'psychology': Icons.psychology, 'screentime': Icons.phone_android, 'activity': Icons.directions_walk,
+      'psychology': Icons.lightbulb, 'screentime': Icons.phone_android, 'activity': Icons.directions_walk,
       'notion': Icons.article_outlined,
     };
     final baseId = SettingsService.sectionBaseId(id);
@@ -1794,7 +1794,7 @@ class DashboardScreenState extends State<DashboardScreen> {
     );
   }
 
-  // ─── 오늘의 심리학 ───
+  // ─── 오늘의 인사이트 ───
   void _openPsychology(BuildContext context, String label) {
     Navigator.of(context).push(MaterialPageRoute(
       builder: (_) => PsychologyScreen(title: label),
@@ -1814,7 +1814,7 @@ class DashboardScreenState extends State<DashboardScreen> {
         ),
         child: Row(
           children: [
-            Icon(Icons.psychology, size: 18, color: theme.colorScheme.primary),
+            Icon(Icons.lightbulb, size: 18, color: theme.colorScheme.primary),
             const SizedBox(width: 10),
             Expanded(
               child: Text(label, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: theme.colorScheme.onSurface),
@@ -1849,15 +1849,15 @@ class DashboardScreenState extends State<DashboardScreen> {
           children: [
             Row(
               children: [
-                Icon(Icons.psychology, size: 18, color: theme.colorScheme.primary),
+                Icon(Icons.lightbulb, size: 18, color: theme.colorScheme.primary),
                 const SizedBox(width: 8),
                 Text(label, style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600)),
               ],
             ),
             const SizedBox(height: 16),
-            Icon(Icons.psychology, size: 40, color: theme.colorScheme.primary.withValues(alpha: 0.4)),
+            Icon(Icons.lightbulb, size: 40, color: theme.colorScheme.primary.withValues(alpha: 0.4)),
             const SizedBox(height: 8),
-            Text('오늘의 심리학 개념을\n확인해보세요',
+            Text('오늘의 인사이트를\n확인해보세요',
                 textAlign: TextAlign.center,
                 style: TextStyle(fontSize: 13, color: theme.colorScheme.onSurfaceVariant)),
           ],
@@ -1873,7 +1873,7 @@ class DashboardScreenState extends State<DashboardScreen> {
       children: [
         Row(
           children: [
-            Icon(Icons.psychology, size: 18, color: theme.colorScheme.primary),
+            Icon(Icons.lightbulb, size: 18, color: theme.colorScheme.primary),
             const SizedBox(width: 8),
             Text(label, style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600)),
             const Spacer(),
