@@ -111,7 +111,7 @@ class Goal {
 
   int get completedMilestones => milestones.where((m) => m.isCompleted).length;
 
-  static const categories = ['건강', '커리어', '학습', '재정', '관계', '기타'];
+  static const categories = ['건강', '커리어', '학습', '재정', '관계', '취미', '생활습관', '자기계발', '여행', '창작', '운동', '기타'];
 
   static IconData categoryIcon(String cat) {
     switch (cat) {
@@ -120,6 +120,12 @@ class Goal {
       case '학습': return Icons.school_outlined;
       case '재정': return Icons.savings_outlined;
       case '관계': return Icons.people_outline;
+      case '취미': return Icons.palette_outlined;
+      case '생활습관': return Icons.repeat;
+      case '자기계발': return Icons.trending_up;
+      case '여행': return Icons.flight_outlined;
+      case '창작': return Icons.edit_outlined;
+      case '운동': return Icons.directions_run;
       default: return Icons.star_outline;
     }
   }
@@ -131,6 +137,12 @@ class Goal {
       case '학습': return const Color(0xFFFF9800);
       case '재정': return const Color(0xFF9C27B0);
       case '관계': return const Color(0xFFE91E63);
+      case '취미': return const Color(0xFFFF5722);
+      case '생활습관': return const Color(0xFF009688);
+      case '자기계발': return const Color(0xFF3F51B5);
+      case '여행': return const Color(0xFF00BCD4);
+      case '창작': return const Color(0xFFFF6F00);
+      case '운동': return const Color(0xFF8BC34A);
       default: return const Color(0xFF607D8B);
     }
   }
