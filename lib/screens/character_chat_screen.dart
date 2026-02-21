@@ -282,15 +282,27 @@ class _CharacterChatScreenState extends State<CharacterChatScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Column(
-          children: [
-            Text('$_charName와 대화'),
-            Builder(builder: (_) {
-              final g = getIt<GrowthService>().currentData;
-              return Text('Lv.${g.level} ${g.title}', style: TextStyle(fontSize: 11, color: AppColors.accent, fontWeight: FontWeight.w600));
-            }),
-          ],
-        ),
+        title: Builder(builder: (_) {
+          final g = getIt<GrowthService>().currentData;
+          return Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text('$_charName와 대화'),
+              const SizedBox(width: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                decoration: BoxDecoration(
+                  color: AppColors.accent.withValues(alpha: 0.12),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: Text(
+                  'Lv.${g.level}',
+                  style: TextStyle(fontSize: 11, fontWeight: FontWeight.w700, color: AppColors.accent),
+                ),
+              ),
+            ],
+          );
+        }),
         centerTitle: true,
         actions: [
           if (_messages.isNotEmpty)

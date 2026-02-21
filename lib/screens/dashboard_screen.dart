@@ -30,6 +30,7 @@ import '../models/briefing_data.dart';
 import '../models/routine_suggestion.dart';
 import '../models/weekly_report_data.dart';
 import 'weekly_report_screen.dart';
+import 'growth_screen.dart';
 import '../models/goal.dart';
 import '../models/psychology_tip.dart';
 import '../models/screen_time_data.dart';
@@ -409,30 +410,21 @@ class DashboardScreenState extends State<DashboardScreen> {
       borderRadius: BorderRadius.circular(12),
       onTap: b == null ? _loadBriefing : null,
       child: Container(
-        padding: const EdgeInsets.all(12),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         decoration: BoxDecoration(
           color: theme.colorScheme.surfaceContainerLow,
           borderRadius: BorderRadius.circular(12),
         ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+        child: Row(
           children: [
-            Row(
-              children: [
-                Icon(Icons.wb_twilight, size: 14, color: theme.colorScheme.primary),
-                const SizedBox(width: 6),
-                Expanded(child: Text(label, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600), overflow: TextOverflow.ellipsis)),
-              ],
-            ),
-            const SizedBox(height: 8),
-            if (b != null) ...[
-              Text(b.greeting, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600), maxLines: 1, overflow: TextOverflow.ellipsis),
-              const SizedBox(height: 4),
-              if (b.weather != null)
-                Text('${b.weather!.temperature.round()}° ${b.weather!.description}',
-                    style: TextStyle(fontSize: 12, color: theme.colorScheme.onSurfaceVariant)),
-            ] else
-              Text('탭하여 생성', style: TextStyle(fontSize: 12, color: theme.colorScheme.onSurfaceVariant)),
+            Icon(Icons.wb_twilight, size: 18, color: theme.colorScheme.primary),
+            const SizedBox(width: 10),
+            Text(label, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: theme.colorScheme.onSurface)),
+            const Spacer(),
+            if (b != null && b.weather != null)
+              Text('${b.weather!.temperature.round()}°', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: theme.colorScheme.onSurfaceVariant))
+            else
+              Text('탭하여 생성', style: TextStyle(fontSize: 13, color: theme.colorScheme.onSurfaceVariant)),
           ],
         ),
       ),
@@ -1906,12 +1898,18 @@ class DashboardScreenState extends State<DashboardScreen> {
 
   // ─── 루나 성장 ──────────────────────────────────────
 
+  void _openGrowth(BuildContext context, String label) {
+    Navigator.of(context).push(MaterialPageRoute(
+      builder: (_) => GrowthScreen(title: label),
+    ));
+  }
+
   Widget _buildGrowthLarge(BuildContext context, ThemeData theme, String label) {
     final data = getIt<GrowthService>().currentData;
     final accentColor = AppColors.accent;
     return InkWell(
       borderRadius: BorderRadius.circular(16),
-      onTap: () {},
+      onTap: () => _openGrowth(context, label),
       child: Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
@@ -2030,35 +2028,20 @@ class DashboardScreenState extends State<DashboardScreen> {
     final accentColor = AppColors.accent;
     return InkWell(
       borderRadius: BorderRadius.circular(12),
-      onTap: () {},
+      onTap: () => _openGrowth(context, label),
       child: Container(
-        padding: const EdgeInsets.all(12),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         decoration: BoxDecoration(
           color: theme.colorScheme.surfaceContainerLow,
           borderRadius: BorderRadius.circular(12),
         ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+        child: Row(
           children: [
-            Row(
-              children: [
-                Icon(Icons.emoji_events, size: 14, color: accentColor),
-                const SizedBox(width: 6),
-                Expanded(child: Text(label, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600), overflow: TextOverflow.ellipsis)),
-              ],
-            ),
-            const SizedBox(height: 8),
-            Text('Lv.${data.level} ${data.title}', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: accentColor)),
-            const SizedBox(height: 6),
-            ClipRRect(
-              borderRadius: BorderRadius.circular(3),
-              child: LinearProgressIndicator(
-                value: data.levelProgress,
-                minHeight: 4,
-                backgroundColor: theme.colorScheme.outline.withValues(alpha: 0.15),
-                valueColor: AlwaysStoppedAnimation<Color>(accentColor),
-              ),
-            ),
+            Icon(Icons.emoji_events, size: 18, color: accentColor),
+            const SizedBox(width: 10),
+            Text(label, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: theme.colorScheme.onSurface)),
+            const Spacer(),
+            Text('Lv.${data.level}', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: accentColor)),
           ],
         ),
       ),
@@ -2203,29 +2186,24 @@ class DashboardScreenState extends State<DashboardScreen> {
         MaterialPageRoute(builder: (_) => WeeklyReportScreen(title: label)),
       ),
       child: Container(
-        padding: const EdgeInsets.all(12),
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         decoration: BoxDecoration(
           color: theme.colorScheme.surfaceContainerLow,
           borderRadius: BorderRadius.circular(12),
         ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
+        child: Row(
           children: [
-            Row(
-              children: [
-                Icon(Icons.assessment, size: 14, color: theme.colorScheme.primary),
-                const SizedBox(width: 6),
-                Expanded(child: Text(label, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600), overflow: TextOverflow.ellipsis)),
-              ],
-            ),
-            const SizedBox(height: 8),
+            Icon(Icons.assessment, size: 18, color: theme.colorScheme.primary),
+            const SizedBox(width: 10),
+            Text(label, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: theme.colorScheme.onSurface)),
+            const Spacer(),
             if (_weeklyReport != null)
               Text('${(_weeklyReport!.overallCompletionRate * 100).round()}%',
-                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: _weeklyScoreColor(_weeklyReport!.overallCompletionRate)))
+                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: _weeklyScoreColor(_weeklyReport!.overallCompletionRate)))
             else if (_weeklyLoading)
-              const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+              const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2))
             else
-              Text('로딩 중...', style: TextStyle(fontSize: 12, color: theme.colorScheme.onSurfaceVariant)),
+              Text('-', style: TextStyle(fontSize: 14, color: theme.colorScheme.onSurfaceVariant)),
           ],
         ),
       ),
