@@ -86,18 +86,10 @@ class BookmarkWidgetProvider : AppWidgetProvider() {
             } catch (_: Exception) {}
         }
 
-        // Step 2: Hardcoded fallback
+        // Step 2: Hardcoded fallback — launch app directly if installed
         val host = Uri.parse(url).host?.lowercase()
         val pkg = if (host != null) urlToPackage(host) else null
         if (pkg != null) {
-            try {
-                val pkgIntent = Intent(Intent.ACTION_VIEW, Uri.parse(url)).apply {
-                    setPackage(pkg)
-                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                }
-                context.startActivity(pkgIntent)
-                return
-            } catch (_: Exception) {}
             try {
                 val launchIntent = context.packageManager.getLaunchIntentForPackage(pkg)
                 if (launchIntent != null) {

@@ -810,20 +810,10 @@ class MainActivity : FlutterFragmentActivity() {
             } catch (_: Exception) {}
         }
 
-        // Step 3: Hardcoded fallback — try launching the mapped app with/without URL
+        // Step 3: Hardcoded fallback — try launching the mapped app
         val pkg = urlToPackage(url)
         if (pkg != null) {
-            // 3a: Try ACTION_VIEW with setPackage (app may handle URL internally)
-            try {
-                val pkgIntent = Intent(Intent.ACTION_VIEW, Uri.parse(url)).apply {
-                    setPackage(pkg)
-                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                }
-                startActivity(pkgIntent)
-                return
-            } catch (_: Exception) {}
-
-            // 3b: Just open the app (without the URL)
+            // 3a: Check if app is installed → launch it directly
             try {
                 val launchIntent = packageManager.getLaunchIntentForPackage(pkg)
                 if (launchIntent != null) {
