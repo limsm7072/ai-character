@@ -26,6 +26,7 @@ import '../services/screen_time_service.dart';
 import '../services/activity_service.dart';
 import '../services/notion_page_service.dart';
 import '../services/notion_database_service.dart';
+import '../services/auto_page_service.dart';
 import 'dashboard_screen.dart';
 import 'settings_screen.dart';
 import 'character_chat_screen.dart';
@@ -58,6 +59,7 @@ class HomeScreen extends StatefulWidget {
   final ActivityService activityService;
   final NotionPageService notionPageService;
   final NotionDatabaseService notionDatabaseService;
+  final AutoPageService autoPageService;
   final VoidCallback? onCompletionUnchecked;
 
   const HomeScreen({
@@ -89,6 +91,7 @@ class HomeScreen extends StatefulWidget {
     required this.activityService,
     required this.notionPageService,
     required this.notionDatabaseService,
+    required this.autoPageService,
     this.onCompletionUnchecked,
   });
 
@@ -135,6 +138,7 @@ class _HomeScreenState extends State<HomeScreen> {
             activityService: widget.activityService,
             notionPageService: widget.notionPageService,
             notionDatabaseService: widget.notionDatabaseService,
+            autoPageService: widget.autoPageService,
             onCompletionUnchecked: widget.onCompletionUnchecked,
           ),
           CharacterChatScreen(
@@ -152,6 +156,7 @@ class _HomeScreenState extends State<HomeScreen> {
             cardService: widget.cardService,
             timerService: widget.timerService,
             diaryService: widget.diaryService,
+            autoPageService: widget.autoPageService,
             onRoutinesChanged: () => _dashboardKey.currentState?.refresh(),
           ),
           SettingsScreen(

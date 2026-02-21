@@ -2,17 +2,21 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../services/notion_page_service.dart';
 import '../services/notion_database_service.dart';
+import '../services/auto_page_service.dart';
 import 'notion_page_list_screen.dart';
 import 'notion_database_list_screen.dart';
+import 'notion_page_edit_screen.dart';
 
 class NotionScreen extends StatefulWidget {
   final NotionPageService pageService;
   final NotionDatabaseService dbService;
+  final AutoPageService? autoPageService;
 
   const NotionScreen({
     super.key,
     required this.pageService,
     required this.dbService,
+    this.autoPageService,
   });
 
   @override
@@ -35,6 +39,93 @@ class _NotionScreenState extends State<NotionScreen>
   void dispose() {
     _tabCtrl.dispose();
     super.dispose();
+  }
+
+  void _showAutoGenerateSheet() {
+    final now = DateTime.now();
+    final todayStr = '${now.year}-${now.month.toString().padLeft(2, '0')}-${now.day.toString().padLeft(2, '0')}';
+    final tomorrow = now.add(const Duration(days: 1));
+    final tomorrowStr = '${tomorrow.year}-${tomorrow.month.toString().padLeft(2, '0')}-${tomorrow.day.toString().padLeft(2, '0')}';
+
+    showModalBottomSheet(
+      context: context,
+      builder: (ctx) => SafeArea(
+        child: Column(
+          mainAxisSize: MainAxisSize.min,
+          children: [
+            const Padding(
+              padding: EdgeInsets.all(16),
+              child: Text('루나 자동 정리',
+                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+            ),
+            ListTile(
+              leading: const Text('📋', style: TextStyle(fontSize: 24)),
+              title: const Text('오늘의 정리'),
+              subtitle: const Text('오늘 하루를 요약합니다'),
+              onTap: () {
+                Navigator.pop(ctx);
+                _autoGenerate(() => widget.autoPageService!.generateDailySummary(todayStr));
+              },
+            ),
+            ListTile(
+              leading: const Text('📝', style: TextStyle(fontSize: 24)),
+              title: const Text('내일 계획'),
+              subtitle: const Text('내일의 일정과 할일을 정리합니다'),
+              onTap: () {
+                Navigator.pop(ctx);
+                _autoGenerate(() => widget.autoPageService!.generatePlanningPage(tomorrowStr));
+              },
+            ),
+            ListTile(
+              leading: const Text('📊', style: TextStyle(fontSize: 24)),
+              title: const Text('주간 리뷰'),
+              subtitle: const Text('이번 주를 돌아봅니다'),
+              onTap: () {
+                Navigator.pop(ctx);
+                _autoGenerate(() => widget.autoPageService!.generateWeeklyReview());
+              },
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Future<void> _autoGenerate(Future<dynamic> Function() generator) async {
+    // Show loading
+    showDialog(
+      context: context,
+      barrierDismissible: false,
+      builder: (_) => const Center(child: CircularProgressIndicator()),
+    );
+    try {
+      final page = await generator();
+      if (!mounted) return;
+      Navigator.pop(context); // dismiss loading
+      // Reload page list
+      _pageListKey.currentState?.setState(() {});
+      // Open the generated page
+      if (page is dynamic && page.id != null) {
+        final latest = widget.pageService.getById(page.id as String);
+        if (latest != null) {
+          Navigator.push(
+            context,
+            MaterialPageRoute(
+              builder: (_) => NotionPageEditScreen(
+                service: widget.pageService,
+                page: latest,
+              ),
+            ),
+          );
+        }
+      }
+    } catch (e) {
+      if (!mounted) return;
+      Navigator.pop(context); // dismiss loading
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('생성 실패: $e')),
+      );
+    }
   }
 
   void _importJson() async {
@@ -143,6 +234,12 @@ class _NotionScreenState extends State<NotionScreen>
       appBar: AppBar(
         title: const Text('워크스페이스'),
         actions: [
+          if (widget.autoPageService != null)
+            IconButton(
+              icon: const Icon(Icons.auto_awesome),
+              tooltip: '루나 정리',
+              onPressed: _showAutoGenerateSheet,
+            ),
           IconButton(
             icon: const Icon(Icons.file_download_outlined),
             tooltip: '가져오기',

@@ -39,6 +39,7 @@ import 'services/screen_time_service.dart';
 import 'services/activity_service.dart';
 import 'services/notion_page_service.dart';
 import 'services/notion_database_service.dart';
+import 'services/auto_page_service.dart';
 import 'widgets/overlay_character.dart';
 import 'theme/app_theme.dart';
 
@@ -111,6 +112,23 @@ void main() async {
   final notionPageService = NotionPageService(prefs);
   final notionDatabaseService = NotionDatabaseService(prefs);
 
+  final autoPageService = AutoPageService(
+    pageService: notionPageService,
+    routineService: routineService,
+    completionService: completionService,
+    todoService: todoService,
+    diaryService: diaryService,
+    calendarService: calendarService,
+    healthService: healthService,
+    screenTimeService: screenTimeService,
+    activityService: activityService,
+    weatherService: weatherService,
+    goalService: goalService,
+    geminiService: geminiService,
+    settingsService: settingsService,
+    prefs: prefs,
+  );
+
   final recommendationService = RecommendationService(
     prefs: prefs,
     cardService: cardService,
@@ -177,6 +195,7 @@ void main() async {
     activityService: activityService,
     notionPageService: notionPageService,
     notionDatabaseService: notionDatabaseService,
+    autoPageService: autoPageService,
   ));
 }
 
@@ -209,6 +228,7 @@ class AiCharacterApp extends StatefulWidget {
   final ActivityService activityService;
   final NotionPageService notionPageService;
   final NotionDatabaseService notionDatabaseService;
+  final AutoPageService autoPageService;
 
   const AiCharacterApp({
     super.key,
@@ -240,6 +260,7 @@ class AiCharacterApp extends StatefulWidget {
     required this.activityService,
     required this.notionPageService,
     required this.notionDatabaseService,
+    required this.autoPageService,
   });
 
   @override
@@ -389,6 +410,7 @@ class _AiCharacterAppState extends State<AiCharacterApp>
         activityService: widget.activityService,
         notionPageService: widget.notionPageService,
         notionDatabaseService: widget.notionDatabaseService,
+        autoPageService: widget.autoPageService,
         onCompletionUnchecked: widget.routineMonitor.forceCheck,
       ),
     );
