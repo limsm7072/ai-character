@@ -659,13 +659,7 @@ class _StatsScreenState extends State<StatsScreen> {
           Navigator.push(
             context,
             MaterialPageRoute(
-              builder: (_) => RoutineStatsScreen(
-                routineId: routine.id,
-                routineName: routine.name,
-                logService: _distractionLogService,
-                routineStartTime: routine.startTime,
-                routineEndTime: routine.endTime,
-              ),
+              builder: (_) => _RoutineCompletionDetailScreen(routine: routine),
             ),
           );
         },
@@ -939,7 +933,57 @@ class _StatsScreenState extends State<StatsScreen> {
           ...topApps
               .map((app) => _buildAppDistractionCard(app, totalTime)),
         ],
+        const SizedBox(height: 20),
+
+        // 루틴별 상세
+        _buildDistractionByRoutine(routines),
         const SizedBox(height: 16),
+      ],
+    );
+  }
+
+  Widget _buildDistractionByRoutine(List<model.Routine> routines) {
+    // 딴짓 기록이 있는 루틴만 필터
+    final routinesWithData = routines.where((r) {
+      final stats = _distractionLogService.getRoutineStats(r.id);
+      return stats.totalDistractions > 0;
+    }).toList();
+
+    if (routinesWithData.isEmpty) return const SizedBox.shrink();
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        const Text(
+          '루틴별 딴짓 상세',
+          style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold),
+        ),
+        const SizedBox(height: 8),
+        ...routinesWithData.map((routine) {
+          final stats = _distractionLogService.getRoutineStats(routine.id);
+          return Card(
+            margin: const EdgeInsets.symmetric(vertical: 4),
+            child: ListTile(
+              title: Text(routine.name, style: const TextStyle(fontWeight: FontWeight.w600)),
+              subtitle: Text('${stats.totalDistractions}회 · ${_formatDuration(stats.totalTime)}',
+                  style: TextStyle(fontSize: 12, color: AppColors.grey600)),
+              trailing: Icon(Icons.chevron_right, size: 18, color: AppColors.grey400),
+              onTap: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute(
+                    builder: (_) => RoutineStatsScreen(
+                      routineId: routine.id,
+                      routineName: routine.name,
+                      routineStartTime: routine.startTime,
+                      routineEndTime: routine.endTime,
+                    ),
+                  ),
+                );
+              },
+            ),
+          );
+        }),
       ],
     );
   }
@@ -2274,4 +2318,155 @@ class _BarSegment {
   final Color color;
 
   _BarSegment({required this.flex, required this.color});
+}
+
+// ─── 루틴별 완료율 상세 화면 ───
+
+class _RoutineCompletionDetailScreen extends StatelessWidget {
+  final model.Routine routine;
+
+  const _RoutineCompletionDetailScreen({required this.routine});
+
+  @override
+  Widget build(BuildContext context) {
+    final completionService = getIt<RoutineCompletionService>();
+    final now = DateTime.now();
+    final theme = Theme.of(context);
+
+    // 최근 30일 데이터 수집
+    final days = <_DayRecord>[];
+    int activeCount = 0;
+    int completedCount = 0;
+    int skippedCount = 0;
+    int currentStreak = 0;
+    int maxStreak = 0;
+    int tempStreak = 0;
+
+    for (int i = 0; i < 30; i++) {
+      final date = now.subtract(Duration(days: i));
+      final dateStr = '${date.year}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
+      final isActive = routine.isActiveOnDate(date);
+      if (!isActive) continue;
+
+      activeCount++;
+      final completed = completionService.isCompleted(routine.id, dateStr);
+      final skipped = completionService.isSkipped(routine.id, dateStr);
+
+      if (completed) {
+        completedCount++;
+        tempStreak++;
+        if (tempStreak > maxStreak) maxStreak = tempStreak;
+      } else if (skipped) {
+        skippedCount++;
+        tempStreak = 0;
+      } else {
+        tempStreak = 0;
+      }
+
+      days.add(_DayRecord(date: date, dateStr: dateStr, completed: completed, skipped: skipped));
+    }
+
+    // 현재 연속 완료일
+    for (int i = 0; i < days.length; i++) {
+      if (days[i].completed) {
+        currentStreak++;
+      } else {
+        break;
+      }
+    }
+
+    final rate = activeCount > 0 ? completedCount / activeCount : 0.0;
+    final percentage = (rate * 100).round();
+
+    return Scaffold(
+      appBar: AppBar(title: Text(routine.name)),
+      body: ListView(
+        padding: const EdgeInsets.all(16),
+        children: [
+          // 요약 카드
+          Card(
+            child: Padding(
+              padding: const EdgeInsets.all(20),
+              child: Column(
+                children: [
+                  Text('$percentage%',
+                      style: TextStyle(fontSize: 48, fontWeight: FontWeight.bold,
+                          color: percentage >= 80 ? AppColors.success : percentage >= 50 ? AppColors.warning : AppColors.error)),
+                  const SizedBox(height: 4),
+                  Text('최근 30일 완료율', style: TextStyle(color: AppColors.grey600)),
+                  const SizedBox(height: 16),
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                    children: [
+                      _statColumn('완료', '$completedCount일', AppColors.success),
+                      _statColumn('건너뜀', '$skippedCount일', AppColors.warning),
+                      _statColumn('미완료', '${activeCount - completedCount - skippedCount}일', AppColors.error),
+                      _statColumn('연속', '$currentStreak일', theme.colorScheme.primary),
+                      _statColumn('최장연속', '$maxStreak일', AppColors.accent),
+                    ],
+                  ),
+                ],
+              ),
+            ),
+          ),
+          const SizedBox(height: 16),
+
+          // 날짜별 기록
+          Text('날짜별 기록', style: theme.textTheme.titleSmall),
+          const SizedBox(height: 8),
+          ...days.map((d) {
+            final weekday = ['월', '화', '수', '목', '금', '토', '일'][d.date.weekday - 1];
+            final label = '${d.date.month}/${d.date.day} ($weekday)';
+            IconData icon;
+            Color color;
+            String status;
+            if (d.completed) {
+              icon = Icons.check_circle;
+              color = AppColors.success;
+              status = '완료';
+            } else if (d.skipped) {
+              icon = Icons.skip_next;
+              color = AppColors.warning;
+              status = '건너뜀';
+            } else {
+              icon = Icons.cancel;
+              color = AppColors.error;
+              status = '미완료';
+            }
+            return Padding(
+              padding: const EdgeInsets.symmetric(vertical: 2),
+              child: Row(
+                children: [
+                  Icon(icon, size: 20, color: color),
+                  const SizedBox(width: 8),
+                  Text(label, style: const TextStyle(fontSize: 14)),
+                  const Spacer(),
+                  Text(status, style: TextStyle(fontSize: 13, color: color, fontWeight: FontWeight.w600)),
+                ],
+              ),
+            );
+          }),
+        ],
+      ),
+    );
+  }
+
+  Widget _statColumn(String label, String value, Color color) {
+    return Column(
+      children: [
+        Text(value, style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold, color: color)),
+        const SizedBox(height: 2),
+        Text(label, style: TextStyle(fontSize: 11, color: AppColors.grey600)),
+      ],
+    );
+  }
+}
+
+class _DayRecord {
+  final DateTime date;
+  final String dateStr;
+  final bool completed;
+  final bool skipped;
+
+  _DayRecord({required this.date, required this.dateStr, required this.completed, required this.skipped});
 }

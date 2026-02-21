@@ -2,12 +2,12 @@ import 'package:flutter/material.dart';
 import '../models/routine.dart' as model;
 import '../models/distraction_log.dart';
 import '../services/distraction_log_service.dart';
+import '../service_locator.dart';
 import '../theme/app_colors.dart';
 
 class RoutineStatsScreen extends StatefulWidget {
   final String routineId;
   final String routineName;
-  final DistractionLogService logService;
   final model.TimeOfDay? routineStartTime;
   final model.TimeOfDay? routineEndTime;
 
@@ -15,7 +15,6 @@ class RoutineStatsScreen extends StatefulWidget {
     super.key,
     required this.routineId,
     required this.routineName,
-    required this.logService,
     this.routineStartTime,
     this.routineEndTime,
   });
@@ -36,8 +35,8 @@ class _RoutineStatsScreenState extends State<RoutineStatsScreen> {
   }
 
   void _loadStats() {
-    _statsByDate = widget.logService.getRoutineStatsByDate(widget.routineId);
-    _totalStats = widget.logService.getRoutineStats(widget.routineId);
+    _statsByDate = getIt<DistractionLogService>().getRoutineStatsByDate(widget.routineId);
+    _totalStats = getIt<DistractionLogService>().getRoutineStats(widget.routineId);
 
     // Sort dates descending
     final dates = _statsByDate.keys.toList()..sort((a, b) => b.compareTo(a));
@@ -281,7 +280,7 @@ class _RoutineStatsScreenState extends State<RoutineStatsScreen> {
     if (totalMs <= 0) return const SizedBox.shrink();
 
     // Get individual logs for this date
-    final logs = widget.logService.getByRoutineAndDate(widget.routineId, _selectedDate);
+    final logs = getIt<DistractionLogService>().getByRoutineAndDate(widget.routineId, _selectedDate);
     if (logs.isEmpty) return const SizedBox.shrink();
 
     // Build timeline blocks
@@ -526,7 +525,7 @@ class _RoutineStatsScreenState extends State<RoutineStatsScreen> {
           ),
           TextButton(
             onPressed: () async {
-              await widget.logService.clearByRoutine(widget.routineId);
+              await getIt<DistractionLogService>().clearByRoutine(widget.routineId);
               if (mounted) {
                 Navigator.pop(context);
                 setState(() => _loadStats());
