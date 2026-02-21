@@ -5,41 +5,14 @@ import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:spine_flutter/spine_flutter.dart';
+import 'service_locator.dart';
 import 'screens/home_screen.dart';
 import 'screens/alarm_ring_screen.dart';
-import 'services/routine_service.dart';
-import 'services/settings_service.dart';
-import 'services/gemini_service.dart';
-import 'services/tts_service.dart';
-import 'services/overlay_service.dart';
-import 'services/app_detection_service.dart';
-import 'services/character_controller.dart';
-import 'services/routine_monitor.dart';
-import 'services/distraction_log_service.dart';
-import 'services/routine_completion_service.dart';
-import 'services/accessory_service.dart';
-import 'services/health_service.dart';
-import 'services/todo_service.dart';
-import 'services/memo_service.dart';
 import 'services/notification_service.dart';
 import 'services/alarm_service.dart';
-import 'services/timer_service.dart';
-import 'services/calendar_service.dart';
-import 'services/news_service.dart';
-import 'services/card_service.dart';
-import 'services/weather_service.dart';
-import 'services/recommendation_service.dart';
-import 'services/routine_group_service.dart';
-import 'services/diary_service.dart';
-import 'services/bookmark_service.dart';
-import 'services/fortune_service.dart';
-import 'services/goal_service.dart';
-import 'services/psychology_service.dart';
-import 'services/screen_time_service.dart';
-import 'services/activity_service.dart';
-import 'services/notion_page_service.dart';
-import 'services/notion_database_service.dart';
-import 'services/auto_page_service.dart';
+import 'services/routine_service.dart';
+import 'services/routine_monitor.dart';
+import 'services/settings_service.dart';
 import 'widgets/overlay_character.dart';
 import 'theme/app_theme.dart';
 
@@ -67,201 +40,13 @@ void main() async {
   await initializeDateFormatting('ko_KR');
   await initSpineFlutter(enableMemoryDebugging: false);
 
-  final prefs = await SharedPreferences.getInstance();
-  final settingsService = SettingsService(prefs);
-  final distractionLogService = DistractionLogService(prefs);
-  final completionService = RoutineCompletionService(prefs);
-  final accessoryService = AccessoryService(prefs);
-  final todoService = TodoService(prefs);
-  final memoService = MemoService(prefs);
+  await setupServiceLocator();
 
-  final notificationService = NotificationService();
-  try {
-    await notificationService.initialize();
-  } catch (e) {
-    print('[Main] NotificationService init failed: $e');
-  }
-  final routineService = RoutineService(prefs, notificationService);
-  final alarmService = AlarmService(prefs);
-  final timerService = TimerService(prefs, notificationService);
-  final calendarService = CalendarService(prefs);
-  final newsService = NewsService(prefs);
-  final cardService = CardService(prefs);
-  final weatherService = WeatherService(prefs);
-  try {
-    await alarmService.rescheduleAll();
-  } catch (e) {
-    print('[Main] rescheduleAll failed: $e');
-  }
-
-  final geminiService = GeminiService();
-  final ttsService = TtsService();
-  final overlayService = OverlayService();
-  final appDetectionService = AppDetectionService();
-  final healthService = HealthService();
-  await healthService.checkExistingPermissions();
-
-  final routineGroupService = RoutineGroupService(prefs);
-  final diaryService = DiaryService(prefs);
-  final bookmarkService = BookmarkService(prefs);
-  final fortuneService = FortuneService(prefs);
-  final goalService = GoalService(prefs);
-  final psychologyService = PsychologyService(prefs);
-  final screenTimeService = ScreenTimeService(prefs);
-  final activityService = ActivityService(prefs);
-  final notionPageService = NotionPageService(prefs);
-  final notionDatabaseService = NotionDatabaseService(prefs);
-
-  final autoPageService = AutoPageService(
-    pageService: notionPageService,
-    routineService: routineService,
-    completionService: completionService,
-    todoService: todoService,
-    diaryService: diaryService,
-    calendarService: calendarService,
-    healthService: healthService,
-    screenTimeService: screenTimeService,
-    activityService: activityService,
-    weatherService: weatherService,
-    goalService: goalService,
-    geminiService: geminiService,
-    settingsService: settingsService,
-    prefs: prefs,
-  );
-
-  final recommendationService = RecommendationService(
-    prefs: prefs,
-    cardService: cardService,
-    routineService: routineService,
-    completionService: completionService,
-    todoService: todoService,
-    memoService: memoService,
-    calendarService: calendarService,
-    weatherService: weatherService,
-    healthService: healthService,
-    geminiService: geminiService,
-  );
-
-  final apiKey = settingsService.apiKey;
-  if (apiKey.isNotEmpty) {
-    geminiService.initialize(apiKey, characterName: settingsService.characterName);
-  }
-
-  await ttsService.initialize();
-  await ttsService.applyPreset(settingsService.voicePreset);
-
-  final characterController = CharacterController(
-    gemini: geminiService,
-    tts: ttsService,
-    overlay: overlayService,
-    settings: settingsService,
-    completionService: completionService,
-  );
-
-  final routineMonitor = RoutineMonitor(
-    routineService: routineService,
-    appDetection: appDetectionService,
-    characterController: characterController,
-    completionService: completionService,
-    settingsService: settingsService,
-  );
-
-  runApp(AiCharacterApp(
-    routineService: routineService,
-    settingsService: settingsService,
-    routineMonitor: routineMonitor,
-    appDetection: appDetectionService,
-    distractionLogService: distractionLogService,
-    completionService: completionService,
-    ttsService: ttsService,
-    accessoryService: accessoryService,
-    healthService: healthService,
-    todoService: todoService,
-    memoService: memoService,
-    alarmService: alarmService,
-    timerService: timerService,
-    calendarService: calendarService,
-    newsService: newsService,
-    cardService: cardService,
-    weatherService: weatherService,
-    recommendationService: recommendationService,
-    routineGroupService: routineGroupService,
-    diaryService: diaryService,
-    bookmarkService: bookmarkService,
-    fortuneService: fortuneService,
-    goalService: goalService,
-    psychologyService: psychologyService,
-    screenTimeService: screenTimeService,
-    activityService: activityService,
-    notionPageService: notionPageService,
-    notionDatabaseService: notionDatabaseService,
-    autoPageService: autoPageService,
-  ));
+  runApp(const AiCharacterApp());
 }
 
 class AiCharacterApp extends StatefulWidget {
-  final RoutineService routineService;
-  final SettingsService settingsService;
-  final RoutineMonitor routineMonitor;
-  final AppDetectionService appDetection;
-  final DistractionLogService distractionLogService;
-  final RoutineCompletionService completionService;
-  final TtsService ttsService;
-  final AccessoryService accessoryService;
-  final HealthService healthService;
-  final TodoService todoService;
-  final MemoService memoService;
-  final AlarmService alarmService;
-  final TimerService timerService;
-  final CalendarService calendarService;
-  final NewsService newsService;
-  final CardService cardService;
-  final WeatherService weatherService;
-  final RecommendationService recommendationService;
-  final RoutineGroupService routineGroupService;
-  final DiaryService diaryService;
-  final BookmarkService bookmarkService;
-  final FortuneService fortuneService;
-  final GoalService goalService;
-  final PsychologyService psychologyService;
-  final ScreenTimeService screenTimeService;
-  final ActivityService activityService;
-  final NotionPageService notionPageService;
-  final NotionDatabaseService notionDatabaseService;
-  final AutoPageService autoPageService;
-
-  const AiCharacterApp({
-    super.key,
-    required this.routineService,
-    required this.settingsService,
-    required this.routineMonitor,
-    required this.appDetection,
-    required this.distractionLogService,
-    required this.completionService,
-    required this.ttsService,
-    required this.accessoryService,
-    required this.healthService,
-    required this.todoService,
-    required this.memoService,
-    required this.alarmService,
-    required this.timerService,
-    required this.calendarService,
-    required this.newsService,
-    required this.cardService,
-    required this.weatherService,
-    required this.recommendationService,
-    required this.routineGroupService,
-    required this.diaryService,
-    required this.bookmarkService,
-    required this.fortuneService,
-    required this.goalService,
-    required this.psychologyService,
-    required this.screenTimeService,
-    required this.activityService,
-    required this.notionPageService,
-    required this.notionDatabaseService,
-    required this.autoPageService,
-  });
+  const AiCharacterApp({super.key});
 
   @override
   State<AiCharacterApp> createState() => _AiCharacterAppState();
@@ -285,7 +70,7 @@ class _AiCharacterAppState extends State<AiCharacterApp>
     _notifSub = NotificationService.onNotificationTap.stream.listen((payload) {
       if (payload.startsWith('alarm:')) {
         final alarmId = payload.substring(6);
-        final alarm = widget.alarmService.getById(alarmId);
+        final alarm = getIt<AlarmService>().getById(alarmId);
         _openAlarmRingScreen(alarm?.label ?? '알람');
       }
     });
@@ -321,10 +106,7 @@ class _AiCharacterAppState extends State<AiCharacterApp>
     if (ctx != null) {
       Navigator.of(ctx).push(
         MaterialPageRoute(
-          builder: (_) => AlarmRingScreen(
-            alarmLabel: label,
-            settingsService: widget.settingsService,
-          ),
+          builder: (_) => AlarmRingScreen(alarmLabel: label),
         ),
       );
     }
@@ -345,24 +127,24 @@ class _AiCharacterAppState extends State<AiCharacterApp>
 
     // Reschedule alarms + routine notifications after permissions are granted
     try {
-      await widget.alarmService.rescheduleAll();
+      await getIt<AlarmService>().rescheduleAll();
     } catch (_) {}
     try {
-      await widget.routineService.rescheduleAllNotifications();
+      await getIt<RoutineService>().rescheduleAllNotifications();
     } catch (_) {}
 
     // Small delay to let permission dialog complete
     await Future.delayed(const Duration(seconds: 1));
 
     // Start monitoring
-    await widget.routineMonitor.start();
+    await getIt<RoutineMonitor>().start();
   }
 
   @override
   void dispose() {
     _notifSub?.cancel();
     WidgetsBinding.instance.removeObserver(this);
-    widget.routineMonitor.dispose();
+    getIt<RoutineMonitor>().dispose();
     super.dispose();
   }
 
@@ -383,35 +165,7 @@ class _AiCharacterAppState extends State<AiCharacterApp>
       darkTheme: AppTheme.dark,
       themeMode: ThemeMode.light,
       home: HomeScreen(
-        routineService: widget.routineService,
-        settingsService: widget.settingsService,
-        appDetection: widget.appDetection,
-        distractionLogService: widget.distractionLogService,
-        completionService: widget.completionService,
-        ttsService: widget.ttsService,
-        accessoryService: widget.accessoryService,
-        healthService: widget.healthService,
-        todoService: widget.todoService,
-        memoService: widget.memoService,
-        alarmService: widget.alarmService,
-        timerService: widget.timerService,
-        calendarService: widget.calendarService,
-        newsService: widget.newsService,
-        cardService: widget.cardService,
-        weatherService: widget.weatherService,
-        recommendationService: widget.recommendationService,
-        routineGroupService: widget.routineGroupService,
-        diaryService: widget.diaryService,
-        bookmarkService: widget.bookmarkService,
-        fortuneService: widget.fortuneService,
-        goalService: widget.goalService,
-        psychologyService: widget.psychologyService,
-        screenTimeService: widget.screenTimeService,
-        activityService: widget.activityService,
-        notionPageService: widget.notionPageService,
-        notionDatabaseService: widget.notionDatabaseService,
-        autoPageService: widget.autoPageService,
-        onCompletionUnchecked: widget.routineMonitor.forceCheck,
+        onCompletionUnchecked: getIt<RoutineMonitor>().forceCheck,
       ),
     );
   }
