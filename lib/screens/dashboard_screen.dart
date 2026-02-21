@@ -61,9 +61,6 @@ import 'activity_screen.dart';
 import 'notion_screen.dart';
 import '../services/notion_page_service.dart';
 import '../services/notion_database_service.dart';
-import '../services/lottery_service.dart';
-import '../models/lottery_data.dart';
-import 'lottery_screen.dart';
 import '../theme/app_colors.dart';
 
 class DashboardScreen extends StatefulWidget {
@@ -87,7 +84,6 @@ class DashboardScreenState extends State<DashboardScreen> {
   ScreenTimeData? _screenTime;
   ActivitySummary? _activity;
   BriefingData? _briefing;
-  LotterySnapshot? _lottery;
   bool _editMode = false;
 
   @override
@@ -107,8 +103,6 @@ class DashboardScreenState extends State<DashboardScreen> {
     _loadActivity();
     _loadWeather();
     _loadRecommendation();
-    _lottery = getIt<LotteryService>().getCached();
-    _loadLottery();
   }
 
   Future<void> _loadNews() async {
@@ -155,12 +149,6 @@ class DashboardScreenState extends State<DashboardScreen> {
     } catch (_) {}
   }
 
-  Future<void> _loadLottery() async {
-    try {
-      final data = await getIt<LotteryService>().fetch();
-      if (mounted && data != null) setState(() => _lottery = data);
-    } catch (_) {}
-  }
 
   Future<void> _loadScreenTime() async {
     try {
@@ -253,8 +241,6 @@ class DashboardScreenState extends State<DashboardScreen> {
         return large ? _buildActivityLarge(context, theme, label) : _buildActivitySmall(context, theme, label);
       case 'notion':
         return large ? _buildNotionLarge(context, theme, label) : _buildNotionSmall(context, theme, label);
-      case 'lottery':
-        return large ? _buildLotteryLarge(theme, label) : _buildLotterySmall(theme, label);
       default:
         return null;
     }
@@ -1737,7 +1723,7 @@ class DashboardScreenState extends State<DashboardScreen> {
     'briefing': '모닝 브리핑', 'recommend': '맞춤 정보', 'growth': '루나 성장', 'weekly': '주간 리포트', 'news': '뉴스', 'weather': '날씨', 'routine': '루틴', 'todo': '할 일',
     'diary': '일기장', 'card': '명함', 'calendar': '캘린더', 'stats': '통계', 'alarm': '알람',
     'timer': '타이머', 'memo': '메모', 'dday': 'D-Day', 'nature': '자연소리', 'bookmark': '바로가기', 'fortune': '오늘의 운세', 'goal': '목표',
-    'psychology': '오늘의 인사이트', 'screentime': '스크린타임', 'activity': '활동', 'notion': '워크스페이스', 'lottery': '복권 확률',
+    'psychology': '오늘의 인사이트', 'screentime': '스크린타임', 'activity': '활동', 'notion': '워크스페이스',
   };
 
   String _sectionLabel(String id) {
@@ -1755,7 +1741,7 @@ class DashboardScreenState extends State<DashboardScreen> {
       'dday': Icons.event_outlined, 'diary': Icons.auto_stories, 'nature': Icons.spa,
       'bookmark': Icons.language, 'fortune': Icons.auto_awesome, 'goal': Icons.track_changes,
       'psychology': Icons.lightbulb, 'screentime': Icons.phone_android, 'activity': Icons.directions_walk,
-      'notion': Icons.article_outlined, 'lottery': Icons.confirmation_number,
+      'notion': Icons.article_outlined,
     };
     final baseId = SettingsService.sectionBaseId(id);
     return icons[baseId] ?? Icons.widgets_outlined;
@@ -3312,97 +3298,4 @@ class DashboardScreenState extends State<DashboardScreen> {
     if (mounted) setState(() {});
   }
 
-  // ── 복권 확률 ──
-
-  Widget? _buildLotteryLarge(ThemeData theme, String label) {
-    if (_lottery == null || _lottery!.games.isEmpty) return null;
-    // 가장 기대값 높은 게임 찾기
-    final best = _lottery!.games.reduce((a, b) => a.returnRate > b.returnRate ? a : b);
-    final first1st = best.tiers.isNotEmpty ? best.tiers.first : null;
-    return InkWell(
-      borderRadius: BorderRadius.circular(16),
-      onTap: () => _push(context, LotteryScreen(title: label)),
-      child: Container(
-        padding: const EdgeInsets.all(16),
-        decoration: BoxDecoration(
-          color: theme.colorScheme.surfaceContainerLow,
-          borderRadius: BorderRadius.circular(16),
-        ),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              children: [
-                Icon(Icons.confirmation_number, size: 18, color: AppColors.accent),
-                const SizedBox(width: 8),
-                Text(label, style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600)),
-              ],
-            ),
-            const SizedBox(height: 10),
-            Row(
-              children: [
-                Expanded(
-                  child: Column(
-                    crossAxisAlignment: CrossAxisAlignment.start,
-                    children: [
-                      Text(best.typeName, style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: theme.colorScheme.onSurface)),
-                      const SizedBox(height: 2),
-                      Text(
-                        '환급률 ${best.returnRate.toStringAsFixed(1)}%',
-                        style: TextStyle(
-                          fontSize: 12,
-                          color: best.returnRate >= 60 ? AppColors.success : AppColors.warning,
-                          fontWeight: FontWeight.w600,
-                        ),
-                      ),
-                    ],
-                  ),
-                ),
-                if (first1st != null && first1st.remaining > 0)
-                  Container(
-                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                    decoration: BoxDecoration(
-                      color: AppColors.error.withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(8),
-                    ),
-                    child: Text(
-                      '1등 ${first1st.remaining}개 남음',
-                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.error),
-                    ),
-                  ),
-              ],
-            ),
-          ],
-        ),
-      ),
-    );
-  }
-
-  Widget? _buildLotterySmall(ThemeData theme, String label) {
-    if (_lottery == null || _lottery!.games.isEmpty) return null;
-    final best = _lottery!.games.reduce((a, b) => a.returnRate > b.returnRate ? a : b);
-    return InkWell(
-      borderRadius: BorderRadius.circular(12),
-      onTap: () => _push(context, LotteryScreen(title: label)),
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-        decoration: BoxDecoration(
-          color: theme.colorScheme.surfaceContainerLow,
-          borderRadius: BorderRadius.circular(12),
-        ),
-        child: Row(
-          children: [
-            Icon(Icons.confirmation_number, size: 18, color: AppColors.accent),
-            const SizedBox(width: 10),
-            Text(label, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: theme.colorScheme.onSurface)),
-            const Spacer(),
-            Text(
-              '${best.typeName} ${best.returnRate.toStringAsFixed(0)}%',
-              style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: theme.colorScheme.onSurfaceVariant),
-            ),
-          ],
-        ),
-      ),
-    );
-  }
 }
