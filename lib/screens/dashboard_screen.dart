@@ -272,20 +272,23 @@ class DashboardScreenState extends State<DashboardScreen> {
     }
 
     final b = _briefing!;
-    return Container(
-      padding: const EdgeInsets.all(16),
-      decoration: BoxDecoration(
-        gradient: LinearGradient(
-          begin: Alignment.topLeft,
-          end: Alignment.bottomRight,
-          colors: [
-            theme.colorScheme.primaryContainer.withValues(alpha: 0.3),
-            theme.colorScheme.surfaceContainerLow,
-          ],
+    return InkWell(
+      borderRadius: BorderRadius.circular(16),
+      onTap: _loadBriefing,
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          gradient: LinearGradient(
+            begin: Alignment.topLeft,
+            end: Alignment.bottomRight,
+            colors: [
+              theme.colorScheme.primaryContainer.withValues(alpha: 0.3),
+              theme.colorScheme.surfaceContainerLow,
+            ],
+          ),
+          borderRadius: BorderRadius.circular(16),
         ),
-        borderRadius: BorderRadius.circular(16),
-      ),
-      child: Column(
+        child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
           // 헤더
@@ -360,6 +363,7 @@ class DashboardScreenState extends State<DashboardScreen> {
           // 루나의 제안 (스마트 루틴 제안)
           ..._buildBriefingSuggestions(theme),
         ],
+      ),
       ),
     );
   }
