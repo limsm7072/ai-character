@@ -21,6 +21,11 @@ import '../services/diary_service.dart';
 import '../services/bookmark_service.dart';
 import '../services/fortune_service.dart';
 import '../services/goal_service.dart';
+import '../services/psychology_service.dart';
+import '../services/screen_time_service.dart';
+import '../services/activity_service.dart';
+import '../services/notion_page_service.dart';
+import '../services/notion_database_service.dart';
 import 'dashboard_screen.dart';
 import 'settings_screen.dart';
 import 'character_chat_screen.dart';
@@ -48,6 +53,11 @@ class HomeScreen extends StatefulWidget {
   final BookmarkService bookmarkService;
   final FortuneService fortuneService;
   final GoalService goalService;
+  final PsychologyService psychologyService;
+  final ScreenTimeService screenTimeService;
+  final ActivityService activityService;
+  final NotionPageService notionPageService;
+  final NotionDatabaseService notionDatabaseService;
   final VoidCallback? onCompletionUnchecked;
 
   const HomeScreen({
@@ -74,6 +84,11 @@ class HomeScreen extends StatefulWidget {
     required this.bookmarkService,
     required this.fortuneService,
     required this.goalService,
+    required this.psychologyService,
+    required this.screenTimeService,
+    required this.activityService,
+    required this.notionPageService,
+    required this.notionDatabaseService,
     this.onCompletionUnchecked,
   });
 
@@ -115,6 +130,11 @@ class _HomeScreenState extends State<HomeScreen> {
             bookmarkService: widget.bookmarkService,
             fortuneService: widget.fortuneService,
             goalService: widget.goalService,
+            psychologyService: widget.psychologyService,
+            screenTimeService: widget.screenTimeService,
+            activityService: widget.activityService,
+            notionPageService: widget.notionPageService,
+            notionDatabaseService: widget.notionDatabaseService,
             onCompletionUnchecked: widget.onCompletionUnchecked,
           ),
           CharacterChatScreen(

@@ -95,6 +95,25 @@ class MainActivity : FlutterFragmentActivity() {
                     val date = call.argument<String>("date") ?: ""
                     result.success(queryDailyUsageStats(date))
                 }
+                "getUnlockCount" -> {
+                    val date = call.argument<String>("date") ?: ""
+                    result.success(getUnlockCount(date))
+                }
+                "getHourlyUsage" -> {
+                    val date = call.argument<String>("date") ?: ""
+                    result.success(getHourlyUsage(date))
+                }
+                "startActivityRecognition" -> {
+                    startActivityRecognition(result)
+                }
+                "stopActivityRecognition" -> {
+                    stopActivityRecognition()
+                    result.success(true)
+                }
+                "getActivityLog" -> {
+                    val date = call.argument<String>("date") ?: ""
+                    result.success(getActivityLog(date))
+                }
                 "startMonitorService" -> {
                     startMonitorService()
                     result.success(true)
@@ -546,6 +565,197 @@ class MainActivity : FlutterFragmentActivity() {
                     "totalTime" to time
                 )
             }
+    }
+
+    private fun getUnlockCount(date: String): Int {
+        if (!hasUsageStatsPermission()) return 0
+        val parts = date.split("-")
+        if (parts.size != 3) return 0
+        val year = parts[0].toIntOrNull() ?: return 0
+        val month = parts[1].toIntOrNull() ?: return 0
+        val day = parts[2].toIntOrNull() ?: return 0
+
+        val cal = java.util.Calendar.getInstance().apply {
+            set(year, month - 1, day, 0, 0, 0)
+            set(java.util.Calendar.MILLISECOND, 0)
+        }
+        val rangeStart = cal.timeInMillis
+        cal.add(java.util.Calendar.DAY_OF_MONTH, 1)
+        val rangeEnd = Math.min(cal.timeInMillis, System.currentTimeMillis())
+        if (rangeEnd <= rangeStart) return 0
+
+        val usm = getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
+        val events = usm.queryEvents(rangeStart, rangeEnd)
+        var count = 0
+        val event = android.app.usage.UsageEvents.Event()
+        while (events.hasNextEvent()) {
+            events.getNextEvent(event)
+            // KEYGUARD_HIDDEN = 18
+            if (event.eventType == 18) count++
+        }
+        return count
+    }
+
+    private fun getHourlyUsage(date: String): List<Long> {
+        val hourly = MutableList(24) { 0L }
+        if (!hasUsageStatsPermission()) return hourly
+        val parts = date.split("-")
+        if (parts.size != 3) return hourly
+        val year = parts[0].toIntOrNull() ?: return hourly
+        val month = parts[1].toIntOrNull() ?: return hourly
+        val day = parts[2].toIntOrNull() ?: return hourly
+
+        val cal = java.util.Calendar.getInstance().apply {
+            set(year, month - 1, day, 0, 0, 0)
+            set(java.util.Calendar.MILLISECOND, 0)
+        }
+        val rangeStart = cal.timeInMillis
+        cal.add(java.util.Calendar.DAY_OF_MONTH, 1)
+        val rangeEnd = Math.min(cal.timeInMillis, System.currentTimeMillis())
+        if (rangeEnd <= rangeStart) return hourly
+
+        val usm = getSystemService(Context.USAGE_STATS_SERVICE) as UsageStatsManager
+        val events = usm.queryEvents(rangeStart, rangeEnd)
+
+        val foregroundStarts = mutableMapOf<String, Long>()
+        val myPackage = packageName
+        val excludePrefixes = listOf(
+            "com.android.launcher", "com.android.systemui",
+            "com.android.inputmethod", "com.google.android.inputmethod",
+            "com.samsung.android.honeyboard", "com.sec.android.inputmethod"
+        )
+
+        val event = android.app.usage.UsageEvents.Event()
+        while (events.hasNextEvent()) {
+            events.getNextEvent(event)
+            val pkg = event.packageName ?: continue
+            if (pkg == myPackage || excludePrefixes.any { pkg.startsWith(it) }) continue
+
+            when (event.eventType) {
+                1, 7 -> foregroundStarts[pkg] = event.timeStamp
+                2, 8 -> {
+                    val start = foregroundStarts.remove(pkg) ?: continue
+                    if (event.timeStamp > start) {
+                        addToHourlyBuckets(hourly, start, event.timeStamp, rangeStart)
+                    }
+                }
+            }
+        }
+        // Still-in-foreground apps
+        for ((_, start) in foregroundStarts) {
+            if (rangeEnd > start) {
+                addToHourlyBuckets(hourly, start, rangeEnd, rangeStart)
+            }
+        }
+        return hourly
+    }
+
+    private fun addToHourlyBuckets(hourly: MutableList<Long>, start: Long, end: Long, dayStart: Long) {
+        val msPerHour = 3600_000L
+        val startHour = ((start - dayStart) / msPerHour).toInt().coerceIn(0, 23)
+        val endHour = ((end - dayStart - 1) / msPerHour).toInt().coerceIn(0, 23)
+        if (startHour == endHour) {
+            hourly[startHour] += end - start
+        } else {
+            // First hour partial
+            val firstHourEnd = dayStart + (startHour + 1) * msPerHour
+            hourly[startHour] += firstHourEnd - start
+            // Full hours in between
+            for (h in (startHour + 1) until endHour) {
+                hourly[h] += msPerHour
+            }
+            // Last hour partial
+            val lastHourStart = dayStart + endHour * msPerHour
+            hourly[endHour] += end - lastHourStart
+        }
+    }
+
+    // ─── Activity Recognition ───
+    private var activityPendingIntent: android.app.PendingIntent? = null
+
+    private fun startActivityRecognition(result: MethodChannel.Result) {
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            if (ContextCompat.checkSelfPermission(this, Manifest.permission.ACTIVITY_RECOGNITION)
+                != PackageManager.PERMISSION_GRANTED) {
+                ActivityCompat.requestPermissions(this,
+                    arrayOf(Manifest.permission.ACTIVITY_RECOGNITION), 3001)
+                result.success(false)
+                return
+            }
+        }
+
+        val intent = Intent(this, ActivityRecognitionReceiver::class.java)
+        activityPendingIntent = android.app.PendingIntent.getBroadcast(
+            this, 0, intent,
+            android.app.PendingIntent.FLAG_UPDATE_CURRENT or android.app.PendingIntent.FLAG_MUTABLE
+        )
+
+        val transitions = mutableListOf<com.google.android.gms.location.ActivityTransition>()
+        val types = listOf(
+            com.google.android.gms.location.DetectedActivity.WALKING,
+            com.google.android.gms.location.DetectedActivity.RUNNING,
+            com.google.android.gms.location.DetectedActivity.ON_BICYCLE,
+            com.google.android.gms.location.DetectedActivity.IN_VEHICLE,
+            com.google.android.gms.location.DetectedActivity.STILL,
+        )
+        for (type in types) {
+            transitions.add(com.google.android.gms.location.ActivityTransition.Builder()
+                .setActivityType(type)
+                .setActivityTransition(com.google.android.gms.location.ActivityTransition.ACTIVITY_TRANSITION_ENTER)
+                .build())
+            transitions.add(com.google.android.gms.location.ActivityTransition.Builder()
+                .setActivityType(type)
+                .setActivityTransition(com.google.android.gms.location.ActivityTransition.ACTIVITY_TRANSITION_EXIT)
+                .build())
+        }
+
+        val request = com.google.android.gms.location.ActivityTransitionRequest(transitions)
+        com.google.android.gms.location.ActivityRecognition.getClient(this)
+            .requestActivityTransitionUpdates(request, activityPendingIntent!!)
+            .addOnSuccessListener { result.success(true) }
+            .addOnFailureListener { result.success(false) }
+    }
+
+    private fun stopActivityRecognition() {
+        val pi = activityPendingIntent ?: return
+        com.google.android.gms.location.ActivityRecognition.getClient(this)
+            .removeActivityTransitionUpdates(pi)
+        activityPendingIntent = null
+    }
+
+    private fun getActivityLog(date: String): List<Map<String, Any>> {
+        val prefs = getSharedPreferences("FlutterSharedPreferences", Context.MODE_PRIVATE)
+        val raw = prefs.getString("flutter.activity_log", "[]") ?: "[]"
+        val arr = try { org.json.JSONArray(raw) } catch (_: Exception) { return emptyList() }
+
+        // Parse date range
+        val parts = date.split("-")
+        if (parts.size != 3) return emptyList()
+        val year = parts[0].toIntOrNull() ?: return emptyList()
+        val month = parts[1].toIntOrNull() ?: return emptyList()
+        val day = parts[2].toIntOrNull() ?: return emptyList()
+
+        val cal = java.util.Calendar.getInstance().apply {
+            set(year, month - 1, day, 0, 0, 0)
+            set(java.util.Calendar.MILLISECOND, 0)
+        }
+        val rangeStart = cal.timeInMillis
+        cal.add(java.util.Calendar.DAY_OF_MONTH, 1)
+        val rangeEnd = cal.timeInMillis
+
+        val result = mutableListOf<Map<String, Any>>()
+        for (i in 0 until arr.length()) {
+            val obj = arr.optJSONObject(i) ?: continue
+            val ts = obj.optLong("timestamp", 0)
+            if (ts in rangeStart until rangeEnd) {
+                result.add(mapOf(
+                    "type" to (obj.optString("type", "unknown")),
+                    "transition" to (obj.optString("transition", "")),
+                    "timestamp" to ts,
+                ))
+            }
+        }
+        return result
     }
 
     private fun getInstalledApps(): Map<String, String> {

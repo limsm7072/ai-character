@@ -34,6 +34,11 @@ import 'services/diary_service.dart';
 import 'services/bookmark_service.dart';
 import 'services/fortune_service.dart';
 import 'services/goal_service.dart';
+import 'services/psychology_service.dart';
+import 'services/screen_time_service.dart';
+import 'services/activity_service.dart';
+import 'services/notion_page_service.dart';
+import 'services/notion_database_service.dart';
 import 'widgets/overlay_character.dart';
 import 'theme/app_theme.dart';
 
@@ -100,6 +105,11 @@ void main() async {
   final bookmarkService = BookmarkService(prefs);
   final fortuneService = FortuneService(prefs);
   final goalService = GoalService(prefs);
+  final psychologyService = PsychologyService(prefs);
+  final screenTimeService = ScreenTimeService(prefs);
+  final activityService = ActivityService(prefs);
+  final notionPageService = NotionPageService(prefs);
+  final notionDatabaseService = NotionDatabaseService(prefs);
 
   final recommendationService = RecommendationService(
     prefs: prefs,
@@ -162,6 +172,11 @@ void main() async {
     bookmarkService: bookmarkService,
     fortuneService: fortuneService,
     goalService: goalService,
+    psychologyService: psychologyService,
+    screenTimeService: screenTimeService,
+    activityService: activityService,
+    notionPageService: notionPageService,
+    notionDatabaseService: notionDatabaseService,
   ));
 }
 
@@ -189,6 +204,11 @@ class AiCharacterApp extends StatefulWidget {
   final BookmarkService bookmarkService;
   final FortuneService fortuneService;
   final GoalService goalService;
+  final PsychologyService psychologyService;
+  final ScreenTimeService screenTimeService;
+  final ActivityService activityService;
+  final NotionPageService notionPageService;
+  final NotionDatabaseService notionDatabaseService;
 
   const AiCharacterApp({
     super.key,
@@ -215,6 +235,11 @@ class AiCharacterApp extends StatefulWidget {
     required this.bookmarkService,
     required this.fortuneService,
     required this.goalService,
+    required this.psychologyService,
+    required this.screenTimeService,
+    required this.activityService,
+    required this.notionPageService,
+    required this.notionDatabaseService,
   });
 
   @override
@@ -359,6 +384,11 @@ class _AiCharacterAppState extends State<AiCharacterApp>
         bookmarkService: widget.bookmarkService,
         fortuneService: widget.fortuneService,
         goalService: widget.goalService,
+        psychologyService: widget.psychologyService,
+        screenTimeService: widget.screenTimeService,
+        activityService: widget.activityService,
+        notionPageService: widget.notionPageService,
+        notionDatabaseService: widget.notionDatabaseService,
         onCompletionUnchecked: widget.routineMonitor.forceCheck,
       ),
     );

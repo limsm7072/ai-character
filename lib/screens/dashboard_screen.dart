@@ -20,11 +20,17 @@ import '../services/diary_service.dart';
 import '../services/bookmark_service.dart';
 import '../services/fortune_service.dart';
 import '../services/goal_service.dart';
+import '../services/psychology_service.dart';
+import '../services/screen_time_service.dart';
+import '../services/activity_service.dart';
 import '../models/fortune_data.dart';
 import '../models/goal.dart';
+import '../models/psychology_tip.dart';
+import '../models/screen_time_data.dart';
+import '../models/activity_data.dart';
 import '../models/weather_data.dart';
 import '../models/recommendation_data.dart';
-import 'package:geolocator/geolocator.dart';
+import 'package:geolocator/geolocator.dart' hide ActivityType;
 import '../widgets/news_ticker.dart';
 import 'routine_list_screen.dart';
 import 'todo_screen.dart';
@@ -42,6 +48,12 @@ import 'nature_scene_screen.dart';
 import 'bookmark_screen.dart';
 import 'fortune_screen.dart';
 import 'goal_screen.dart';
+import 'psychology_screen.dart';
+import 'screen_time_screen.dart';
+import 'activity_screen.dart';
+import 'notion_screen.dart';
+import '../services/notion_page_service.dart';
+import '../services/notion_database_service.dart';
 import '../theme/app_colors.dart';
 
 class DashboardScreen extends StatefulWidget {
@@ -65,6 +77,11 @@ class DashboardScreen extends StatefulWidget {
   final BookmarkService bookmarkService;
   final FortuneService fortuneService;
   final GoalService goalService;
+  final PsychologyService psychologyService;
+  final ScreenTimeService screenTimeService;
+  final ActivityService activityService;
+  final NotionPageService notionPageService;
+  final NotionDatabaseService notionDatabaseService;
   final VoidCallback? onCompletionUnchecked;
 
   const DashboardScreen({
@@ -89,6 +106,11 @@ class DashboardScreen extends StatefulWidget {
     required this.bookmarkService,
     required this.fortuneService,
     required this.goalService,
+    required this.psychologyService,
+    required this.screenTimeService,
+    required this.activityService,
+    required this.notionPageService,
+    required this.notionDatabaseService,
     this.onCompletionUnchecked,
   });
 
@@ -101,6 +123,9 @@ class DashboardScreenState extends State<DashboardScreen> {
   WeatherData? _weather;
   RecommendationData? _recommendation;
   FortuneData? _fortune;
+  PsychologyTip? _psychology;
+  ScreenTimeData? _screenTime;
+  ActivitySummary? _activity;
   bool _editMode = false;
 
   @override
@@ -110,7 +135,12 @@ class DashboardScreenState extends State<DashboardScreen> {
     _weather = widget.weatherService.getCached();
     _recommendation = widget.recommendationService.getCached();
     _fortune = widget.fortuneService.getCached() ?? widget.fortuneService.generateTodayFortune();
+    _psychology = widget.psychologyService.getCached() ?? widget.psychologyService.generateTodayTip();
+    _screenTime = widget.screenTimeService.getCached();
+    _activity = widget.activityService.getCached();
     _loadNews();
+    _loadScreenTime();
+    _loadActivity();
     _loadWeather();
     _loadRecommendation();
   }
@@ -152,12 +182,29 @@ class DashboardScreenState extends State<DashboardScreen> {
     } catch (_) {}
   }
 
+  Future<void> _loadScreenTime() async {
+    try {
+      final data = await widget.screenTimeService.fetchToday();
+      if (mounted && data != null) setState(() => _screenTime = data);
+    } catch (_) {}
+  }
+
+  Future<void> _loadActivity() async {
+    if (!widget.activityService.isEnabled) return;
+    try {
+      final data = await widget.activityService.fetchToday();
+      if (mounted && data != null) setState(() => _activity = data);
+    } catch (_) {}
+  }
+
   void refresh() {
     _fortune = widget.fortuneService.generateTodayFortune();
     if (mounted) setState(() {});
     _loadNews();
     _loadWeather();
     _loadRecommendation();
+    _loadScreenTime();
+    _loadActivity();
   }
 
   String _formatDate(DateTime dt) =>
@@ -212,6 +259,14 @@ class DashboardScreenState extends State<DashboardScreen> {
         return large ? _buildFortuneLarge(context, theme, label) : _buildFortuneSmall(context, theme, label);
       case 'goal':
         return large ? _buildGoalLarge(context, theme, label) : _buildGoalSmall(context, theme, label);
+      case 'psychology':
+        return large ? _buildPsychologyLarge(context, theme, label) : _buildPsychologySmall(context, theme, label);
+      case 'screentime':
+        return large ? _buildScreenTimeLarge(context, theme, label) : _buildScreenTimeSmall(context, theme, label);
+      case 'activity':
+        return large ? _buildActivityLarge(context, theme, label) : _buildActivitySmall(context, theme, label);
+      case 'notion':
+        return large ? _buildNotionLarge(context, theme, label) : _buildNotionSmall(context, theme, label);
       default:
         return null;
     }
@@ -1518,6 +1573,7 @@ class DashboardScreenState extends State<DashboardScreen> {
     'recommend': '맞춤 정보', 'news': '뉴스', 'weather': '날씨', 'routine': '루틴', 'todo': '할 일',
     'diary': '일기장', 'card': '명함', 'calendar': '캘린더', 'stats': '통계', 'alarm': '알람',
     'timer': '타이머', 'memo': '메모', 'dday': 'D-Day', 'nature': '자연소리', 'bookmark': '바로가기', 'fortune': '오늘의 운세', 'goal': '목표',
+    'psychology': '오늘의 심리학', 'screentime': '스크린타임', 'activity': '활동', 'notion': '워크스페이스',
   };
 
   String _sectionLabel(String id) {
@@ -1534,6 +1590,8 @@ class DashboardScreenState extends State<DashboardScreen> {
       'timer': Icons.timer_outlined, 'memo': Icons.note_alt_outlined,
       'dday': Icons.event_outlined, 'diary': Icons.auto_stories, 'nature': Icons.spa,
       'bookmark': Icons.language, 'fortune': Icons.auto_awesome, 'goal': Icons.track_changes,
+      'psychology': Icons.psychology, 'screentime': Icons.phone_android, 'activity': Icons.directions_walk,
+      'notion': Icons.article_outlined,
     };
     final baseId = SettingsService.sectionBaseId(id);
     return icons[baseId] ?? Icons.widgets_outlined;
@@ -1800,6 +1858,531 @@ class DashboardScreenState extends State<DashboardScreen> {
                     textAlign: TextAlign.center,
                     style: TextStyle(fontSize: 13, color: theme.colorScheme.onSurfaceVariant)),
               ),
+            ],
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ─── 오늘의 심리학 ───
+  void _openPsychology(BuildContext context, String label) {
+    Navigator.of(context).push(MaterialPageRoute(
+      builder: (_) => PsychologyScreen(psychologyService: widget.psychologyService, title: label),
+    ));
+  }
+
+  Widget? _buildPsychologySmall(BuildContext context, ThemeData theme, String label) {
+    final tip = _psychology;
+    return InkWell(
+      borderRadius: BorderRadius.circular(12),
+      onTap: () => _openPsychology(context, label),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        decoration: BoxDecoration(
+          color: theme.colorScheme.surfaceContainerLow,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Row(
+          children: [
+            Icon(Icons.psychology, size: 18, color: theme.colorScheme.primary),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(label, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: theme.colorScheme.onSurface),
+                  overflow: TextOverflow.ellipsis),
+            ),
+            if (tip != null)
+              Flexible(
+                child: Text(tip.title,
+                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: PsychologyTip.categoryColor(tip.category)),
+                    overflow: TextOverflow.ellipsis),
+              )
+            else
+              Text('로딩중...', style: TextStyle(fontSize: 13, color: theme.colorScheme.onSurfaceVariant)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget? _buildPsychologyLarge(BuildContext context, ThemeData theme, String label) {
+    final tip = _psychology;
+    return InkWell(
+      borderRadius: BorderRadius.circular(16),
+      onTap: () => _openPsychology(context, label),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: theme.colorScheme.surfaceContainerLow,
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: tip != null ? _buildPsychologyLargeContent(theme, tip, label) : Column(
+          children: [
+            Row(
+              children: [
+                Icon(Icons.psychology, size: 18, color: theme.colorScheme.primary),
+                const SizedBox(width: 8),
+                Text(label, style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600)),
+              ],
+            ),
+            const SizedBox(height: 16),
+            Icon(Icons.psychology, size: 40, color: theme.colorScheme.primary.withValues(alpha: 0.4)),
+            const SizedBox(height: 8),
+            Text('오늘의 심리학 개념을\n확인해보세요',
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 13, color: theme.colorScheme.onSurfaceVariant)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildPsychologyLargeContent(ThemeData theme, PsychologyTip tip, String label) {
+    final catColor = PsychologyTip.categoryColor(tip.category);
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Icon(Icons.psychology, size: 18, color: theme.colorScheme.primary),
+            const SizedBox(width: 8),
+            Text(label, style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600)),
+            const Spacer(),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+              decoration: BoxDecoration(
+                color: catColor.withValues(alpha: 0.15),
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Text(PsychologyTip.categoryKorean(tip.category),
+                  style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: catColor)),
+            ),
+          ],
+        ),
+        const SizedBox(height: 12),
+        Text(tip.title, style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: theme.colorScheme.onSurface)),
+        const SizedBox(height: 6),
+        Text(tip.description,
+            style: TextStyle(fontSize: 13, height: 1.5, color: theme.colorScheme.onSurfaceVariant),
+            maxLines: 2, overflow: TextOverflow.ellipsis),
+        const SizedBox(height: 10),
+        Container(
+          width: double.infinity,
+          padding: const EdgeInsets.all(10),
+          decoration: BoxDecoration(
+            color: theme.colorScheme.primaryContainer.withValues(alpha: 0.3),
+            borderRadius: BorderRadius.circular(10),
+          ),
+          child: Row(
+            children: [
+              Icon(Icons.chat_bubble_outline, size: 14, color: theme.colorScheme.primary),
+              const SizedBox(width: 6),
+              Expanded(
+                child: Text(tip.lunaComment,
+                    style: TextStyle(fontSize: 12, color: theme.colorScheme.primary),
+                    maxLines: 1, overflow: TextOverflow.ellipsis),
+              ),
+            ],
+          ),
+        ),
+      ],
+    );
+  }
+
+  // ─── 스크린타임 ───
+  void _openScreenTime(BuildContext context, String label) {
+    Navigator.of(context).push(MaterialPageRoute(
+      builder: (_) => ScreenTimeScreen(screenTimeService: widget.screenTimeService, title: label),
+    )).then((_) => _loadScreenTime());
+  }
+
+  Widget? _buildScreenTimeSmall(BuildContext context, ThemeData theme, String label) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(12),
+      onTap: () => _openScreenTime(context, label),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        decoration: BoxDecoration(
+          color: theme.colorScheme.surfaceContainerLow,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Row(
+          children: [
+            Icon(Icons.phone_android, size: 18, color: theme.colorScheme.primary),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(label, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: theme.colorScheme.onSurface),
+                  overflow: TextOverflow.ellipsis),
+            ),
+            if (_screenTime != null)
+              Text(_screenTime!.formattedTotalTime,
+                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: theme.colorScheme.primary))
+            else
+              Text('확인하기', style: TextStyle(fontSize: 13, color: theme.colorScheme.primary)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget? _buildScreenTimeLarge(BuildContext context, ThemeData theme, String label) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(16),
+      onTap: () => _openScreenTime(context, label),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: theme.colorScheme.surfaceContainerLow,
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: _screenTime != null ? _buildScreenTimeLargeContent(theme, label) : Column(
+          children: [
+            Row(
+              children: [
+                Icon(Icons.phone_android, size: 18, color: theme.colorScheme.primary),
+                const SizedBox(width: 8),
+                Text(label, style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600)),
+              ],
+            ),
+            const SizedBox(height: 16),
+            Icon(Icons.phone_android, size: 40, color: theme.colorScheme.primary.withValues(alpha: 0.4)),
+            const SizedBox(height: 8),
+            Text('스크린타임을\n확인해보세요',
+                textAlign: TextAlign.center,
+                style: TextStyle(fontSize: 13, color: theme.colorScheme.onSurfaceVariant)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildScreenTimeLargeContent(ThemeData theme, String label) {
+    final d = _screenTime!;
+    final topApps = d.topApps.take(3);
+    final categoryBreakdown = d.categoryBreakdown;
+    final total = d.totalTimeMs;
+
+    final catColors = <AppCategory, Color>{
+      AppCategory.sns: const Color(0xFFE91E63),
+      AppCategory.game: const Color(0xFF9C27B0),
+      AppCategory.entertainment: const Color(0xFFFF5722),
+      AppCategory.productivity: const Color(0xFF2196F3),
+      AppCategory.communication: const Color(0xFF4CAF50),
+      AppCategory.education: const Color(0xFF00BCD4),
+      AppCategory.shopping: const Color(0xFFFF9800),
+      AppCategory.finance: const Color(0xFF607D8B),
+      AppCategory.health: const Color(0xFF8BC34A),
+      AppCategory.other: const Color(0xFF9E9E9E),
+    };
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Icon(Icons.phone_android, size: 18, color: theme.colorScheme.primary),
+            const SizedBox(width: 8),
+            Text(label, style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600)),
+            const Spacer(),
+            Text(d.formattedTotalTime,
+                style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, color: theme.colorScheme.primary)),
+          ],
+        ),
+        const SizedBox(height: 10),
+        // Category bar
+        if (total > 0)
+          ClipRRect(
+            borderRadius: BorderRadius.circular(4),
+            child: SizedBox(
+              height: 8,
+              child: Row(
+                children: categoryBreakdown.entries.map((e) {
+                  final ratio = e.value / total;
+                  if (ratio < 0.01) return const SizedBox.shrink();
+                  return Expanded(
+                    flex: (ratio * 1000).round(),
+                    child: Container(color: catColors[e.key] ?? Colors.grey),
+                  );
+                }).toList(),
+              ),
+            ),
+          ),
+        const SizedBox(height: 10),
+        // Top 3 apps
+        ...topApps.map((app) {
+          final catColor = catColors[app.category] ?? Colors.grey;
+          return Padding(
+            padding: const EdgeInsets.only(bottom: 4),
+            child: Row(
+              children: [
+                Container(
+                  width: 20, height: 20,
+                  decoration: BoxDecoration(color: catColor.withValues(alpha: 0.15), borderRadius: BorderRadius.circular(5)),
+                  child: Center(child: Text(app.appName.isNotEmpty ? app.appName[0] : '?',
+                      style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: catColor))),
+                ),
+                const SizedBox(width: 8),
+                Expanded(child: Text(app.appName, style: TextStyle(fontSize: 12, color: theme.colorScheme.onSurfaceVariant),
+                    overflow: TextOverflow.ellipsis)),
+                Text(ScreenTimeData.formatDuration(app.totalTimeMs),
+                    style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: theme.colorScheme.onSurface)),
+              ],
+            ),
+          );
+        }),
+      ],
+    );
+  }
+
+  // ─── 활동 ───
+  void _openActivity(BuildContext context, String label) {
+    Navigator.of(context).push(MaterialPageRoute(
+      builder: (_) => ActivityScreen(activityService: widget.activityService, title: label),
+    )).then((_) => _loadActivity());
+  }
+
+  Widget? _buildActivitySmall(BuildContext context, ThemeData theme, String label) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(12),
+      onTap: () => _openActivity(context, label),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        decoration: BoxDecoration(
+          color: theme.colorScheme.surfaceContainerLow,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Row(
+          children: [
+            Icon(Icons.directions_walk, size: 18, color: theme.colorScheme.primary),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(label, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: theme.colorScheme.onSurface),
+                  overflow: TextOverflow.ellipsis),
+            ),
+            if (_activity != null && _activity!.entries.isNotEmpty) ...[
+              if (_activity!.walkingMinutes > 0)
+                Text('걷기 ${_activity!.walkingMinutes}분',
+                    style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: ActivitySummary.activityColor(ActivityType.walking))),
+              if (_activity!.walkingMinutes > 0 && _activity!.stillMinutes > 0)
+                Text(' | ', style: TextStyle(fontSize: 12, color: theme.colorScheme.onSurfaceVariant)),
+              if (_activity!.stillMinutes > 0)
+                Text('정지 ${_activity!.stillMinutes}분',
+                    style: TextStyle(fontSize: 13, color: theme.colorScheme.onSurfaceVariant)),
+            ] else
+              Text(widget.activityService.isEnabled ? '감지 중...' : '시작하기',
+                  style: TextStyle(fontSize: 13, color: theme.colorScheme.primary)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget? _buildActivityLarge(BuildContext context, ThemeData theme, String label) {
+    return InkWell(
+      borderRadius: BorderRadius.circular(16),
+      onTap: () => _openActivity(context, label),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: theme.colorScheme.surfaceContainerLow,
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: _activity != null && _activity!.entries.isNotEmpty
+            ? _buildActivityLargeContent(theme, label)
+            : Column(
+                children: [
+                  Row(
+                    children: [
+                      Icon(Icons.directions_walk, size: 18, color: theme.colorScheme.primary),
+                      const SizedBox(width: 8),
+                      Text(label, style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600)),
+                    ],
+                  ),
+                  const SizedBox(height: 16),
+                  Icon(Icons.directions_walk, size: 40, color: theme.colorScheme.primary.withValues(alpha: 0.4)),
+                  const SizedBox(height: 8),
+                  Text(widget.activityService.isEnabled
+                      ? '활동을 감지하고 있습니다\n이동하면 자동으로 기록됩니다'
+                      : '활동 자동 감지를\n시작해보세요',
+                      textAlign: TextAlign.center,
+                      style: TextStyle(fontSize: 13, color: theme.colorScheme.onSurfaceVariant)),
+                ],
+              ),
+      ),
+    );
+  }
+
+  Widget _buildActivityLargeContent(ThemeData theme, String label) {
+    final s = _activity!;
+    final items = [
+      (ActivityType.walking, s.walkingMinutes),
+      (ActivityType.running, s.runningMinutes),
+      (ActivityType.cycling, s.cyclingMinutes),
+      (ActivityType.vehicle, s.vehicleMinutes),
+    ];
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          children: [
+            Icon(Icons.directions_walk, size: 18, color: theme.colorScheme.primary),
+            const SizedBox(width: 8),
+            Text(label, style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600)),
+          ],
+        ),
+        const SizedBox(height: 12),
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceAround,
+          children: items.map((e) {
+            final color = ActivitySummary.activityColor(e.$1);
+            return Column(
+              children: [
+                Container(
+                  width: 36, height: 36,
+                  decoration: BoxDecoration(
+                    color: color.withValues(alpha: e.$2 > 0 ? 0.15 : 0.05),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Icon(ActivitySummary.activityIcon(e.$1), size: 18,
+                      color: e.$2 > 0 ? color : color.withValues(alpha: 0.3)),
+                ),
+                const SizedBox(height: 4),
+                Text('${e.$2}분', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600,
+                    color: e.$2 > 0 ? theme.colorScheme.onSurface : theme.colorScheme.onSurfaceVariant)),
+              ],
+            );
+          }).toList(),
+        ),
+        if (s.timeline.isNotEmpty) ...[
+          const SizedBox(height: 10),
+          // Mini timeline
+          ClipRRect(
+            borderRadius: BorderRadius.circular(4),
+            child: SizedBox(
+              height: 8,
+              child: LayoutBuilder(
+                builder: (ctx, constraints) {
+                  final dayStart = DateTime.parse(s.date).millisecondsSinceEpoch;
+                  final totalMs = 24 * 3600 * 1000;
+                  return Stack(
+                    children: [
+                      Container(color: theme.colorScheme.surfaceContainerHighest),
+                      ...s.timeline.map((seg) {
+                        final left = (seg.startMs - dayStart) / totalMs;
+                        final width = (seg.endMs - seg.startMs) / totalMs;
+                        return Positioned(
+                          left: left * constraints.maxWidth,
+                          width: (width * constraints.maxWidth).clamp(2.0, constraints.maxWidth),
+                          top: 0, bottom: 0,
+                          child: Container(color: ActivitySummary.activityColor(seg.type)),
+                        );
+                      }),
+                    ],
+                  );
+                },
+              ),
+            ),
+          ),
+        ],
+      ],
+    );
+  }
+
+  // ─── Notion (워크스페이스) ───
+
+  void _openNotion(BuildContext context) {
+    Navigator.of(context).push(MaterialPageRoute(
+      builder: (_) => NotionScreen(
+        pageService: widget.notionPageService,
+        dbService: widget.notionDatabaseService,
+      ),
+    ));
+  }
+
+  Widget? _buildNotionSmall(BuildContext context, ThemeData theme, String label) {
+    final pageCount = widget.notionPageService.getAll().length;
+    final dbCount = widget.notionDatabaseService.getAll().length;
+    return InkWell(
+      borderRadius: BorderRadius.circular(12),
+      onTap: () => _openNotion(context),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        decoration: BoxDecoration(
+          color: theme.colorScheme.surfaceContainerLow,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Row(
+          children: [
+            Icon(Icons.article_outlined, color: theme.colorScheme.primary),
+            const SizedBox(width: 12),
+            Text(label, style: theme.textTheme.titleSmall),
+            const Spacer(),
+            Text('$pageCount페이지 · $dbCount DB',
+                style: TextStyle(fontSize: 12, color: Colors.grey.shade600)),
+            const SizedBox(width: 4),
+            Icon(Icons.chevron_right, size: 18, color: Colors.grey.shade400),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget? _buildNotionLarge(BuildContext context, ThemeData theme, String label) {
+    final recentPages = widget.notionPageService.getRecent(limit: 3);
+    final dbCount = widget.notionDatabaseService.getAll().length;
+    return InkWell(
+      borderRadius: BorderRadius.circular(16),
+      onTap: () => _openNotion(context),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: theme.colorScheme.surfaceContainerLow,
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.article_outlined, color: theme.colorScheme.primary),
+                const SizedBox(width: 8),
+                Text(label, style: theme.textTheme.titleSmall),
+                const Spacer(),
+                Text('$dbCount DB',
+                    style: TextStyle(fontSize: 11, color: Colors.grey.shade500)),
+                const SizedBox(width: 4),
+                Icon(Icons.chevron_right, size: 18, color: Colors.grey.shade400),
+              ],
+            ),
+            if (recentPages.isEmpty) ...[
+              const SizedBox(height: 12),
+              Center(
+                child: Text('페이지를 만들어보세요',
+                    style: TextStyle(color: Colors.grey.shade500, fontSize: 13)),
+              ),
+            ] else ...[
+              const SizedBox(height: 8),
+              ...recentPages.map((p) => Padding(
+                    padding: const EdgeInsets.symmetric(vertical: 3),
+                    child: Row(
+                      children: [
+                        Text(p.icon ?? '📝', style: const TextStyle(fontSize: 16)),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Text(
+                            p.title.isEmpty ? '제목 없음' : p.title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: const TextStyle(fontSize: 13),
+                          ),
+                        ),
+                        Text('${p.blocks.length}',
+                            style: TextStyle(
+                                fontSize: 11, color: Colors.grey.shade500)),
+                      ],
+                    ),
+                  )),
             ],
           ],
         ),
