@@ -153,14 +153,118 @@ class LunarCalendar {
   // ─── Korean holidays ────────────────────────────────
 
   /// Returns the Korean holiday name for a solar date, or null.
-  /// Checks both solar (양력) and lunar (음력) holidays.
+  /// Checks both solar (양력) and lunar (음력) holidays + 대체공휴일.
   static String? getHoliday(DateTime solar) {
     // Solar (양력) public holidays
     final solarHoliday = getSolarHoliday(solar.month, solar.day);
     if (solarHoliday != null) return solarHoliday;
 
     // Lunar (음력) holidays
-    return getLunarHoliday(solar);
+    final lunarHoliday = getLunarHoliday(solar);
+    if (lunarHoliday != null) return lunarHoliday;
+
+    // 대체공휴일 check
+    return _getSubstituteHoliday(solar);
+  }
+
+  /// 대체공휴일 계산
+  /// 2014~: 설날/추석/어린이날 (일요일 겹침 시)
+  /// 2021~: 삼일절, 광복절, 개천절, 한글날 추가
+  /// 2023~: 토요일도 대체공휴일 적용 (전체 공휴일)
+  static String? _getSubstituteHoliday(DateTime solar) {
+    final year = solar.year;
+
+    // 양력 공휴일: 토/일 → 다음 월요일
+    final solarSubstituteDates = [
+      DateTime(year, 1, 1),   // 신정
+      DateTime(year, 3, 1),   // 삼일절
+      DateTime(year, 5, 5),   // 어린이날
+      DateTime(year, 6, 6),   // 현충일
+      DateTime(year, 8, 15),  // 광복절
+      DateTime(year, 10, 3),  // 개천절
+      DateTime(year, 10, 9),  // 한글날
+      DateTime(year, 12, 25), // 크리스마스
+    ];
+
+    for (final h in solarSubstituteDates) {
+      DateTime? sub;
+      if (h.weekday == DateTime.sunday) {
+        sub = h.add(const Duration(days: 1));
+      } else if (h.weekday == DateTime.saturday && year >= 2023) {
+        sub = h.add(const Duration(days: 2));
+      }
+      if (sub != null &&
+          solar.year == sub.year && solar.month == sub.month && solar.day == sub.day) {
+        return '대체공휴일 (${getSolarHoliday(h.month, h.day)})';
+      }
+    }
+
+    // 설날/추석 대체공휴일: 연휴 3일 중 토/일 겹치면 연휴 다음 첫 평일
+    final lunarHolidayBases = <List<int>>[[1, 1], [8, 15]];
+    for (final lh in lunarHolidayBases) {
+      final baseDate = _lunarToSolar(year, lh[0], lh[1]);
+      if (baseDate == null) continue;
+
+      final days = [
+        baseDate.subtract(const Duration(days: 1)),
+        baseDate,
+        baseDate.add(const Duration(days: 1)),
+      ];
+
+      final weekendCount = days.where((d) =>
+          d.weekday == DateTime.saturday || d.weekday == DateTime.sunday).length;
+      if (weekendCount > 0) {
+        var sub = days.last.add(const Duration(days: 1));
+        // 주말+공휴일 피해서 다음 평일 찾기
+        int safetyCount = 0;
+        while ((sub.weekday == DateTime.saturday || sub.weekday == DateTime.sunday) &&
+               safetyCount < 7) {
+          sub = sub.add(const Duration(days: 1));
+          safetyCount++;
+        }
+        if (solar.year == sub.year && solar.month == sub.month && solar.day == sub.day) {
+          final name = lh[0] == 1 ? '설날' : '추석';
+          return '대체공휴일 ($name)';
+        }
+      }
+    }
+
+    // 석가탄신일 대체공휴일 (2024~)
+    final buddhaDay = _lunarToSolar(year, 4, 8);
+    if (buddhaDay != null && year >= 2024) {
+      DateTime? sub;
+      if (buddhaDay.weekday == DateTime.sunday) {
+        sub = buddhaDay.add(const Duration(days: 1));
+      } else if (buddhaDay.weekday == DateTime.saturday) {
+        sub = buddhaDay.add(const Duration(days: 2));
+      }
+      if (sub != null &&
+          solar.year == sub.year && solar.month == sub.month && solar.day == sub.day) {
+        return '대체공휴일 (석가탄신일)';
+      }
+    }
+
+    return null;
+  }
+
+  /// 음력 → 양력 변환 (특정 년도의 음력 날짜에 해당하는 양력 날짜 찾기)
+  static DateTime? _lunarToSolar(int solarYear, int lunarMonth, int lunarDay) {
+    // Search within the solar year for matching lunar date
+    // 설날: 보통 1~2월, 추석: 보통 9~10월
+    final searchStart = lunarMonth <= 6
+        ? DateTime(solarYear, 1, 1)
+        : DateTime(solarYear, 8, 1);
+    final searchEnd = lunarMonth <= 6
+        ? DateTime(solarYear, 3, 15)
+        : DateTime(solarYear, 11, 15);
+
+    for (var d = searchStart; d.isBefore(searchEnd); d = d.add(const Duration(days: 1))) {
+      final ld = solarToLunar(d);
+      if (ld != null && !ld.isLeapMonth && ld.month == lunarMonth && ld.day == lunarDay) {
+        return d;
+      }
+    }
+    return null;
   }
 
   /// Korean solar (양력) public holidays.
@@ -176,7 +280,7 @@ class LunarCalendar {
     return null;
   }
 
-  /// Korean lunar (음력) holidays.
+  /// Korean lunar (음력) public holidays (빨간날만).
   static String? getLunarHoliday(DateTime solar) {
     final ld = solarToLunar(solar);
     if (ld == null || ld.isLeapMonth) return null;
@@ -186,9 +290,7 @@ class LunarCalendar {
 
     if (m == 1 && d == 1) return '설날';
     if (m == 1 && d == 2) return '설날 연휴';
-    if (m == 1 && d == 15) return '정월대보름';
     if (m == 4 && d == 8) return '석가탄신일';
-    if (m == 5 && d == 5) return '단오';
     if (m == 8 && d == 14) return '추석 연휴';
     if (m == 8 && d == 15) return '추석';
     if (m == 8 && d == 16) return '추석 연휴';
@@ -200,6 +302,33 @@ class LunarCalendar {
       return '설날 연휴';
     }
 
+    return null;
+  }
+
+  /// 음력 기념일 (공휴일 아님, 캘린더 표시용).
+  static String? getLunarMemorialDay(DateTime solar) {
+    final ld = solarToLunar(solar);
+    if (ld == null || ld.isLeapMonth) return null;
+
+    if (ld.month == 1 && ld.day == 15) return '정월대보름';
+    if (ld.month == 5 && ld.day == 5) return '단오';
+    if (ld.month == 7 && ld.day == 7) return '칠석';
+    if (ld.month == 8 && ld.day == 1) return '어버이은혜의 날';
+    if (ld.month == 9 && ld.day == 9) return '중양절';
+    if (ld.month == 12 && ld.day == 30) return '섣달그믐';
+    return null;
+  }
+
+  /// 양력 기념일 (공휴일 아님, 캘린더 표시용).
+  static String? getSolarMemorialDay(int month, int day) {
+    if (month == 2 && day == 14) return '발렌타인데이';
+    if (month == 3 && day == 14) return '화이트데이';
+    if (month == 4 && day == 5) return '식목일';
+    if (month == 5 && day == 8) return '어버이날';
+    if (month == 5 && day == 15) return '스승의날';
+    if (month == 6 && day == 25) return '6.25 전쟁일';
+    if (month == 7 && day == 17) return '제헌절';
+    if (month == 11 && day == 11) return '빼빼로데이';
     return null;
   }
 

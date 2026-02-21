@@ -60,7 +60,7 @@ class NaverWebViewActivity : Activity() {
         setupUI()
         setupWebView()
 
-        handler.postDelayed(timeoutRunnable, 60_000)
+        handler.postDelayed(timeoutRunnable, 90_000)
 
         // Check if cookies exist (already logged in)
         val cookieManager = CookieManager.getInstance()
@@ -223,51 +223,92 @@ class NaverWebViewActivity : Activity() {
         if (extractionScheduled) return
         extractionScheduled = true
 
-        // Wait for React SPA to render (3 seconds)
+        statusText.text = "예약 내역 불러오는 중..."
+
+        // Wait for initial render, then start incremental scrolling
         handler.postDelayed({
-            extractPageText()
+            incrementalScroll(0)
         }, 3000)
     }
 
-    private fun extractPageText() {
+    /**
+     * Scroll incrementally like a real user to trigger lazy loading.
+     * Naver SPA may use IntersectionObserver or scroll event listeners
+     * that only fire on gradual scrolling, not instant scrollTo(0, max).
+     */
+    private fun incrementalScroll(step: Int) {
         if (hasResult || isFinishing) return
 
-        Log.d(TAG, "Extracting page text via JS")
-        webView.evaluateJavascript(
-            "(function() { return document.body.innerText; })()"
-        ) { rawValue ->
-            // JS returns a JSON-encoded string (with quotes and escapes)
-            val text = try {
-                // Remove surrounding quotes and unescape
-                if (rawValue != null && rawValue != "null") {
-                    org.json.JSONObject("{\"t\":$rawValue}").getString("t")
-                } else ""
+        // Scroll down by ~1 viewport height each step, also try scrollable containers
+        val js = """
+            (function() {
+                var vh = window.innerHeight || 800;
+
+                // 1. Try scrolling the window
+                window.scrollBy(0, vh);
+
+                // 2. Also find and scroll any overflow containers (React SPA pattern)
+                var containers = document.querySelectorAll('[class*="scroll"], [class*="list"], [class*="content"], [class*="timeline"], [style*="overflow"]');
+                for (var i = 0; i < containers.length; i++) {
+                    var c = containers[i];
+                    if (c.scrollHeight > c.clientHeight + 10) {
+                        c.scrollBy(0, vh);
+                    }
+                }
+
+                // 3. Dispatch scroll event (some frameworks listen for this)
+                window.dispatchEvent(new Event('scroll'));
+                document.dispatchEvent(new Event('scroll'));
+
+                var scrollY = window.pageYOffset || document.documentElement.scrollTop;
+                var maxScroll = document.body.scrollHeight - window.innerHeight;
+                var textLen = document.body.innerText.length;
+
+                return JSON.stringify({y: scrollY, max: maxScroll, len: textLen});
+            })()
+        """.trimIndent()
+
+        webView.evaluateJavascript(js) { rawResult ->
+            val json = try {
+                val str = if (rawResult != null && rawResult != "null") {
+                    org.json.JSONObject("{\"t\":$rawResult}").getString("t")
+                } else "{}"
+                org.json.JSONObject(str)
             } catch (e: Exception) {
-                rawValue?.trim('"') ?: ""
+                Log.w(TAG, "Scroll parse error: $rawResult")
+                org.json.JSONObject()
             }
 
-            Log.d(TAG, "Extracted text length: ${text.length}")
+            val scrollY = json.optInt("y", 0)
+            val maxScroll = json.optInt("max", 0)
+            val textLen = json.optInt("len", 0)
+            Log.d(TAG, "Scroll step #$step: y=$scrollY, max=$maxScroll, textLen=$textLen")
 
-            if (text.length > 50) {
-                hasResult = true
-                onResult?.invoke(text)
-                // Small delay to ensure callback is processed
-                handler.postDelayed({ safeFinish() }, 300)
-            } else {
-                // Text too short, might not be fully loaded. Retry once after 3 more seconds.
-                Log.w(TAG, "Text too short (${text.length}), retrying...")
-                extractionScheduled = false
+            statusText.text = "예약 내역 불러오는 중... (${step + 1})"
+
+            // Keep scrolling if not at bottom yet, or up to 20 steps
+            if (step < 20 && (scrollY < maxScroll - 100 || step < 3)) {
                 handler.postDelayed({
-                    extractionScheduled = true
-                    retryExtraction()
-                }, 3000)
+                    incrementalScroll(step + 1)
+                }, 800)
+            } else {
+                // Done scrolling, wait a moment for final lazy content, then extract
+                Log.d(TAG, "Scroll done at step $step, waiting for final render...")
+                statusText.text = "내용 추출 중..."
+                handler.postDelayed({
+                    extractFullPage()
+                }, 2000)
             }
         }
     }
 
-    private fun retryExtraction() {
+    /**
+     * Extract the entire page text (includes both upcoming and past reservations).
+     */
+    private fun extractFullPage() {
         if (hasResult || isFinishing) return
 
+        // Don't scroll back to top — just extract all text from wherever we are
         webView.evaluateJavascript(
             "(function() { return document.body.innerText; })()"
         ) { rawValue ->
@@ -278,6 +319,8 @@ class NaverWebViewActivity : Activity() {
             } catch (e: Exception) {
                 rawValue?.trim('"') ?: ""
             }
+
+            Log.d(TAG, "Extracted full page: ${text.length} chars")
 
             hasResult = true
             if (text.length > 20) {

@@ -346,6 +346,12 @@ class _SettingsScreenState extends State<SettingsScreen> {
               trailing: const Icon(Icons.sync),
               onTap: () => _syncNaverReservations(),
             ),
+            ListTile(
+              title: const Text('네이버 예약 데이터 초기화'),
+              subtitle: const Text('잘못 등록된 캘린더 이벤트 삭제'),
+              trailing: const Icon(Icons.delete_outline),
+              onTap: () => _clearNaverData(),
+            ),
           ],
           const Divider(),
 
@@ -380,16 +386,44 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   Future<void> _syncNaverReservations() async {
     try {
-      final result = await getIt<NaverReservationService>().syncReservations();
+      final result = await getIt<NaverReservationService>().syncReservationsDetailed();
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(content: Text(
-            result.added > 0
-                ? '${result.added}건 등록 완료 (${result.skipped}건 중복 건너뜀)'
-                : '새로 등록할 예약이 없습니다',
-          )),
+        showDialog(
+          context: context,
+          builder: (_) => AlertDialog(
+            title: const Text('동기화 결과'),
+            content: Column(
+              mainAxisSize: MainAxisSize.min,
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text('페이지 텍스트: ${result.pageTextLength}자'),
+                const SizedBox(height: 4),
+                Text('API 키: ${result.hasApiKey ? "있음" : "없음"}'),
+                const SizedBox(height: 4),
+                Text('파싱 방법: ${result.parseMethod}'),
+                const SizedBox(height: 4),
+                Text('발견된 예약: ${result.total}건'),
+                Text('새로 등록: ${result.added}건'),
+                Text('중복 건너뜀: ${result.skipped}건'),
+                if (result.debugText.isNotEmpty) ...[
+                  const SizedBox(height: 8),
+                  const Text('상세:', style: TextStyle(fontWeight: FontWeight.bold)),
+                  const SizedBox(height: 4),
+                  Container(
+                    constraints: const BoxConstraints(maxHeight: 200),
+                    child: SingleChildScrollView(
+                      child: Text(result.debugText, style: const TextStyle(fontSize: 12)),
+                    ),
+                  ),
+                ],
+              ],
+            ),
+            actions: [
+              TextButton(onPressed: () => Navigator.pop(context), child: const Text('확인')),
+            ],
+          ),
         );
-        setState(() {}); // Update last sync text
+        setState(() {});
       }
     } catch (e) {
       if (mounted) {
@@ -397,6 +431,29 @@ class _SettingsScreenState extends State<SettingsScreen> {
           SnackBar(content: Text('$e')),
         );
       }
+    }
+  }
+
+  Future<void> _clearNaverData() async {
+    final confirm = await showDialog<bool>(
+      context: context,
+      builder: (_) => AlertDialog(
+        title: const Text('네이버 예약 초기화'),
+        content: const Text('[네이버예약]으로 시작하는 모든 캘린더 이벤트를 삭제하고 동기화 기록을 초기화합니다.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('취소')),
+          TextButton(onPressed: () => Navigator.pop(context, true), child: const Text('삭제')),
+        ],
+      ),
+    );
+    if (confirm != true) return;
+
+    final removed = await getIt<NaverReservationService>().clearNaverData();
+    if (mounted) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(content: Text('$removed건의 네이버 예약 이벤트를 삭제했습니다')),
+      );
+      setState(() {});
     }
   }
 

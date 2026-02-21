@@ -419,6 +419,8 @@ class _CalendarScreenState extends State<CalendarScreen> {
     final holiday = LunarCalendar.getHoliday(day);
     final solarHoliday = LunarCalendar.getSolarHoliday(day.month, day.day);
     final lunarHoliday = LunarCalendar.getLunarHoliday(day);
+    final memorialDay = LunarCalendar.getLunarMemorialDay(day) ??
+        LunarCalendar.getSolarMemorialDay(day.month, day.day);
     final isWeekend = day.weekday == DateTime.saturday || day.weekday == DateTime.sunday;
     final isHoliday = holiday != null;
 
@@ -433,10 +435,12 @@ class _CalendarScreenState extends State<CalendarScreen> {
       textColor = Theme.of(context).textTheme.bodyMedium?.color ?? AppColors.black;
     }
 
-    // Subtitle text: holiday name > lunar month start > lunar day
+    // Subtitle text: holiday name > memorial day > lunar month start > lunar day
     String lunarText = '';
     if (holiday != null) {
       lunarText = holiday;
+    } else if (memorialDay != null) {
+      lunarText = memorialDay;
     } else if (lunar != null) {
       if (lunar.day == 1) {
         lunarText = '${lunar.month}월';
