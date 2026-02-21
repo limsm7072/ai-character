@@ -30,20 +30,16 @@ class GeminiService {
   String? _apiKey;
 
   // Model fallback chains (free tier quota per day)
-  // flash-lite 1000, flash 250, pro 100, 2.0-flash 1500, 1.5-flash 1500
+  // flash-lite 1000, flash 250, pro 100
   static const _chatModels = [
     'gemini-2.5-flash-lite',
     'gemini-2.5-flash',
     'gemini-2.5-pro',
-    'gemini-2.0-flash',
-    'gemini-1.5-flash',
   ];
   static const _agentModels = [
     'gemini-2.5-flash',
     'gemini-2.5-flash-lite',
     'gemini-2.5-pro',
-    'gemini-2.0-flash',
-    'gemini-1.5-flash',
   ];
 
   int _chatModelIndex = 0;

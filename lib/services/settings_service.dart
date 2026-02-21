@@ -86,7 +86,7 @@ class SettingsService {
 
   // Dashboard order
   static const _dashboardOrderKey = 'dashboard_order';
-  static const defaultDashboardOrder = ['briefing', 'recommend', 'growth', 'weekly', 'fortune', 'psychology', 'screentime', 'activity', 'news', 'weather', 'routine', 'todo', 'goal', 'diary', 'card', 'calendar', 'stats', 'alarm', 'timer', 'memo', 'dday', 'nature', 'bookmark', 'notion'];
+  static const defaultDashboardOrder = ['briefing', 'recommend', 'growth', 'weekly', 'fortune', 'psychology', 'screentime', 'activity', 'news', 'weather', 'routine', 'todo', 'goal', 'diary', 'card', 'calendar', 'stats', 'alarm', 'timer', 'memo', 'dday', 'nature', 'bookmark', 'notion', 'lottery'];
 
   List<String> get dashboardOrder {
     final raw = _prefs.getString(_dashboardOrderKey);
@@ -131,7 +131,7 @@ class SettingsService {
   // Dashboard section sizes (true=large, false=small)
   static const _dashboardSizesKey = 'dashboard_sizes';
   // All sections default to large
-  static const _defaultLargeSections = {'briefing', 'recommend', 'growth', 'weekly', 'fortune', 'psychology', 'screentime', 'activity', 'news', 'weather', 'routine', 'todo', 'goal', 'diary', 'card', 'calendar', 'stats', 'alarm', 'timer', 'memo', 'dday', 'nature', 'bookmark', 'notion'};
+  static const _defaultLargeSections = {'briefing', 'recommend', 'growth', 'weekly', 'fortune', 'psychology', 'screentime', 'activity', 'news', 'weather', 'routine', 'todo', 'goal', 'diary', 'card', 'calendar', 'stats', 'alarm', 'timer', 'memo', 'dday', 'nature', 'bookmark', 'notion', 'lottery'};
 
   bool isDashboardSectionLarge(String id) {
     final raw = _prefs.getString(_dashboardSizesKey);
