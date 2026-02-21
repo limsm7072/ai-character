@@ -222,7 +222,8 @@ class _GoalScreenState extends State<GoalScreen> {
             final theme = Theme.of(ctx);
             return Padding(
               padding: EdgeInsets.fromLTRB(20, 20, 20, MediaQuery.of(ctx).viewInsets.bottom + 20),
-              child: Column(
+              child: SingleChildScrollView(
+                child: Column(
                 mainAxisSize: MainAxisSize.min,
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
@@ -329,6 +330,7 @@ class _GoalScreenState extends State<GoalScreen> {
                     ),
                   ),
                 ],
+              ),
               ),
             );
           },

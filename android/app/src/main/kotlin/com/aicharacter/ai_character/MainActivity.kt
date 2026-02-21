@@ -831,7 +831,9 @@ class MainActivity : FlutterFragmentActivity() {
     private fun urlToPackage(url: String): String? {
         val host = Uri.parse(url).host?.lowercase() ?: return null
         return when {
-            // Korean apps
+            // Korean apps (specific subdomains first!)
+            host.contains("webtoon") || host.contains("comic.naver") -> "com.nhn.android.webtoon"
+            host.contains("band.us") || host.contains("band.naver") -> "com.nhn.android.band"
             host.contains("naver.com") || host.contains("naver") -> "com.nhn.android.search"
             host.contains("kakaotalk") || host.contains("kakao.com") || host.contains("kakaocorp.com") -> "com.kakao.talk"
             host.contains("daum.net") -> "net.daum.android.daum"
@@ -840,8 +842,6 @@ class MainActivity : FlutterFragmentActivity() {
             host.contains("toss") && !host.contains("github") -> "viva.republica.toss"
             host.contains("danggeun") || host.contains("karrotmarket") || host.contains("daangn") -> "com.towneers.www"
             host.contains("zigbang.com") -> "com.chbreeze.jikbang4a"
-            host.contains("band.us") -> "com.nhn.android.band"
-            host.contains("webtoon") || host.contains("comic.naver") -> "com.nhn.android.webtoon"
             host.contains("melon.com") -> "com.iloen.melon"
             host.contains("bugs.co.kr") -> "com.neowiz.android.bugs"
             host.contains("genie.co.kr") -> "com.ktmusic.geniemusic"

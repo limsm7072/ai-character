@@ -67,7 +67,8 @@ class _BookmarkScreenState extends State<BookmarkScreen> {
   String _faviconApiUrl(String url) {
     try {
       final host = Uri.parse(url).host;
-      return 'https://www.google.com/s2/favicons?domain=$host&sz=64';
+      // Try higher quality icon services
+      return 'https://icons.duckduckgo.com/ip3/$host.ico';
     } catch (_) {
       return '';
     }

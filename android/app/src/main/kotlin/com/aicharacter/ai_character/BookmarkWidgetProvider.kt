@@ -108,6 +108,9 @@ class BookmarkWidgetProvider : AppWidgetProvider() {
 
     private fun urlToPackage(host: String): String? {
         return when {
+            // Specific subdomains first!
+            host.contains("webtoon") || host.contains("comic.naver") -> "com.nhn.android.webtoon"
+            host.contains("band.us") || host.contains("band.naver") -> "com.nhn.android.band"
             host.contains("naver.com") || host.contains("naver") -> "com.nhn.android.search"
             host.contains("kakaotalk") || host.contains("kakao.com") || host.contains("kakaocorp.com") -> "com.kakao.talk"
             host.contains("daum.net") -> "net.daum.android.daum"
