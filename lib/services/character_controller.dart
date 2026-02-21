@@ -8,6 +8,8 @@ import 'tts_service.dart';
 import 'overlay_service.dart';
 import 'settings_service.dart';
 import 'routine_completion_service.dart';
+import 'growth_service.dart';
+import '../service_locator.dart';
 
 /// Orchestrates the character's behavior:
 /// receives events, generates AI responses, controls animations and speech.
@@ -217,14 +219,21 @@ class CharacterController {
         } else if (voiceText != null && _isAffirmative(voiceText)) {
           await _completionService.toggleCompletion(routineId, date);
 
+          // XP 보상
+          final growth = getIt<GrowthService>();
+          await growth.onRoutineCompleted(routineId);
+          final xpMsg = growth.didLevelUp
+              ? '완료! 레벨 ${growth.currentData.level} 달성!'
+              : '완료 체크했어! 수고했어~';
+
           _updateState(CharacterState(
-            emotion: 'happy',
-            gesture: 'thumbs_up',
-            text: '완료 체크했어! 수고했어~',
+            emotion: growth.didLevelUp ? 'proud' : 'happy',
+            gesture: growth.didLevelUp ? 'clapping' : 'thumbs_up',
+            text: xpMsg,
             characterId: _characterId,
           ));
           await _overlay.sendToOverlay(jsonEncode(_currentState.toJson()));
-          await _speak('완료 체크했어! 수고했어~');
+          await _speak(xpMsg);
           await Future.delayed(const Duration(seconds: 2));
         }
 

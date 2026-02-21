@@ -23,6 +23,7 @@ import '../services/diary_service.dart';
 import '../services/auto_page_service.dart';
 import '../service_locator.dart';
 import '../widgets/spine_character_widget.dart';
+import '../services/growth_service.dart';
 import '../theme/app_colors.dart';
 import 'dress_up_screen.dart';
 
@@ -281,7 +282,15 @@ class _CharacterChatScreenState extends State<CharacterChatScreen> {
 
     return Scaffold(
       appBar: AppBar(
-        title: Text('$_charName와 대화'),
+        title: Column(
+          children: [
+            Text('$_charName와 대화'),
+            Builder(builder: (_) {
+              final g = getIt<GrowthService>().currentData;
+              return Text('Lv.${g.level} ${g.title}', style: TextStyle(fontSize: 11, color: AppColors.accent, fontWeight: FontWeight.w600));
+            }),
+          ],
+        ),
         centerTitle: true,
         actions: [
           if (_messages.isNotEmpty)
@@ -321,6 +330,7 @@ class _CharacterChatScreenState extends State<CharacterChatScreen> {
                   customColors: customColors.isNotEmpty ? customColors : null,
                   showBubble: false,
                   interactive: true,
+                  growthData: getIt<GrowthService>().currentData,
                 );
               }),
             ),

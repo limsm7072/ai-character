@@ -20,7 +20,16 @@ import '../services/goal_service.dart';
 import '../services/psychology_service.dart';
 import '../services/screen_time_service.dart';
 import '../services/activity_service.dart';
+import '../services/growth_service.dart';
+import '../services/briefing_service.dart';
+import '../services/suggestion_service.dart';
+import '../services/weekly_report_service.dart';
 import '../models/fortune_data.dart';
+import '../models/growth_data.dart';
+import '../models/briefing_data.dart';
+import '../models/routine_suggestion.dart';
+import '../models/weekly_report_data.dart';
+import 'weekly_report_screen.dart';
 import '../models/goal.dart';
 import '../models/psychology_tip.dart';
 import '../models/screen_time_data.dart';
@@ -73,6 +82,7 @@ class DashboardScreenState extends State<DashboardScreen> {
   PsychologyTip? _psychology;
   ScreenTimeData? _screenTime;
   ActivitySummary? _activity;
+  BriefingData? _briefing;
   bool _editMode = false;
 
   @override
@@ -85,7 +95,9 @@ class DashboardScreenState extends State<DashboardScreen> {
     _psychology = getIt<PsychologyService>().getCached() ?? getIt<PsychologyService>().generateTodayTip();
     _screenTime = getIt<ScreenTimeService>().getCached();
     _activity = getIt<ActivityService>().getCached();
+    _briefing = getIt<BriefingService>().cachedBriefing;
     _loadNews();
+    _loadBriefing();
     _loadScreenTime();
     _loadActivity();
     _loadWeather();
@@ -120,6 +132,13 @@ class DashboardScreenState extends State<DashboardScreen> {
       await getIt<SettingsService>().setWeatherLocationName(data.locationName);
     }
     if (mounted && data != null) setState(() => _weather = data);
+  }
+
+  Future<void> _loadBriefing() async {
+    try {
+      final data = await getIt<BriefingService>().generateBriefing();
+      if (mounted) setState(() => _briefing = data);
+    } catch (_) {}
   }
 
   Future<void> _loadRecommendation() async {
@@ -165,8 +184,14 @@ class DashboardScreenState extends State<DashboardScreen> {
     final baseId = SettingsService.sectionBaseId(id);
     final label = _sectionLabel(id);
     switch (baseId) {
+      case 'briefing':
+        return large ? _buildBriefingLarge(context, theme, label) : _buildBriefingSmall(context, theme, label);
       case 'recommend':
         return large ? _buildRecommendLarge(theme, label) : _buildRecommendSmall(theme, label);
+      case 'growth':
+        return large ? _buildGrowthLarge(context, theme, label) : _buildGrowthSmall(context, theme, label);
+      case 'weekly':
+        return large ? _buildWeeklyLarge(context, theme, label) : _buildWeeklySmall(context, theme, label);
       case 'news':
         return large ? _buildNewsLarge(theme, label) : _buildNewsSmall(theme, label);
       case 'weather':
@@ -217,6 +242,201 @@ class DashboardScreenState extends State<DashboardScreen> {
       default:
         return null;
     }
+  }
+
+  // ─── 모닝 브리핑 ──────────────────────────────────────
+
+  Widget _buildBriefingLarge(BuildContext context, ThemeData theme, String label) {
+    if (_briefing == null) {
+      return InkWell(
+        borderRadius: BorderRadius.circular(16),
+        onTap: _loadBriefing,
+        child: Container(
+          padding: const EdgeInsets.all(16),
+          decoration: BoxDecoration(
+            color: theme.colorScheme.surfaceContainerLow,
+            borderRadius: BorderRadius.circular(16),
+          ),
+          child: Column(
+            children: [
+              Icon(Icons.wb_twilight, size: 32, color: theme.colorScheme.primary),
+              const SizedBox(height: 8),
+              Text(label, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+              const SizedBox(height: 4),
+              Text('탭하여 브리핑 생성', style: TextStyle(fontSize: 12, color: theme.colorScheme.onSurfaceVariant)),
+            ],
+          ),
+        ),
+      );
+    }
+
+    final b = _briefing!;
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        gradient: LinearGradient(
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+          colors: [
+            theme.colorScheme.primaryContainer.withValues(alpha: 0.3),
+            theme.colorScheme.surfaceContainerLow,
+          ],
+        ),
+        borderRadius: BorderRadius.circular(16),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // 헤더
+          Row(
+            children: [
+              Icon(Icons.wb_twilight, size: 18, color: theme.colorScheme.primary),
+              const SizedBox(width: 8),
+              Text(label, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
+            ],
+          ),
+          const SizedBox(height: 12),
+
+          // 인사말
+          Text(b.greeting, style: TextStyle(fontSize: 16, fontWeight: FontWeight.w700, height: 1.4, color: theme.colorScheme.onSurface)),
+          const SizedBox(height: 14),
+
+          // 정보 카드들
+          Wrap(
+            spacing: 8,
+            runSpacing: 8,
+            children: [
+              if (b.weather != null)
+                _briefingChip(theme, Icons.thermostat, '${b.weather!.temperature.round()}° ${b.weather!.description}'),
+              if (b.todayEvents.isNotEmpty)
+                _briefingChip(theme, Icons.calendar_today, '일정 ${b.todayEvents.length}개'),
+              if (b.pendingTodoCount > 0)
+                _briefingChip(theme, Icons.checklist, '할 일 ${b.pendingTodoCount}개'),
+              _briefingChip(theme, Icons.check_circle_outline, '루틴 ${b.completedRoutineCount}/${b.todayRoutineCount}'),
+            ],
+          ),
+
+          // 일정 목록
+          if (b.todayEvents.isNotEmpty) ...[
+            const SizedBox(height: 12),
+            ...b.todayEvents.map((e) => Padding(
+              padding: const EdgeInsets.only(bottom: 4),
+              child: Row(
+                children: [
+                  Container(width: 4, height: 4, decoration: BoxDecoration(color: theme.colorScheme.primary, shape: BoxShape.circle)),
+                  const SizedBox(width: 8),
+                  if (e.time != null) ...[
+                    Text(e.time!, style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: theme.colorScheme.primary)),
+                    const SizedBox(width: 6),
+                  ],
+                  Expanded(child: Text(e.title, style: const TextStyle(fontSize: 13), overflow: TextOverflow.ellipsis)),
+                ],
+              ),
+            )),
+          ],
+
+          // 루나 코멘트
+          if (b.lunaComment != null) ...[
+            const SizedBox(height: 12),
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(12),
+              decoration: BoxDecoration(
+                color: theme.colorScheme.surface,
+                borderRadius: BorderRadius.circular(10),
+              ),
+              child: Row(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Icon(Icons.chat_bubble_outline, size: 14, color: theme.colorScheme.primary),
+                  const SizedBox(width: 8),
+                  Expanded(child: Text(b.lunaComment!, style: TextStyle(fontSize: 12, height: 1.5, color: theme.colorScheme.onSurface))),
+                ],
+              ),
+            ),
+          ],
+
+          // 루나의 제안 (스마트 루틴 제안)
+          ..._buildBriefingSuggestions(theme),
+        ],
+      ),
+    );
+  }
+
+  List<Widget> _buildBriefingSuggestions(ThemeData theme) {
+    final suggestions = getIt<SuggestionService>().generateSuggestions();
+    if (suggestions.isEmpty) return [];
+    final top = suggestions.take(2).toList();
+    return [
+      const SizedBox(height: 12),
+      Text('루나의 제안', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: theme.colorScheme.onSurfaceVariant)),
+      const SizedBox(height: 6),
+      ...top.map((s) => Padding(
+        padding: const EdgeInsets.only(bottom: 4),
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(s.icon, style: const TextStyle(fontSize: 12)),
+            const SizedBox(width: 6),
+            Expanded(child: Text(s.title, style: const TextStyle(fontSize: 12), maxLines: 2, overflow: TextOverflow.ellipsis)),
+          ],
+        ),
+      )),
+    ];
+  }
+
+  Widget _briefingChip(ThemeData theme, IconData icon, String text) {
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+      decoration: BoxDecoration(
+        color: theme.colorScheme.surface,
+        borderRadius: BorderRadius.circular(8),
+      ),
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 14, color: theme.colorScheme.onSurfaceVariant),
+          const SizedBox(width: 4),
+          Text(text, style: TextStyle(fontSize: 12, color: theme.colorScheme.onSurface)),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildBriefingSmall(BuildContext context, ThemeData theme, String label) {
+    final b = _briefing;
+    return InkWell(
+      borderRadius: BorderRadius.circular(12),
+      onTap: b == null ? _loadBriefing : null,
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: theme.colorScheme.surfaceContainerLow,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.wb_twilight, size: 14, color: theme.colorScheme.primary),
+                const SizedBox(width: 6),
+                Expanded(child: Text(label, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600), overflow: TextOverflow.ellipsis)),
+              ],
+            ),
+            const SizedBox(height: 8),
+            if (b != null) ...[
+              Text(b.greeting, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600), maxLines: 1, overflow: TextOverflow.ellipsis),
+              const SizedBox(height: 4),
+              if (b.weather != null)
+                Text('${b.weather!.temperature.round()}° ${b.weather!.description}',
+                    style: TextStyle(fontSize: 12, color: theme.colorScheme.onSurfaceVariant)),
+            ] else
+              Text('탭하여 생성', style: TextStyle(fontSize: 12, color: theme.colorScheme.onSurfaceVariant)),
+          ],
+        ),
+      ),
+    );
   }
 
   // ─── 맞춤 정보 ──────────────────────────────────────
@@ -1503,7 +1723,7 @@ class DashboardScreenState extends State<DashboardScreen> {
   // ─── Layout helpers ───────────────────────────────
 
   static const _defaultLabels = {
-    'recommend': '맞춤 정보', 'news': '뉴스', 'weather': '날씨', 'routine': '루틴', 'todo': '할 일',
+    'briefing': '모닝 브리핑', 'recommend': '맞춤 정보', 'growth': '루나 성장', 'weekly': '주간 리포트', 'news': '뉴스', 'weather': '날씨', 'routine': '루틴', 'todo': '할 일',
     'diary': '일기장', 'card': '명함', 'calendar': '캘린더', 'stats': '통계', 'alarm': '알람',
     'timer': '타이머', 'memo': '메모', 'dday': 'D-Day', 'nature': '자연소리', 'bookmark': '바로가기', 'fortune': '오늘의 운세', 'goal': '목표',
     'psychology': '오늘의 인사이트', 'screentime': '스크린타임', 'activity': '활동', 'notion': '워크스페이스',
@@ -1516,7 +1736,7 @@ class DashboardScreenState extends State<DashboardScreen> {
 
   IconData _sectionIcon(String id) {
     const icons = {
-      'recommend': Icons.auto_awesome_outlined, 'news': Icons.newspaper_outlined, 'weather': Icons.wb_sunny_outlined,
+      'briefing': Icons.wb_twilight, 'recommend': Icons.auto_awesome_outlined, 'growth': Icons.emoji_events, 'weekly': Icons.assessment, 'news': Icons.newspaper_outlined, 'weather': Icons.wb_sunny_outlined,
       'routine': Icons.check_circle_outline, 'todo': Icons.checklist,
       'card': Icons.badge_outlined, 'calendar': Icons.calendar_month_outlined,
       'stats': Icons.bar_chart_rounded, 'alarm': Icons.alarm_rounded,
@@ -1682,6 +1902,339 @@ class DashboardScreenState extends State<DashboardScreen> {
         ),
       ],
     );
+  }
+
+  // ─── 루나 성장 ──────────────────────────────────────
+
+  Widget _buildGrowthLarge(BuildContext context, ThemeData theme, String label) {
+    final data = getIt<GrowthService>().currentData;
+    final accentColor = AppColors.accent;
+    return InkWell(
+      borderRadius: BorderRadius.circular(16),
+      onTap: () {},
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: theme.colorScheme.surfaceContainerLow,
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // 헤더
+            Row(
+              children: [
+                Icon(Icons.emoji_events, size: 18, color: accentColor),
+                const SizedBox(width: 8),
+                Text(label, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
+                const Spacer(),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: accentColor.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Text('Lv.${data.level}', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: accentColor)),
+                ),
+              ],
+            ),
+            const SizedBox(height: 14),
+
+            // 칭호 + 레벨
+            Row(
+              children: [
+                Container(
+                  width: 44, height: 44,
+                  decoration: BoxDecoration(
+                    gradient: LinearGradient(
+                      begin: Alignment.topLeft,
+                      end: Alignment.bottomRight,
+                      colors: [accentColor.withValues(alpha: 0.2), accentColor.withValues(alpha: 0.05)],
+                    ),
+                    borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: accentColor.withValues(alpha: 0.3)),
+                  ),
+                  child: Center(child: Text('${data.level}', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: accentColor))),
+                ),
+                const SizedBox(width: 12),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(data.title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
+                    const SizedBox(height: 2),
+                    Text('${data.totalXp} XP', style: TextStyle(fontSize: 12, color: theme.colorScheme.onSurfaceVariant)),
+                  ],
+                ),
+              ],
+            ),
+            const SizedBox(height: 14),
+
+            // XP 프로그레스 바
+            Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Text('다음 레벨까지', style: TextStyle(fontSize: 11, color: theme.colorScheme.onSurfaceVariant)),
+                    Text('${data.xpToNextLevel} XP', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: accentColor)),
+                  ],
+                ),
+                const SizedBox(height: 6),
+                ClipRRect(
+                  borderRadius: BorderRadius.circular(4),
+                  child: LinearProgressIndicator(
+                    value: data.levelProgress,
+                    minHeight: 6,
+                    backgroundColor: theme.colorScheme.outline.withValues(alpha: 0.15),
+                    valueColor: AlwaysStoppedAnimation<Color>(accentColor),
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+
+            // 오늘 XP + 연속 달성
+            Row(
+              children: [
+                _growthStat(theme, Icons.bolt, '오늘', '+${data.todayXp} XP'),
+                const SizedBox(width: 16),
+                _growthStat(theme, Icons.local_fire_department, '연속', '${data.streak}일'),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _growthStat(ThemeData theme, IconData icon, String label, String value) {
+    return Row(
+      mainAxisSize: MainAxisSize.min,
+      children: [
+        Icon(icon, size: 14, color: theme.colorScheme.onSurfaceVariant),
+        const SizedBox(width: 4),
+        Text('$label ', style: TextStyle(fontSize: 11, color: theme.colorScheme.onSurfaceVariant)),
+        Text(value, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600)),
+      ],
+    );
+  }
+
+  Widget _buildGrowthSmall(BuildContext context, ThemeData theme, String label) {
+    final data = getIt<GrowthService>().currentData;
+    final accentColor = AppColors.accent;
+    return InkWell(
+      borderRadius: BorderRadius.circular(12),
+      onTap: () {},
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: theme.colorScheme.surfaceContainerLow,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.emoji_events, size: 14, color: accentColor),
+                const SizedBox(width: 6),
+                Expanded(child: Text(label, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600), overflow: TextOverflow.ellipsis)),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Text('Lv.${data.level} ${data.title}', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w700, color: accentColor)),
+            const SizedBox(height: 6),
+            ClipRRect(
+              borderRadius: BorderRadius.circular(3),
+              child: LinearProgressIndicator(
+                value: data.levelProgress,
+                minHeight: 4,
+                backgroundColor: theme.colorScheme.outline.withValues(alpha: 0.15),
+                valueColor: AlwaysStoppedAnimation<Color>(accentColor),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ─── 주간 리포트 ──────────────────────────────────────
+
+  WeeklyReportData? _weeklyReport;
+  bool _weeklyLoading = false;
+
+  void _loadWeeklyReport() async {
+    if (_weeklyLoading) return;
+    _weeklyLoading = true;
+    try {
+      final report = await getIt<WeeklyReportService>().generateReport();
+      if (mounted) setState(() { _weeklyReport = report; _weeklyLoading = false; });
+    } catch (_) {
+      _weeklyLoading = false;
+    }
+  }
+
+  Widget _buildWeeklyLarge(BuildContext context, ThemeData theme, String label) {
+    if (_weeklyReport == null && !_weeklyLoading) {
+      _loadWeeklyReport();
+    }
+
+    return InkWell(
+      borderRadius: BorderRadius.circular(16),
+      onTap: () => Navigator.of(context).push(
+        MaterialPageRoute(builder: (_) => WeeklyReportScreen(title: label)),
+      ),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: theme.colorScheme.surfaceContainerLow,
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: _weeklyReport == null
+            ? Column(
+                children: [
+                  Icon(Icons.assessment, size: 32, color: theme.colorScheme.primary),
+                  const SizedBox(height: 8),
+                  Text(label, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600)),
+                  const SizedBox(height: 4),
+                  if (_weeklyLoading)
+                    const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                  else
+                    Text('탭하여 확인', style: TextStyle(fontSize: 12, color: theme.colorScheme.onSurfaceVariant)),
+                ],
+              )
+            : Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    children: [
+                      Icon(Icons.assessment, size: 18, color: theme.colorScheme.primary),
+                      const SizedBox(width: 8),
+                      Text(label, style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
+                      const Spacer(),
+                      Text(_weeklyReport!.weekLabel,
+                          style: TextStyle(fontSize: 12, color: theme.colorScheme.onSurfaceVariant)),
+                    ],
+                  ),
+                  const SizedBox(height: 14),
+
+                  // 완료율
+                  Row(
+                    children: [
+                      Text('${(_weeklyReport!.overallCompletionRate * 100).round()}%',
+                          style: TextStyle(fontSize: 28, fontWeight: FontWeight.w800, color: _weeklyScoreColor(_weeklyReport!.overallCompletionRate))),
+                      const SizedBox(width: 12),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text('종합 완료율', style: TextStyle(fontSize: 12, color: theme.colorScheme.onSurfaceVariant)),
+                            const SizedBox(height: 4),
+                            // 미니 요일 바 차트
+                            _buildMiniDayBars(theme),
+                          ],
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 10),
+
+                  Row(
+                    children: [
+                      Icon(Icons.chevron_right, size: 14, color: theme.colorScheme.primary),
+                      Text('자세히 보기', style: TextStyle(fontSize: 12, color: theme.colorScheme.primary)),
+                    ],
+                  ),
+                ],
+              ),
+      ),
+    );
+  }
+
+  Widget _buildMiniDayBars(ThemeData theme) {
+    const keys = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
+    const days = ['월', '화', '수', '목', '금', '토', '일'];
+    return Row(
+      children: List.generate(7, (i) {
+        final rate = _weeklyReport?.dailyRates[keys[i]] ?? 0;
+        return Expanded(
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 1),
+            child: Column(
+              children: [
+                Container(
+                  height: 20,
+                  decoration: BoxDecoration(
+                    color: theme.colorScheme.outline.withValues(alpha: 0.1),
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                  child: FractionallySizedBox(
+                    alignment: Alignment.bottomCenter,
+                    heightFactor: rate > 0 ? rate : 0.05,
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: _weeklyScoreColor(rate),
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                  ),
+                ),
+                Text(days[i], style: TextStyle(fontSize: 8, color: theme.colorScheme.onSurfaceVariant)),
+              ],
+            ),
+          ),
+        );
+      }),
+    );
+  }
+
+  Widget _buildWeeklySmall(BuildContext context, ThemeData theme, String label) {
+    if (_weeklyReport == null && !_weeklyLoading) {
+      _loadWeeklyReport();
+    }
+
+    return InkWell(
+      borderRadius: BorderRadius.circular(12),
+      onTap: () => Navigator.of(context).push(
+        MaterialPageRoute(builder: (_) => WeeklyReportScreen(title: label)),
+      ),
+      child: Container(
+        padding: const EdgeInsets.all(12),
+        decoration: BoxDecoration(
+          color: theme.colorScheme.surfaceContainerLow,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.assessment, size: 14, color: theme.colorScheme.primary),
+                const SizedBox(width: 6),
+                Expanded(child: Text(label, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w600), overflow: TextOverflow.ellipsis)),
+              ],
+            ),
+            const SizedBox(height: 8),
+            if (_weeklyReport != null)
+              Text('${(_weeklyReport!.overallCompletionRate * 100).round()}%',
+                  style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: _weeklyScoreColor(_weeklyReport!.overallCompletionRate)))
+            else if (_weeklyLoading)
+              const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+            else
+              Text('로딩 중...', style: TextStyle(fontSize: 12, color: theme.colorScheme.onSurfaceVariant)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Color _weeklyScoreColor(double rate) {
+    if (rate >= 0.8) return const Color(0xFF4CAF50);
+    if (rate >= 0.6) return const Color(0xFF26A69A);
+    if (rate >= 0.4) return const Color(0xFFFF9800);
+    return const Color(0xFFE53935);
   }
 
   // ─── 목표 섹션 ───

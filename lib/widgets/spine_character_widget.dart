@@ -4,6 +4,7 @@ import 'package:flutter/material.dart';
 import 'package:spine_flutter/spine_flutter.dart';
 import '../models/character_config.dart';
 import '../models/character_state.dart';
+import '../models/growth_data.dart';
 import '../theme/app_colors.dart';
 
 /// Spine 2D character widget driven by CharacterConfig.
@@ -16,6 +17,7 @@ class SpineCharacterWidget extends StatefulWidget {
   final Map<String, int>? customColors;
   final bool interactive;
   final String? previewAnimation;
+  final GrowthData? growthData;
 
   const SpineCharacterWidget({
     super.key,
@@ -27,6 +29,7 @@ class SpineCharacterWidget extends StatefulWidget {
     this.customColors,
     this.interactive = false,
     this.previewAnimation,
+    this.growthData,
   });
 
   @override
@@ -531,6 +534,41 @@ class _SpineCharacterWidgetState extends State<SpineCharacterWidget> {
                     color: AppColors.black87,
                   ),
                 ),
+              ),
+            ),
+          ),
+
+        // 레벨 뱃지 (우하단)
+        if (widget.growthData != null)
+          Positioned(
+            right: 12,
+            bottom: 12,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+              decoration: BoxDecoration(
+                color: AppColors.white.withValues(alpha: 0.95),
+                borderRadius: BorderRadius.circular(12),
+                border: Border.all(
+                  color: AppColors.accent.withValues(alpha: widget.growthData!.level >= 5 ? 0.8 : 0.4),
+                  width: widget.growthData!.level >= 5 ? 2 : 1,
+                ),
+                boxShadow: [
+                  if (widget.growthData!.level >= 5)
+                    BoxShadow(
+                      color: AppColors.accent.withValues(alpha: 0.3),
+                      blurRadius: 8,
+                      spreadRadius: 1,
+                    ),
+                ],
+              ),
+              child: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  Icon(Icons.emoji_events, size: 12, color: AppColors.accent),
+                  const SizedBox(width: 3),
+                  Text('Lv.${widget.growthData!.level}',
+                    style: TextStyle(fontSize: 10, fontWeight: FontWeight.w700, color: AppColors.accent)),
+                ],
               ),
             ),
           ),

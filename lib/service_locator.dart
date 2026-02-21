@@ -27,6 +27,10 @@ import 'services/goal_service.dart';
 import 'services/psychology_service.dart';
 import 'services/screen_time_service.dart';
 import 'services/activity_service.dart';
+import 'services/growth_service.dart';
+import 'services/briefing_service.dart';
+import 'services/suggestion_service.dart';
+import 'services/weekly_report_service.dart';
 import 'services/notion_page_service.dart';
 import 'services/notion_database_service.dart';
 import 'services/auto_page_service.dart';
@@ -60,6 +64,7 @@ Future<void> setupServiceLocator() async {
   getIt.registerSingleton<PsychologyService>(PsychologyService(prefs));
   getIt.registerSingleton<ScreenTimeService>(ScreenTimeService(prefs));
   getIt.registerSingleton<ActivityService>(ActivityService(prefs));
+  getIt.registerSingleton<GrowthService>(GrowthService(prefs));
   getIt.registerSingleton<NotionPageService>(NotionPageService(prefs));
   getIt.registerSingleton<NotionDatabaseService>(NotionDatabaseService(prefs));
 
@@ -113,6 +118,35 @@ Future<void> setupServiceLocator() async {
     geminiService: getIt<GeminiService>(),
     settingsService: getIt<SettingsService>(),
     prefs: prefs,
+  ));
+
+  getIt.registerSingleton<SuggestionService>(SuggestionService(
+    prefs: prefs,
+    routine: getIt<RoutineService>(),
+    completion: getIt<RoutineCompletionService>(),
+    distraction: getIt<DistractionLogService>(),
+    growth: getIt<GrowthService>(),
+  ));
+
+  getIt.registerSingleton<WeeklyReportService>(WeeklyReportService(
+    prefs: prefs,
+    routine: getIt<RoutineService>(),
+    completion: getIt<RoutineCompletionService>(),
+    distraction: getIt<DistractionLogService>(),
+    growth: getIt<GrowthService>(),
+    gemini: getIt<GeminiService>(),
+  ));
+
+  getIt.registerSingleton<BriefingService>(BriefingService(
+    prefs: prefs,
+    weather: getIt<WeatherService>(),
+    calendar: getIt<CalendarService>(),
+    todo: getIt<TodoService>(),
+    routine: getIt<RoutineService>(),
+    completion: getIt<RoutineCompletionService>(),
+    growth: getIt<GrowthService>(),
+    settings: getIt<SettingsService>(),
+    gemini: getIt<GeminiService>(),
   ));
 
   getIt.registerSingleton<RecommendationService>(RecommendationService(
