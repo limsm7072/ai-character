@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import '../service_locator.dart';
 import '../services/notion_page_service.dart';
 import '../services/notion_database_service.dart';
 import '../services/auto_page_service.dart';
@@ -8,15 +9,8 @@ import 'notion_database_list_screen.dart';
 import 'notion_page_edit_screen.dart';
 
 class NotionScreen extends StatefulWidget {
-  final NotionPageService pageService;
-  final NotionDatabaseService dbService;
-  final AutoPageService? autoPageService;
-
   const NotionScreen({
     super.key,
-    required this.pageService,
-    required this.dbService,
-    this.autoPageService,
   });
 
   @override
@@ -25,6 +19,10 @@ class NotionScreen extends StatefulWidget {
 
 class _NotionScreenState extends State<NotionScreen>
     with SingleTickerProviderStateMixin {
+  NotionPageService get _pageService => getIt<NotionPageService>();
+  NotionDatabaseService get _dbService => getIt<NotionDatabaseService>();
+  AutoPageService get _autoPageService => getIt<AutoPageService>();
+
   late TabController _tabCtrl;
   final _pageListKey = GlobalKey<NotionPageListScreenState>();
   final _dbListKey = GlobalKey<NotionDatabaseListScreenState>();
@@ -64,7 +62,7 @@ class _NotionScreenState extends State<NotionScreen>
               subtitle: const Text('오늘 하루를 요약합니다'),
               onTap: () {
                 Navigator.pop(ctx);
-                _autoGenerate(() => widget.autoPageService!.generateDailySummary(todayStr));
+                _autoGenerate(() => _autoPageService.generateDailySummary(todayStr));
               },
             ),
             ListTile(
@@ -73,7 +71,7 @@ class _NotionScreenState extends State<NotionScreen>
               subtitle: const Text('내일의 일정과 할일을 정리합니다'),
               onTap: () {
                 Navigator.pop(ctx);
-                _autoGenerate(() => widget.autoPageService!.generatePlanningPage(tomorrowStr));
+                _autoGenerate(() => _autoPageService.generatePlanningPage(tomorrowStr));
               },
             ),
             ListTile(
@@ -82,7 +80,7 @@ class _NotionScreenState extends State<NotionScreen>
               subtitle: const Text('이번 주를 돌아봅니다'),
               onTap: () {
                 Navigator.pop(ctx);
-                _autoGenerate(() => widget.autoPageService!.generateWeeklyReview());
+                _autoGenerate(() => _autoPageService.generateWeeklyReview());
               },
             ),
           ],
@@ -106,13 +104,12 @@ class _NotionScreenState extends State<NotionScreen>
       _pageListKey.currentState?.setState(() {});
       // Open the generated page
       if (page is dynamic && page.id != null) {
-        final latest = widget.pageService.getById(page.id as String);
+        final latest = _pageService.getById(page.id as String);
         if (latest != null) {
           Navigator.push(
             context,
             MaterialPageRoute(
               builder: (_) => NotionPageEditScreen(
-                service: widget.pageService,
                 page: latest,
               ),
             ),
@@ -181,7 +178,7 @@ class _NotionScreenState extends State<NotionScreen>
   void _importAsPage(String text) {
     try {
       // Try single page first
-      final page = widget.pageService.importFromJson(text);
+      final page = _pageService.importFromJson(text);
       if (page != null) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('"${page.title}" 페이지를 가져왔습니다')),
@@ -190,7 +187,7 @@ class _NotionScreenState extends State<NotionScreen>
         return;
       }
       // Try array of pages
-      final pages = widget.pageService.importAllFromJson(text);
+      final pages = _pageService.importAllFromJson(text);
       if (pages.isNotEmpty) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('${pages.length}개 페이지를 가져왔습니다')),
@@ -210,7 +207,7 @@ class _NotionScreenState extends State<NotionScreen>
 
   void _importAsDatabase(String text) {
     try {
-      final db = widget.dbService.importFromJson(text);
+      final db = _dbService.importFromJson(text);
       if (db != null) {
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text('"${db.title}" 데이터베이스를 가져왔습니다')),
@@ -234,12 +231,11 @@ class _NotionScreenState extends State<NotionScreen>
       appBar: AppBar(
         title: const Text('워크스페이스'),
         actions: [
-          if (widget.autoPageService != null)
-            IconButton(
-              icon: const Icon(Icons.auto_awesome),
-              tooltip: '루나 정리',
-              onPressed: _showAutoGenerateSheet,
-            ),
+          IconButton(
+            icon: const Icon(Icons.auto_awesome),
+            tooltip: '루나 정리',
+            onPressed: _showAutoGenerateSheet,
+          ),
           IconButton(
             icon: const Icon(Icons.file_download_outlined),
             tooltip: '가져오기',
@@ -267,11 +263,9 @@ class _NotionScreenState extends State<NotionScreen>
         children: [
           NotionPageListScreen(
             key: _pageListKey,
-            service: widget.pageService,
           ),
           NotionDatabaseListScreen(
             key: _dbListKey,
-            service: widget.dbService,
           ),
         ],
       ),

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:spine_flutter/spine_flutter.dart' hide Color;
 import '../models/character_config.dart';
 import '../models/character_state.dart';
+import '../service_locator.dart';
 import '../services/accessory_service.dart';
 import '../widgets/spine_character_widget.dart';
 import '../theme/app_colors.dart';
@@ -100,12 +101,10 @@ class _ColorPreset {
 
 class DressUpScreen extends StatefulWidget {
   final CharacterConfig config;
-  final AccessoryService accessoryService;
 
   const DressUpScreen({
     super.key,
     required this.config,
-    required this.accessoryService,
   });
 
   @override
@@ -113,6 +112,8 @@ class DressUpScreen extends StatefulWidget {
 }
 
 class _DressUpScreenState extends State<DressUpScreen> {
+  AccessoryService get _accessoryService => getIt<AccessoryService>();
+
   /// Discovered skin categories: { category -> [skin names] }
   Map<String, List<String>> _categories = {};
 
@@ -184,7 +185,7 @@ class _DressUpScreenState extends State<DressUpScreen> {
       }
 
       // Load saved selections
-      final savedSkins = widget.accessoryService.getSelectedSkins(widget.config.id);
+      final savedSkins = _accessoryService.getSelectedSkins(widget.config.id);
       for (final skinName in savedSkins) {
         if (widget.config.baseSkins.contains(skinName)) continue;
         final slashIdx = skinName.indexOf('/');
@@ -214,7 +215,7 @@ class _DressUpScreenState extends State<DressUpScreen> {
       }
 
       // Load saved colors
-      _colorSelections = widget.accessoryService.getSlotColors(widget.config.id);
+      _colorSelections = _accessoryService.getSlotColors(widget.config.id);
 
       if (mounted) {
         setState(() {
@@ -294,11 +295,11 @@ class _DressUpScreenState extends State<DressUpScreen> {
   }
 
   Future<void> _save() async {
-    await widget.accessoryService.setSelectedSkins(
+    await _accessoryService.setSelectedSkins(
       widget.config.id,
       _buildCurrentSkins(),
     );
-    await widget.accessoryService.setSlotColors(
+    await _accessoryService.setSlotColors(
       widget.config.id,
       _colorSelections,
     );

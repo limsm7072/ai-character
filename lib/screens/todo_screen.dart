@@ -1,19 +1,20 @@
 import 'package:flutter/material.dart';
 import '../models/todo.dart';
 import '../services/todo_service.dart';
+import '../service_locator.dart';
 import '../theme/app_colors.dart';
 
 class TodoScreen extends StatefulWidget {
-  final TodoService todoService;
   final String? title;
 
-  const TodoScreen({super.key, required this.todoService, this.title});
+  const TodoScreen({super.key, this.title});
 
   @override
   State<TodoScreen> createState() => _TodoScreenState();
 }
 
 class _TodoScreenState extends State<TodoScreen> {
+  final TodoService _todoService = getIt<TodoService>();
   final _inputController = TextEditingController();
   final _focusNode = FocusNode();
   List<Todo> _todos = [];
@@ -32,7 +33,7 @@ class _TodoScreenState extends State<TodoScreen> {
   }
 
   void _load() {
-    setState(() => _todos = widget.todoService.getAll());
+    setState(() => _todos = _todoService.getAll());
   }
 
   List<Todo> get _incomplete => _todos.where((t) => !t.isCompleted).toList();
@@ -41,19 +42,19 @@ class _TodoScreenState extends State<TodoScreen> {
   Future<void> _addTodo() async {
     final text = _inputController.text.trim();
     if (text.isEmpty) return;
-    await widget.todoService.add(text);
+    await _todoService.add(text);
     _inputController.clear();
     _focusNode.requestFocus();
     _load();
   }
 
   Future<void> _toggleComplete(Todo todo) async {
-    await widget.todoService.toggleComplete(todo.id);
+    await _todoService.toggleComplete(todo.id);
     _load();
   }
 
   Future<void> _deleteTodo(Todo todo) async {
-    await widget.todoService.delete(todo.id);
+    await _todoService.delete(todo.id);
     _load();
   }
 
@@ -157,7 +158,7 @@ class _TodoScreenState extends State<TodoScreen> {
     );
     if (picked != null) {
       todo.dueDate = '${picked.year}-${picked.month.toString().padLeft(2, '0')}-${picked.day.toString().padLeft(2, '0')}';
-      await widget.todoService.update(todo);
+      await _todoService.update(todo);
       _load();
     } else if (todo.dueDate != null) {
       // Show option to clear
@@ -175,7 +176,7 @@ class _TodoScreenState extends State<TodoScreen> {
       );
       if (clear == true) {
         todo.dueDate = null;
-        await widget.todoService.update(todo);
+        await _todoService.update(todo);
         _load();
       }
     }

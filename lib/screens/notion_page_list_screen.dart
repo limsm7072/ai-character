@@ -1,19 +1,20 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../models/notion_page.dart';
+import '../service_locator.dart';
 import '../services/notion_page_service.dart';
 import 'notion_page_edit_screen.dart';
 
 class NotionPageListScreen extends StatefulWidget {
-  final NotionPageService service;
-
-  const NotionPageListScreen({super.key, required this.service});
+  const NotionPageListScreen({super.key});
 
   @override
   State<NotionPageListScreen> createState() => NotionPageListScreenState();
 }
 
 class NotionPageListScreenState extends State<NotionPageListScreen> {
+  NotionPageService get _service => getIt<NotionPageService>();
+
   List<NotionPage> _pages = [];
   String _searchQuery = '';
   bool _showSearch = false;
@@ -26,7 +27,7 @@ class NotionPageListScreenState extends State<NotionPageListScreen> {
 
   void _reload() {
     setState(() {
-      _pages = widget.service.getAll();
+      _pages = _service.getAll();
     });
   }
 
@@ -39,13 +40,12 @@ class NotionPageListScreenState extends State<NotionPageListScreen> {
   }
 
   Future<void> _createPage() async {
-    final page = await widget.service.add();
+    final page = await _service.add();
     if (!mounted) return;
     await Navigator.push(
       context,
       MaterialPageRoute(
         builder: (_) => NotionPageEditScreen(
-          service: widget.service,
           page: page,
         ),
       ),
@@ -55,12 +55,11 @@ class NotionPageListScreenState extends State<NotionPageListScreen> {
 
   Future<void> _openPage(NotionPage page) async {
     // Re-fetch latest version
-    final latest = widget.service.getById(page.id) ?? page;
+    final latest = _service.getById(page.id) ?? page;
     await Navigator.push(
       context,
       MaterialPageRoute(
         builder: (_) => NotionPageEditScreen(
-          service: widget.service,
           page: latest,
         ),
       ),
@@ -83,7 +82,7 @@ class NotionPageListScreenState extends State<NotionPageListScreen> {
               title: Text(page.isFavorite ? '즐겨찾기 해제' : '즐겨찾기'),
               onTap: () {
                 page.isFavorite = !page.isFavorite;
-                widget.service.update(page);
+                _service.update(page);
                 Navigator.pop(ctx);
                 _reload();
               },
@@ -92,7 +91,7 @@ class NotionPageListScreenState extends State<NotionPageListScreen> {
               leading: const Icon(Icons.code),
               title: const Text('JSON 복사'),
               onTap: () {
-                final json = widget.service.exportAsJson(page);
+                final json = _service.exportAsJson(page);
                 Clipboard.setData(ClipboardData(text: json));
                 Navigator.pop(ctx);
                 ScaffoldMessenger.of(context).showSnackBar(
@@ -104,7 +103,7 @@ class NotionPageListScreenState extends State<NotionPageListScreen> {
               leading: const Icon(Icons.description),
               title: const Text('마크다운 복사'),
               onTap: () {
-                final md = widget.service.exportAsMarkdown(page);
+                final md = _service.exportAsMarkdown(page);
                 Clipboard.setData(ClipboardData(text: md));
                 Navigator.pop(ctx);
                 ScaffoldMessenger.of(context).showSnackBar(
@@ -116,8 +115,8 @@ class NotionPageListScreenState extends State<NotionPageListScreen> {
               leading: const Icon(Icons.copy),
               title: const Text('페이지 복제'),
               onTap: () async {
-                final json = widget.service.exportAsJson(page);
-                widget.service.importFromJson(json);
+                final json = _service.exportAsJson(page);
+                _service.importFromJson(json);
                 Navigator.pop(ctx);
                 _reload();
               },
@@ -146,7 +145,7 @@ class NotionPageListScreenState extends State<NotionPageListScreen> {
                   ),
                 );
                 if (confirm == true) {
-                  await widget.service.delete(page.id);
+                  await _service.delete(page.id);
                   _reload();
                 }
               },

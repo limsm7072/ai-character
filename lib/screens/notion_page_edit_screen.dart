@@ -2,15 +2,14 @@ import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../models/notion_page.dart';
+import '../service_locator.dart';
 import '../services/notion_page_service.dart';
 
 class NotionPageEditScreen extends StatefulWidget {
-  final NotionPageService service;
   final NotionPage page;
 
   const NotionPageEditScreen({
     super.key,
-    required this.service,
     required this.page,
   });
 
@@ -19,6 +18,8 @@ class NotionPageEditScreen extends StatefulWidget {
 }
 
 class _NotionPageEditScreenState extends State<NotionPageEditScreen> {
+  NotionPageService get _service => getIt<NotionPageService>();
+
   late NotionPage _page;
   late TextEditingController _titleCtrl;
   final Map<String, TextEditingController> _blockCtrls = {};
@@ -63,7 +64,7 @@ class _NotionPageEditScreenState extends State<NotionPageEditScreen> {
     for (final b in _page.blocks) {
       _syncBlock(b);
     }
-    await widget.service.update(_page);
+    await _service.update(_page);
     _dirty = false;
   }
 
@@ -85,7 +86,7 @@ class _NotionPageEditScreenState extends State<NotionPageEditScreen> {
     for (final b in _page.blocks) {
       _syncBlock(b);
     }
-    widget.service.update(_page);
+    _service.update(_page);
     _titleCtrl.dispose();
     for (final ctrl in _blockCtrls.values) {
       ctrl.dispose();
@@ -246,7 +247,7 @@ class _NotionPageEditScreenState extends State<NotionPageEditScreen> {
                 leading: const Icon(Icons.code),
                 title: const Text('JSON 복사'),
                 onTap: () {
-                  final json = widget.service.exportAsJson(_page);
+                  final json = _service.exportAsJson(_page);
                   Clipboard.setData(ClipboardData(text: json));
                   Navigator.pop(ctx);
                   ScaffoldMessenger.of(context).showSnackBar(
@@ -258,7 +259,7 @@ class _NotionPageEditScreenState extends State<NotionPageEditScreen> {
                 leading: const Icon(Icons.description),
                 title: const Text('마크다운 복사'),
                 onTap: () {
-                  final md = widget.service.exportAsMarkdown(_page);
+                  final md = _service.exportAsMarkdown(_page);
                   Clipboard.setData(ClipboardData(text: md));
                   Navigator.pop(ctx);
                   ScaffoldMessenger.of(context).showSnackBar(

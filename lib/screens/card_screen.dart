@@ -5,19 +5,20 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 import '../models/business_card.dart';
 import '../services/card_service.dart';
+import '../service_locator.dart';
 import '../theme/app_colors.dart';
 
 class CardScreen extends StatefulWidget {
-  final CardService cardService;
   final String? title;
 
-  const CardScreen({super.key, required this.cardService, this.title});
+  const CardScreen({super.key, this.title});
 
   @override
   State<CardScreen> createState() => _CardScreenState();
 }
 
 class _CardScreenState extends State<CardScreen> {
+  final CardService _cardService = getIt<CardService>();
   static const _channel = MethodChannel('com.aicharacter.ai_character/usage_stats');
 
   final _cardKey = GlobalKey();
@@ -40,7 +41,7 @@ class _CardScreenState extends State<CardScreen> {
   @override
   void initState() {
     super.initState();
-    _card = widget.cardService.get() ?? BusinessCard();
+    _card = _cardService.get() ?? BusinessCard();
     _editing = _card.isEmpty; // 명함 없으면 바로 편집 모드
     _nameCtrl = TextEditingController(text: _card.name);
     _companyCtrl = TextEditingController(text: _card.company);
@@ -94,7 +95,7 @@ class _CardScreenState extends State<CardScreen> {
 
   Future<void> _save() async {
     _updateCard();
-    await widget.cardService.save(_card);
+    await _cardService.save(_card);
     if (mounted) {
       setState(() => _editing = false);
       ScaffoldMessenger.of(context).showSnackBar(

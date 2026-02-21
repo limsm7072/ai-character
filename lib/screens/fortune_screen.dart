@@ -1,14 +1,13 @@
 import 'package:flutter/material.dart';
 import '../models/fortune_data.dart';
 import '../services/fortune_service.dart';
+import '../service_locator.dart';
 
 class FortuneScreen extends StatefulWidget {
-  final FortuneService fortuneService;
   final String title;
 
   const FortuneScreen({
     super.key,
-    required this.fortuneService,
     this.title = '오늘의 운세',
   });
 
@@ -17,6 +16,7 @@ class FortuneScreen extends StatefulWidget {
 }
 
 class _FortuneScreenState extends State<FortuneScreen> {
+  final FortuneService _fortuneService = getIt<FortuneService>();
   FortuneData? _fortune;
 
   // Profile form
@@ -27,11 +27,11 @@ class _FortuneScreenState extends State<FortuneScreen> {
   @override
   void initState() {
     super.initState();
-    if (widget.fortuneService.hasProfile) {
-      _fortune = widget.fortuneService.generateTodayFortune();
+    if (_fortuneService.hasProfile) {
+      _fortune = _fortuneService.generateTodayFortune();
     } else {
       // Pre-fill from existing profile if any
-      final bd = widget.fortuneService.birthDate;
+      final bd = _fortuneService.birthDate;
       if (bd.isNotEmpty) {
         final parts = bd.split('-');
         if (parts.length == 3) {
@@ -42,8 +42,8 @@ class _FortuneScreenState extends State<FortuneScreen> {
           );
         }
       }
-      _selectedHour = widget.fortuneService.birthHour;
-      _selectedGender = widget.fortuneService.gender;
+      _selectedHour = _fortuneService.birthHour;
+      _selectedGender = _fortuneService.gender;
     }
   }
 
@@ -52,7 +52,7 @@ class _FortuneScreenState extends State<FortuneScreen> {
     return Scaffold(
       appBar: AppBar(
         title: Text(widget.title),
-        actions: widget.fortuneService.hasProfile
+        actions: _fortuneService.hasProfile
             ? [
                 IconButton(
                   icon: const Icon(Icons.settings_outlined),
@@ -240,20 +240,20 @@ class _FortuneScreenState extends State<FortuneScreen> {
         '${_selectedDate.month.toString().padLeft(2, '0')}-'
         '${_selectedDate.day.toString().padLeft(2, '0')}';
 
-    await widget.fortuneService.setProfile(
+    await _fortuneService.setProfile(
       birthDate: dateStr,
       birthHour: _selectedHour,
       gender: _selectedGender,
     );
 
     setState(() {
-      _fortune = widget.fortuneService.generateTodayFortune();
+      _fortune = _fortuneService.generateTodayFortune();
     });
   }
 
   void _showProfileEdit() {
     // Load current profile into form
-    final bd = widget.fortuneService.birthDate;
+    final bd = _fortuneService.birthDate;
     if (bd.isNotEmpty) {
       final parts = bd.split('-');
       if (parts.length == 3) {
@@ -264,8 +264,8 @@ class _FortuneScreenState extends State<FortuneScreen> {
         );
       }
     }
-    _selectedHour = widget.fortuneService.birthHour;
-    _selectedGender = widget.fortuneService.gender;
+    _selectedHour = _fortuneService.birthHour;
+    _selectedGender = _fortuneService.gender;
 
     setState(() => _fortune = null);
   }

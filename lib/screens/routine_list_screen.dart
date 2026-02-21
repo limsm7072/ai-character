@@ -2,38 +2,22 @@ import 'package:flutter/material.dart';
 import '../models/routine.dart' as model;
 import '../models/routine_group.dart';
 import '../models/routine_preset.dart';
+import '../service_locator.dart';
 import '../services/routine_service.dart';
 import '../services/routine_completion_service.dart';
-import '../services/settings_service.dart';
-import '../services/alarm_service.dart';
 import '../services/timer_service.dart';
 import '../services/routine_group_service.dart';
-import '../services/calendar_service.dart';
 import '../utils/routine_icons.dart';
 import 'routine_edit_screen.dart';
 import 'timer_screen.dart';
 import '../theme/app_colors.dart';
 
 class RoutineListScreen extends StatefulWidget {
-  final RoutineService routineService;
-  final RoutineCompletionService completionService;
-  final SettingsService settingsService;
-  final AlarmService? alarmService;
-  final TimerService? timerService;
-  final RoutineGroupService routineGroupService;
-  final CalendarService? calendarService;
   final VoidCallback? onCompletionUnchecked;
   final String? title;
 
   const RoutineListScreen({
     super.key,
-    required this.routineService,
-    required this.completionService,
-    required this.settingsService,
-    this.alarmService,
-    this.timerService,
-    required this.routineGroupService,
-    this.calendarService,
     this.onCompletionUnchecked,
     this.title,
   });
@@ -53,6 +37,11 @@ class _RoutineListScreenState extends State<RoutineListScreen> {
   final Set<String> _selectedRoutineIds = {};
   bool _isFabExpanded = false;
 
+  RoutineService get _routineService => getIt<RoutineService>();
+  RoutineCompletionService get _completionService => getIt<RoutineCompletionService>();
+  TimerService get _timerService => getIt<TimerService>();
+  RoutineGroupService get _routineGroupService => getIt<RoutineGroupService>();
+
   @override
   void initState() {
     super.initState();
@@ -62,7 +51,7 @@ class _RoutineListScreenState extends State<RoutineListScreen> {
   }
 
   void _loadRoutines() {
-    setState(() => _routines = widget.routineService.getAll());
+    setState(() => _routines = _routineService.getAll());
   }
 
   Future<void> _onReorder(int oldIndex, int newIndex) async {
@@ -75,7 +64,7 @@ class _RoutineListScreenState extends State<RoutineListScreen> {
     var realNew = _routines.indexWhere((r) => r.id == targetRoutineId);
     if (newIndex > oldIndex) realNew++;
 
-    await widget.routineService.reorder(realOld, realNew);
+    await _routineService.reorder(realOld, realNew);
     _loadRoutines();
   }
 
@@ -91,7 +80,7 @@ class _RoutineListScreenState extends State<RoutineListScreen> {
   String _formatDate(DateTime dt) =>
       '${dt.year}-${dt.month.toString().padLeft(2, '0')}-${dt.day.toString().padLeft(2, '0')}';
 
-  String get _todayStr => widget.completionService.todayStr();
+  String get _todayStr => _completionService.todayStr();
   bool get _isSelectedToday => _selectedDateStr == _todayStr;
 
   List<model.Routine> get _filteredRoutines =>
@@ -135,14 +124,14 @@ class _RoutineListScreenState extends State<RoutineListScreen> {
       return;
     }
     // Make selected routines contiguous in the full list
-    await widget.routineService.makeContiguous(_selectedRoutineIds.toList());
-    await widget.routineGroupService.createGroup(_selectedRoutineIds.toList());
+    await _routineService.makeContiguous(_selectedRoutineIds.toList());
+    await _routineGroupService.createGroup(_selectedRoutineIds.toList());
     _loadRoutines();
     _exitGroupMode();
   }
 
   Future<void> _showUngroupDialog(RoutineGroup group) async {
-    await widget.routineGroupService.ungroup(group.id);
+    await _routineGroupService.ungroup(group.id);
     _loadRoutines();
   }
 
@@ -166,7 +155,7 @@ class _RoutineListScreenState extends State<RoutineListScreen> {
                 subtitle: const Text('이 루틴만 그룹에서 제거합니다'),
                 onTap: () async {
                   Navigator.pop(ctx);
-                  await widget.routineGroupService.removeFromGroup(routine.id);
+                  await _routineGroupService.removeFromGroup(routine.id);
                   _loadRoutines();
                 },
               ),
@@ -189,7 +178,7 @@ class _RoutineListScreenState extends State<RoutineListScreen> {
 
   /// Build a map: routineId → groupId for filtered routines
   Map<String, String> _buildGroupMap(List<model.Routine> filtered) {
-    final groups = widget.routineGroupService.getAll();
+    final groups = _routineGroupService.getAll();
     final filteredIds = filtered.map((r) => r.id).toSet();
     final map = <String, String>{};
     for (final g in groups) {
@@ -273,7 +262,7 @@ class _RoutineListScreenState extends State<RoutineListScreen> {
       nagIntensity: original.nagIntensity,
       workTypeId: original.workTypeId,
     );
-    await widget.routineService.add(copy);
+    await _routineService.add(copy);
     _loadRoutines();
   }
 
@@ -296,8 +285,8 @@ class _RoutineListScreenState extends State<RoutineListScreen> {
       ),
     );
     if (confirm == true) {
-      await widget.routineService.delete(routine.id);
-      await widget.routineGroupService.onRoutineDeleted(routine.id);
+      await _routineService.delete(routine.id);
+      await _routineGroupService.onRoutineDeleted(routine.id);
       _loadRoutines();
     }
   }
@@ -305,7 +294,7 @@ class _RoutineListScreenState extends State<RoutineListScreen> {
   // ─── Navigation ─────────────────────────────────────────
 
   void _launchTimer(model.Routine routine) {
-    final presets = widget.timerService!.getAll();
+    final presets = _timerService.getAll();
     final preset = presets.firstWhere(
       (p) => p.id == routine.linkedTimerId,
       orElse: () => presets.first,
@@ -314,7 +303,6 @@ class _RoutineListScreenState extends State<RoutineListScreen> {
       context,
       MaterialPageRoute(
         builder: (_) => TimerRunScreen(
-          timerService: widget.timerService!,
           initialPreset: preset,
         ),
       ),
@@ -325,13 +313,7 @@ class _RoutineListScreenState extends State<RoutineListScreen> {
     final result = await Navigator.push<bool>(
       context,
       MaterialPageRoute(
-        builder: (_) => RoutineEditScreen(
-          routineService: widget.routineService,
-          alarmService: widget.alarmService,
-          timerService: widget.timerService,
-          routineGroupService: widget.routineGroupService,
-          calendarService: widget.calendarService,
-        ),
+        builder: (_) => const RoutineEditScreen(),
       ),
     );
     if (result == true) _loadRoutines();
@@ -342,11 +324,6 @@ class _RoutineListScreenState extends State<RoutineListScreen> {
       context,
       MaterialPageRoute(
         builder: (_) => RoutineEditScreen(
-          routineService: widget.routineService,
-          alarmService: widget.alarmService,
-          timerService: widget.timerService,
-          routineGroupService: widget.routineGroupService,
-          calendarService: widget.calendarService,
           routine: routine,
         ),
       ),
@@ -364,7 +341,7 @@ class _RoutineListScreenState extends State<RoutineListScreen> {
       isAllDay: preset.isAllDay,
       startDate: _formatDate(now),
     );
-    await widget.routineService.add(routine);
+    await _routineService.add(routine);
     _loadRoutines();
   }
 
@@ -679,8 +656,8 @@ class _RoutineListScreenState extends State<RoutineListScreen> {
     List<model.Routine> filtered,
     Map<String, String> groupMap,
   ) {
-    final isCompleted = widget.completionService.isCompleted(routine.id, _selectedDateStr);
-    final isSkipped = widget.completionService.isSkipped(routine.id, _selectedDateStr);
+    final isCompleted = _completionService.isCompleted(routine.id, _selectedDateStr);
+    final isSkipped = _completionService.isSkipped(routine.id, _selectedDateStr);
     final isOn = routine.isEnabled;
     final theme = Theme.of(context);
     final isFirst = index == 0;
@@ -754,7 +731,7 @@ class _RoutineListScreenState extends State<RoutineListScreen> {
               children: [
                 if (routine.linkedAlarmId != null && !routine.isAllDay)
                   Icon(Icons.alarm, size: 18, color: AppColors.grey500),
-                if (routine.linkedTimerId != null && widget.timerService != null)
+                if (routine.linkedTimerId != null)
                   Padding(
                     padding: const EdgeInsets.only(left: 8),
                     child: GestureDetector(
@@ -822,7 +799,7 @@ class _RoutineListScreenState extends State<RoutineListScreen> {
                   onTap: () => _editRoutine(routine),
                   onLongPress: isInGroup
                       ? () {
-                          final group = widget.routineGroupService.groupForRoutine(routine.id);
+                          final group = _routineGroupService.groupForRoutine(routine.id);
                           if (group != null) _showRoutineGroupOptions(routine, group);
                         }
                       : () => _showRoutineOptions(routine),
@@ -880,11 +857,11 @@ class _RoutineListScreenState extends State<RoutineListScreen> {
       behavior: HitTestBehavior.opaque,
       onTap: () async {
         if (!isCompleted && !isSkipped) {
-          await widget.completionService.toggleCompletion(routine.id, _selectedDateStr);
+          await _completionService.toggleCompletion(routine.id, _selectedDateStr);
         } else if (isCompleted) {
-          await widget.completionService.markSkipped(routine.id, _selectedDateStr);
+          await _completionService.markSkipped(routine.id, _selectedDateStr);
         } else {
-          await widget.completionService.toggleCompletion(routine.id, _selectedDateStr);
+          await _completionService.toggleCompletion(routine.id, _selectedDateStr);
           widget.onCompletionUnchecked?.call();
         }
         setState(() {});

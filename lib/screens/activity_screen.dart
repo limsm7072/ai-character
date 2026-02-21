@@ -1,41 +1,42 @@
 import 'package:flutter/material.dart';
 import '../models/activity_data.dart';
 import '../services/activity_service.dart';
+import '../service_locator.dart';
 
 class ActivityScreen extends StatefulWidget {
-  final ActivityService activityService;
   final String? title;
 
-  const ActivityScreen({super.key, required this.activityService, this.title});
+  const ActivityScreen({super.key, this.title});
 
   @override
   State<ActivityScreen> createState() => _ActivityScreenState();
 }
 
 class _ActivityScreenState extends State<ActivityScreen> {
+  final ActivityService _activityService = getIt<ActivityService>();
   ActivitySummary? _summary;
   bool _loading = false;
 
   @override
   void initState() {
     super.initState();
-    if (widget.activityService.isEnabled) {
+    if (_activityService.isEnabled) {
       _load();
     }
   }
 
   Future<void> _load() async {
     setState(() => _loading = true);
-    final data = await widget.activityService.fetchToday();
+    final data = await _activityService.fetchToday();
     if (mounted) setState(() { _summary = data; _loading = false; });
   }
 
   Future<void> _toggleService() async {
-    if (widget.activityService.isEnabled) {
-      await widget.activityService.stop();
+    if (_activityService.isEnabled) {
+      await _activityService.stop();
       setState(() => _summary = null);
     } else {
-      final ok = await widget.activityService.start();
+      final ok = await _activityService.start();
       if (ok) {
         await _load();
       } else {
@@ -52,7 +53,7 @@ class _ActivityScreenState extends State<ActivityScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final enabled = widget.activityService.isEnabled;
+    final enabled = _activityService.isEnabled;
     return Scaffold(
       appBar: AppBar(
         title: Text(widget.title ?? '활동'),

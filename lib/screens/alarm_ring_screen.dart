@@ -4,16 +4,15 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../services/settings_service.dart';
 import '../services/alarm_service.dart';
+import '../service_locator.dart';
 import '../theme/app_colors.dart';
 
 class AlarmRingScreen extends StatefulWidget {
   final String alarmLabel;
-  final SettingsService settingsService;
 
   const AlarmRingScreen({
     super.key,
     required this.alarmLabel,
-    required this.settingsService,
   });
 
   @override
@@ -25,6 +24,7 @@ class _AlarmRingScreenState extends State<AlarmRingScreen>
   static const _audioChannel =
       MethodChannel('com.aicharacter.ai_character/audio');
 
+  final SettingsService _settingsService = getIt<SettingsService>();
   late final bool _shakeEnabled;
   late final int _shakeTarget;
   int _shakeCount = 0;
@@ -35,8 +35,8 @@ class _AlarmRingScreenState extends State<AlarmRingScreen>
   @override
   void initState() {
     super.initState();
-    _shakeEnabled = widget.settingsService.shakeToDisable;
-    _shakeTarget = widget.settingsService.shakeCount;
+    _shakeEnabled = _settingsService.shakeToDisable;
+    _shakeTarget = _settingsService.shakeCount;
     _updateTime();
     _clockTimer = Timer.periodic(const Duration(seconds: 1), (_) => _updateTime());
 

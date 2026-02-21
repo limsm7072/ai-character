@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../models/timer_preset.dart';
 import '../services/timer_service.dart';
+import '../service_locator.dart';
 import '../theme/app_colors.dart';
 
 // ─── Ambient Sound Types ──────────────────────────────
@@ -25,16 +26,16 @@ enum AmbientSound {
 // ─── Timer List Screen ───────────────────────────────
 
 class TimerScreen extends StatefulWidget {
-  final TimerService timerService;
   final String? title;
 
-  const TimerScreen({super.key, required this.timerService, this.title});
+  const TimerScreen({super.key, this.title});
 
   @override
   State<TimerScreen> createState() => _TimerScreenState();
 }
 
 class _TimerScreenState extends State<TimerScreen> {
+  final TimerService _timerService = getIt<TimerService>();
   List<TimerPreset> _presets = [];
 
   @override
@@ -44,7 +45,7 @@ class _TimerScreenState extends State<TimerScreen> {
   }
 
   void _load() {
-    setState(() => _presets = widget.timerService.getAll().toList());
+    setState(() => _presets = _timerService.getAll().toList());
   }
 
   void _addPreset() {
@@ -101,14 +102,14 @@ class _TimerScreenState extends State<TimerScreen> {
         isPomodoro: existing?.isPomodoro ?? isPomodoro,
         onSave: (preset) async {
           if (existing != null) {
-            await widget.timerService.update(preset);
+            await _timerService.update(preset);
           } else {
-            await widget.timerService.add(preset);
+            await _timerService.add(preset);
           }
           if (mounted) _load();
         },
         onDelete: existing != null ? () async {
-          await widget.timerService.delete(existing.id);
+          await _timerService.delete(existing.id);
           if (mounted) _load();
         } : null,
       ),
@@ -120,7 +121,6 @@ class _TimerScreenState extends State<TimerScreen> {
       context,
       MaterialPageRoute(
         builder: (_) => TimerRunScreen(
-          timerService: widget.timerService,
           initialPreset: preset,
         ),
       ),
@@ -243,12 +243,10 @@ class _TimerScreenState extends State<TimerScreen> {
 // ─── Timer Run Screen ────────────────────────────────
 
 class TimerRunScreen extends StatefulWidget {
-  final TimerService timerService;
   final TimerPreset? initialPreset;
 
   const TimerRunScreen({
     super.key,
-    required this.timerService,
     this.initialPreset,
   });
 
@@ -257,6 +255,7 @@ class TimerRunScreen extends StatefulWidget {
 }
 
 class _TimerRunScreenState extends State<TimerRunScreen> {
+  final TimerService _timerService = getIt<TimerService>();
   void _confirmDelete() {
     final preset = widget.initialPreset;
     if (preset == null) return;
@@ -269,7 +268,7 @@ class _TimerRunScreenState extends State<TimerRunScreen> {
           TextButton(onPressed: () => Navigator.pop(context), child: const Text('취소')),
           TextButton(
             onPressed: () async {
-              await widget.timerService.delete(preset.id);
+              await _timerService.delete(preset.id);
               if (mounted) {
                 Navigator.pop(context); // dialog
                 Navigator.pop(context); // back to list
@@ -301,13 +300,11 @@ class _TimerRunScreenState extends State<TimerRunScreen> {
       ),
       body: isPomodoro
           ? _PomodoroTab(
-              timerService: widget.timerService,
               initialFocusMinutes: preset?.focusMinutes,
               initialBreakMinutes: preset?.breakMinutes,
               initialTargetSessions: preset?.targetSessions,
             )
           : _CountdownTab(
-              timerService: widget.timerService,
               initialDurationSeconds: preset?.durationSeconds,
             ),
     );
@@ -684,11 +681,9 @@ class _PresetEditSheetState extends State<_PresetEditSheet> {
 // ─── Countdown Tab ─────────────────────────────────────
 
 class _CountdownTab extends StatefulWidget {
-  final TimerService timerService;
   final int? initialDurationSeconds;
 
   const _CountdownTab({
-    required this.timerService,
     this.initialDurationSeconds,
   });
 
@@ -698,6 +693,7 @@ class _CountdownTab extends StatefulWidget {
 
 class _CountdownTabState extends State<_CountdownTab> {
   static const _audioChannel = MethodChannel('com.aicharacter.ai_character/audio');
+  final TimerService _timerService = getIt<TimerService>();
 
   Timer? _timer;
   int _totalSeconds = 300;
@@ -779,11 +775,11 @@ class _CountdownTabState extends State<_CountdownTab> {
     if (_isRunning) {
       _timer?.cancel();
       _stopAmbient();
-      widget.timerService.cancelTimerAlarm();
+      _timerService.cancelTimerAlarm();
       setState(() => _isRunning = false);
     } else {
       if (_remaining <= 0) _remaining = _totalSeconds;
-      widget.timerService.scheduleTimerAlarm(_remaining, '카운트다운');
+      _timerService.scheduleTimerAlarm(_remaining, '카운트다운');
       _startAmbient();
       _timer = Timer.periodic(const Duration(seconds: 1), (_) {
         setState(() {
@@ -793,9 +789,9 @@ class _CountdownTabState extends State<_CountdownTab> {
             _isRunning = false;
             _timer?.cancel();
             _stopAmbient();
-            widget.timerService.cancelTimerAlarm();
+            _timerService.cancelTimerAlarm();
             _playAlarm();
-            widget.timerService.notifyTimerComplete('카운트다운');
+            _timerService.notifyTimerComplete('카운트다운');
           }
         });
       });
@@ -807,7 +803,7 @@ class _CountdownTabState extends State<_CountdownTab> {
     _timer?.cancel();
     _stopAlarm();
     _stopAmbient();
-    widget.timerService.cancelTimerAlarm();
+    _timerService.cancelTimerAlarm();
     setState(() {
       _remaining = _totalSeconds;
       _isRunning = false;
@@ -904,13 +900,11 @@ class _CountdownTabState extends State<_CountdownTab> {
 // ─── Pomodoro Tab ──────────────────────────────────────
 
 class _PomodoroTab extends StatefulWidget {
-  final TimerService timerService;
   final int? initialFocusMinutes;
   final int? initialBreakMinutes;
   final int? initialTargetSessions;
 
   const _PomodoroTab({
-    required this.timerService,
     this.initialFocusMinutes,
     this.initialBreakMinutes,
     this.initialTargetSessions,
@@ -922,6 +916,7 @@ class _PomodoroTab extends StatefulWidget {
 
 class _PomodoroTabState extends State<_PomodoroTab> {
   static const _audioChannel = MethodChannel('com.aicharacter.ai_character/audio');
+  final TimerService _timerService = getIt<TimerService>();
 
   Timer? _timer;
   int _focusMinutes = 25;
@@ -1009,12 +1004,12 @@ class _PomodoroTabState extends State<_PomodoroTab> {
     if (_isRunning) {
       _timer?.cancel();
       _stopAmbient();
-      widget.timerService.cancelTimerAlarm();
+      _timerService.cancelTimerAlarm();
       setState(() => _isRunning = false);
     } else {
       if (_remaining <= 0) _remaining = _totalPhaseSeconds;
       final phaseLabel = _isFocusPhase ? '뽀모도로 집중' : '뽀모도로 휴식';
-      widget.timerService.scheduleTimerAlarm(_remaining, phaseLabel);
+      _timerService.scheduleTimerAlarm(_remaining, phaseLabel);
       _startAmbient();
       _timer = Timer.periodic(const Duration(seconds: 1), (_) {
         setState(() {
@@ -1024,7 +1019,7 @@ class _PomodoroTabState extends State<_PomodoroTab> {
             _timer?.cancel();
             _isRunning = false;
             _stopAmbient();
-            widget.timerService.cancelTimerAlarm();
+            _timerService.cancelTimerAlarm();
             _onPhaseComplete();
           }
         });
@@ -1037,7 +1032,7 @@ class _PomodoroTabState extends State<_PomodoroTab> {
     _playAlarm();
     if (_isFocusPhase) {
       if (_currentSession >= _targetSessions) {
-        widget.timerService.notifyTimerComplete('뽀모도로 $_targetSessions세션 완료!');
+        _timerService.notifyTimerComplete('뽀모도로 $_targetSessions세션 완료!');
         setState(() {
           _currentSession = 1;
           _isFocusPhase = true;
@@ -1049,14 +1044,14 @@ class _PomodoroTabState extends State<_PomodoroTab> {
         _isFocusPhase = false;
         _remaining = _breakMinutes * 60;
       });
-      widget.timerService.notifyPomodoroPhase(isFocus: false, session: _currentSession, total: _targetSessions);
+      _timerService.notifyPomodoroPhase(isFocus: false, session: _currentSession, total: _targetSessions);
     } else {
       setState(() {
         _currentSession++;
         _isFocusPhase = true;
         _remaining = _focusMinutes * 60;
       });
-      widget.timerService.notifyPomodoroPhase(isFocus: true, session: _currentSession, total: _targetSessions);
+      _timerService.notifyPomodoroPhase(isFocus: true, session: _currentSession, total: _targetSessions);
     }
   }
 
@@ -1064,7 +1059,7 @@ class _PomodoroTabState extends State<_PomodoroTab> {
     _timer?.cancel();
     _stopAlarm();
     _stopAmbient();
-    widget.timerService.cancelTimerAlarm();
+    _timerService.cancelTimerAlarm();
     setState(() {
       _currentSession = 1;
       _isFocusPhase = true;
@@ -1083,7 +1078,6 @@ class _PomodoroTabState extends State<_PomodoroTab> {
       context,
       MaterialPageRoute(
         builder: (_) => _FocusModeScreen(
-          timerService: widget.timerService,
           state: _PomodoroState(
             focusMinutes: _focusMinutes,
             breakMinutes: _breakMinutes,
@@ -1297,10 +1291,9 @@ class _PomodoroState {
 // ─── Focus Mode Screen ────────────────────────────────
 
 class _FocusModeScreen extends StatefulWidget {
-  final TimerService timerService;
   final _PomodoroState state;
 
-  const _FocusModeScreen({required this.timerService, required this.state});
+  const _FocusModeScreen({required this.state});
 
   @override
   State<_FocusModeScreen> createState() => _FocusModeScreenState();
@@ -1308,6 +1301,7 @@ class _FocusModeScreen extends StatefulWidget {
 
 class _FocusModeScreenState extends State<_FocusModeScreen> {
   static const _audioChannel = MethodChannel('com.aicharacter.ai_character/audio');
+  final TimerService _timerService = getIt<TimerService>();
 
   late _PomodoroState _s;
   Timer? _timer;
@@ -1389,12 +1383,12 @@ class _FocusModeScreenState extends State<_FocusModeScreen> {
     if (_isRunning) {
       _timer?.cancel();
       _stopAmbient();
-      widget.timerService.cancelTimerAlarm();
+      _timerService.cancelTimerAlarm();
       setState(() => _isRunning = false);
     } else {
       if (_s.remaining <= 0) _s.remaining = _totalPhaseSeconds;
       final phaseLabel = _s.isFocusPhase ? '뽀모도로 집중' : '뽀모도로 휴식';
-      widget.timerService.scheduleTimerAlarm(_s.remaining, phaseLabel);
+      _timerService.scheduleTimerAlarm(_s.remaining, phaseLabel);
       _startAmbient();
       _timer = Timer.periodic(const Duration(seconds: 1), (_) {
         setState(() {
@@ -1404,7 +1398,7 @@ class _FocusModeScreenState extends State<_FocusModeScreen> {
             _timer?.cancel();
             _isRunning = false;
             _stopAmbient();
-            widget.timerService.cancelTimerAlarm();
+            _timerService.cancelTimerAlarm();
             _onPhaseComplete();
           }
         });
@@ -1417,7 +1411,7 @@ class _FocusModeScreenState extends State<_FocusModeScreen> {
     _playAlarm();
     if (_s.isFocusPhase) {
       if (_s.currentSession >= _s.targetSessions) {
-        widget.timerService.notifyTimerComplete('뽀모도로 ${_s.targetSessions}세션 완료!');
+        _timerService.notifyTimerComplete('뽀모도로 ${_s.targetSessions}세션 완료!');
         setState(() {
           _s.currentSession = 1;
           _s.isFocusPhase = true;
@@ -1429,14 +1423,14 @@ class _FocusModeScreenState extends State<_FocusModeScreen> {
         _s.isFocusPhase = false;
         _s.remaining = _s.breakMinutes * 60;
       });
-      widget.timerService.notifyPomodoroPhase(isFocus: false, session: _s.currentSession, total: _s.targetSessions);
+      _timerService.notifyPomodoroPhase(isFocus: false, session: _s.currentSession, total: _s.targetSessions);
     } else {
       setState(() {
         _s.currentSession++;
         _s.isFocusPhase = true;
         _s.remaining = _s.focusMinutes * 60;
       });
-      widget.timerService.notifyPomodoroPhase(isFocus: true, session: _s.currentSession, total: _s.targetSessions);
+      _timerService.notifyPomodoroPhase(isFocus: true, session: _s.currentSession, total: _s.targetSessions);
     }
   }
 
@@ -1444,7 +1438,7 @@ class _FocusModeScreenState extends State<_FocusModeScreen> {
     _timer?.cancel();
     _stopAmbient();
     if (!_isRunning) {
-      widget.timerService.cancelTimerAlarm();
+      _timerService.cancelTimerAlarm();
     }
     _isRunning = false;
     Navigator.pop(context, _s);

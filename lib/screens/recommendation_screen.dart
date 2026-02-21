@@ -1,20 +1,21 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../services/recommendation_service.dart';
+import '../service_locator.dart';
 import '../models/recommendation_data.dart';
 import '../models/news_article.dart';
 
 class RecommendationScreen extends StatefulWidget {
-  final RecommendationService recommendationService;
   final String? title;
 
-  const RecommendationScreen({super.key, required this.recommendationService, this.title});
+  const RecommendationScreen({super.key, this.title});
 
   @override
   State<RecommendationScreen> createState() => _RecommendationScreenState();
 }
 
 class _RecommendationScreenState extends State<RecommendationScreen> {
+  final RecommendationService _recommendationService = getIt<RecommendationService>();
   static const _channel = MethodChannel('com.aicharacter.ai_character/usage_stats');
 
   RecommendationData? _data;
@@ -23,14 +24,14 @@ class _RecommendationScreenState extends State<RecommendationScreen> {
   @override
   void initState() {
     super.initState();
-    _data = widget.recommendationService.getCached();
+    _data = _recommendationService.getCached();
     _fetch();
   }
 
   Future<void> _fetch() async {
     setState(() => _loading = true);
     try {
-      final data = await widget.recommendationService.fetch(force: true);
+      final data = await _recommendationService.fetch(force: true);
       if (mounted) setState(() => _data = data);
     } catch (e) {
       print('[RecommendationScreen] fetch error: $e');

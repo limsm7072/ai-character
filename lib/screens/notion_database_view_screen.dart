@@ -1,15 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../models/notion_database.dart';
+import '../service_locator.dart';
 import '../services/notion_database_service.dart';
 
 class NotionDatabaseViewScreen extends StatefulWidget {
-  final NotionDatabaseService service;
   final NotionDatabase database;
 
   const NotionDatabaseViewScreen({
     super.key,
-    required this.service,
     required this.database,
   });
 
@@ -19,6 +18,8 @@ class NotionDatabaseViewScreen extends StatefulWidget {
 }
 
 class _NotionDatabaseViewScreenState extends State<NotionDatabaseViewScreen> {
+  NotionDatabaseService get _service => getIt<NotionDatabaseService>();
+
   late NotionDatabase _db;
   bool _isKanban = false;
   String? _kanbanColumnId;
@@ -38,7 +39,7 @@ class _NotionDatabaseViewScreenState extends State<NotionDatabaseViewScreen> {
   }
 
   Future<void> _save() async {
-    await widget.service.update(_db);
+    await _service.update(_db);
   }
 
   List<DatabaseRow> get _displayRows {

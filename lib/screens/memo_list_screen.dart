@@ -2,19 +2,20 @@ import 'package:flutter/material.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import '../models/memo.dart';
 import '../services/memo_service.dart';
+import '../service_locator.dart';
 import '../theme/app_colors.dart';
 
 class MemoListScreen extends StatefulWidget {
-  final MemoService memoService;
   final String? title;
 
-  const MemoListScreen({super.key, required this.memoService, this.title});
+  const MemoListScreen({super.key, this.title});
 
   @override
   State<MemoListScreen> createState() => _MemoListScreenState();
 }
 
 class _MemoListScreenState extends State<MemoListScreen> {
+  final MemoService _memoService = getIt<MemoService>();
   static const _collapsedKey = 'memo_collapsed';
   List<Memo> _memos = [];
   bool _collapsed = false;
@@ -40,7 +41,7 @@ class _MemoListScreenState extends State<MemoListScreen> {
   }
 
   void _load() {
-    final memos = widget.memoService.getAll();
+    final memos = _memoService.getAll();
     memos.sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
     setState(() => _memos = memos);
   }
@@ -68,7 +69,7 @@ class _MemoListScreenState extends State<MemoListScreen> {
       ),
     );
     if (confirmed == true) {
-      await widget.memoService.delete(memo.id);
+      await _memoService.delete(memo.id);
       _load();
     }
   }
@@ -106,11 +107,11 @@ class _MemoListScreenState extends State<MemoListScreen> {
                       return;
                     }
                     if (isNew) {
-                      await widget.memoService.add(title, content: contentController.text);
+                      await _memoService.add(title, content: contentController.text);
                     } else {
                       existing!.title = title;
                       existing.content = contentController.text;
-                      await widget.memoService.update(existing);
+                      await _memoService.update(existing);
                     }
                     if (ctx.mounted) Navigator.pop(ctx, true);
                   },

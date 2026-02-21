@@ -3,18 +3,19 @@ import 'package:flutter/services.dart';
 import '../models/bookmark.dart';
 import '../theme/app_colors.dart';
 import '../services/bookmark_service.dart';
+import '../service_locator.dart';
 
 class BookmarkScreen extends StatefulWidget {
-  final BookmarkService bookmarkService;
   final String? title;
 
-  const BookmarkScreen({super.key, required this.bookmarkService, this.title});
+  const BookmarkScreen({super.key, this.title});
 
   @override
   State<BookmarkScreen> createState() => _BookmarkScreenState();
 }
 
 class _BookmarkScreenState extends State<BookmarkScreen> {
+  final BookmarkService _bookmarkService = getIt<BookmarkService>();
   static const _channel = MethodChannel('com.aicharacter.ai_character/usage_stats');
 
   List<Bookmark> _bookmarks = [];
@@ -54,7 +55,7 @@ class _BookmarkScreenState extends State<BookmarkScreen> {
 
   void _load() {
     setState(() {
-      _bookmarks = widget.bookmarkService.getAll();
+      _bookmarks = _bookmarkService.getAll();
     });
   }
 
@@ -166,7 +167,7 @@ class _BookmarkScreenState extends State<BookmarkScreen> {
                         ),
                         trailing: Icon(Icons.add_circle_outline, color: theme.colorScheme.primary),
                         onTap: () async {
-                          await widget.bookmarkService.add(preset.name, preset.url, faviconUrl: _faviconApiUrl(preset.url));
+                          await _bookmarkService.add(preset.name, preset.url, faviconUrl: _faviconApiUrl(preset.url));
                           _load();
                           if (ctx.mounted) Navigator.pop(ctx);
                         },
@@ -238,9 +239,9 @@ class _BookmarkScreenState extends State<BookmarkScreen> {
                     order: existing.order,
                     createdAt: existing.createdAt,
                   );
-                  await widget.bookmarkService.update(updated);
+                  await _bookmarkService.update(updated);
                 } else {
-                  await widget.bookmarkService.add(name, url, faviconUrl: _faviconApiUrl(url));
+                  await _bookmarkService.add(name, url, faviconUrl: _faviconApiUrl(url));
                 }
                 if (ctx.mounted) Navigator.pop(ctx);
                 _load();
@@ -305,7 +306,7 @@ class _BookmarkScreenState extends State<BookmarkScreen> {
           TextButton(
             onPressed: () async {
               Navigator.pop(ctx);
-              await widget.bookmarkService.delete(bookmark.id);
+              await _bookmarkService.delete(bookmark.id);
               _load();
             },
             child: Text('삭제', style: TextStyle(color: AppColors.error)),

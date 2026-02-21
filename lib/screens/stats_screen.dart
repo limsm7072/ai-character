@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../models/routine.dart' as model;
+import '../service_locator.dart';
 import '../services/routine_service.dart';
 import '../services/routine_completion_service.dart';
 import '../services/distraction_log_service.dart';
@@ -11,23 +12,11 @@ import '../theme/app_colors.dart';
 import 'routine_stats_screen.dart';
 
 class StatsScreen extends StatefulWidget {
-  final RoutineService routineService;
-  final RoutineCompletionService completionService;
-  final DistractionLogService distractionLogService;
-  final AppDetectionService? appDetectionService;
-  final HealthService? healthService;
-  final CalendarService? calendarService;
   final int initialTab;
   final String? title;
 
   const StatsScreen({
     super.key,
-    required this.routineService,
-    required this.completionService,
-    required this.distractionLogService,
-    this.appDetectionService,
-    this.healthService,
-    this.calendarService,
     this.initialTab = 0,
     this.title,
   });
@@ -37,6 +26,13 @@ class StatsScreen extends StatefulWidget {
 }
 
 class _StatsScreenState extends State<StatsScreen> {
+  RoutineService get _routineService => getIt<RoutineService>();
+  RoutineCompletionService get _completionService => getIt<RoutineCompletionService>();
+  DistractionLogService get _distractionLogService => getIt<DistractionLogService>();
+  AppDetectionService get _appDetectionService => getIt<AppDetectionService>();
+  HealthService get _healthService => getIt<HealthService>();
+  CalendarService get _calendarService => getIt<CalendarService>();
+
   bool _appUsageLoading = false;
   bool? _hasUsagePermission;
   List<_DayUsageData> _weeklyDayData = [];
@@ -140,8 +136,8 @@ class _StatsScreenState extends State<StatsScreen> {
   // ==================== 완료율 탭 ====================
 
   Widget _buildCompletionTab() {
-    final routines = widget.routineService.getAll();
-    final today = widget.completionService.todayStr();
+    final routines = _routineService.getAll();
+    final today = _completionService.todayStr();
 
     if (routines.isEmpty) {
       return Center(
@@ -160,9 +156,8 @@ class _StatsScreenState extends State<StatsScreen> {
     }
 
     // 오늘 근무형태 확인
-    final cs = widget.calendarService;
-    final todayWorkTypeId = cs?.getDateWorkType(today);
-    final todayWorkType = todayWorkTypeId != null ? cs?.getWorkTypeById(todayWorkTypeId) : null;
+    final todayWorkTypeId = _calendarService.getDateWorkType(today);
+    final todayWorkType = todayWorkTypeId != null ? _calendarService.getWorkTypeById(todayWorkTypeId) : null;
 
     // 근무형태 필터링된 루틴 목록 (카드 표시용)
     final displayRoutines = todayWorkType != null
@@ -255,8 +250,7 @@ class _StatsScreenState extends State<StatsScreen> {
   /// Filter routines active on a specific date (checks startDate + activeDays + workType).
   List<model.Routine> _activeRoutinesOn(List<model.Routine> routines, DateTime date) {
     final dateStr = _formatDate(date);
-    final cs = widget.calendarService;
-    final todayWorkType = cs?.getDateWorkType(dateStr);
+    final todayWorkType = _calendarService.getDateWorkType(dateStr);
 
     return routines.where((r) {
       if (!r.isActiveOnDate(date)) return false;
@@ -280,7 +274,7 @@ class _StatsScreenState extends State<StatsScreen> {
       final active = _activeRoutinesOn(routines, date);
       totalSlots += active.length;
       for (final r in active) {
-        if (widget.completionService.isCompleted(r.id, dateStr)) {
+        if (_completionService.isCompleted(r.id, dateStr)) {
           completedSlots++;
         }
       }
@@ -293,7 +287,7 @@ class _StatsScreenState extends State<StatsScreen> {
     final now = DateTime.now();
     final todayActive = _activeRoutinesOn(routines, now);
     final todayCompleted = todayActive
-        .where((r) => widget.completionService.isCompleted(r.id, today))
+        .where((r) => _completionService.isCompleted(r.id, today))
         .length;
     final todayRate =
         todayActive.isNotEmpty ? todayCompleted / todayActive.length : 0.0;
@@ -440,7 +434,7 @@ class _StatsScreenState extends State<StatsScreen> {
       if (activeRoutines.isEmpty) continue;
 
       final allCompleted = activeRoutines.every(
-          (r) => widget.completionService.isCompleted(r.id, dateStr));
+          (r) => _completionService.isCompleted(r.id, dateStr));
 
       if (allCompleted) {
         streak++;
@@ -531,11 +525,11 @@ class _StatsScreenState extends State<StatsScreen> {
           } else {
             final completedCount = activeRoutines
                 .where((r) =>
-                    widget.completionService.isCompleted(r.id, dateStr))
+                    _completionService.isCompleted(r.id, dateStr))
                 .length;
             final skippedCount = activeRoutines
                 .where((r) =>
-                    widget.completionService.isSkipped(r.id, dateStr))
+                    _completionService.isSkipped(r.id, dateStr))
                 .length;
             final rate = completedCount / activeRoutines.length;
             cells.add(Expanded(
@@ -635,7 +629,7 @@ class _StatsScreenState extends State<StatsScreen> {
       if (!routine.isActiveOnDate(date)) continue;
       activeCount++;
       final dateStr = _formatDate(date);
-      if (widget.completionService.isCompleted(routine.id, dateStr)) {
+      if (_completionService.isCompleted(routine.id, dateStr)) {
         completedCount++;
       }
     }
@@ -668,7 +662,7 @@ class _StatsScreenState extends State<StatsScreen> {
               builder: (_) => RoutineStatsScreen(
                 routineId: routine.id,
                 routineName: routine.name,
-                logService: widget.distractionLogService,
+                logService: _distractionLogService,
                 routineStartTime: routine.startTime,
                 routineEndTime: routine.endTime,
               ),
@@ -735,10 +729,10 @@ class _StatsScreenState extends State<StatsScreen> {
         IconData? dotIcon;
         if (isFuture || !isActive) {
           dotColor = AppColors.grey400.withOpacity(0.3);
-        } else if (widget.completionService.isCompleted(routine.id, dateStr)) {
+        } else if (_completionService.isCompleted(routine.id, dateStr)) {
           dotColor = AppColors.success;
           dotIcon = Icons.check;
-        } else if (widget.completionService.isSkipped(routine.id, dateStr)) {
+        } else if (_completionService.isSkipped(routine.id, dateStr)) {
           dotColor = AppColors.warning;
           dotIcon = Icons.close;
         } else {
@@ -786,7 +780,7 @@ class _StatsScreenState extends State<StatsScreen> {
   }
 
   Widget _buildDistractionTab() {
-    final routines = widget.routineService.getAll();
+    final routines = _routineService.getAll();
     final filterDates = _getDistractionFilterDates();
 
     int totalCount = 0;
@@ -797,7 +791,7 @@ class _StatsScreenState extends State<StatsScreen> {
       if (filterDates.isEmpty) {
         // 전체
         final stats =
-            widget.distractionLogService.getRoutineStats(routine.id);
+            _distractionLogService.getRoutineStats(routine.id);
         for (final entry in stats.appBreakdown.entries) {
           if (_isHiddenApp(entry.value.appPackage)) continue;
           totalCount += entry.value.count;
@@ -818,7 +812,7 @@ class _StatsScreenState extends State<StatsScreen> {
       } else {
         // 날짜 필터 적용
         for (final date in filterDates) {
-          final stats = widget.distractionLogService
+          final stats = _distractionLogService
               .getRoutineStats(routine.id, date: date);
           for (final entry in stats.appBreakdown.entries) {
             if (_isHiddenApp(entry.value.appPackage)) continue;
@@ -1070,14 +1064,11 @@ class _StatsScreenState extends State<StatsScreen> {
   // ==================== 건강 탭 ====================
 
   Future<void> _loadHealthData() async {
-    final hs = widget.healthService;
-    if (hs == null) return;
-
     setState(() => _healthLoading = true);
 
     try {
-      if (!hs.isAuthorized) {
-        final granted = await hs.requestAuthorization();
+      if (!_healthService.isAuthorized) {
+        final granted = await _healthService.requestAuthorization();
         if (!granted) {
           setState(() {
             _healthLoading = false;
@@ -1087,11 +1078,11 @@ class _StatsScreenState extends State<StatsScreen> {
         }
       }
 
-      final steps = await hs.getTodaySteps();
-      final weekly = await hs.getWeeklySteps();
-      final sleep = await hs.getLastSleep();
-      final hr = await hs.getLatestHeartRate();
-      final hrRange = await hs.getTodayHeartRateRange();
+      final steps = await _healthService.getTodaySteps();
+      final weekly = await _healthService.getWeeklySteps();
+      final sleep = await _healthService.getLastSleep();
+      final hr = await _healthService.getLatestHeartRate();
+      final hrRange = await _healthService.getTodayHeartRateRange();
 
       if (mounted) {
         setState(() {
@@ -1111,24 +1102,6 @@ class _StatsScreenState extends State<StatsScreen> {
   }
 
   Widget _buildHealthTab() {
-    final hs = widget.healthService;
-
-    if (hs == null) {
-      return Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.health_and_safety, size: 64, color: AppColors.grey400),
-            const SizedBox(height: 16),
-            Text(
-              '건강 데이터를 사용할 수 없습니다',
-              style: TextStyle(fontSize: 16, color: AppColors.grey500),
-            ),
-          ],
-        ),
-      );
-    }
-
     if (!_healthLoaded && !_healthLoading) {
       Future.microtask(() => _loadHealthData());
     }
@@ -1137,7 +1110,7 @@ class _StatsScreenState extends State<StatsScreen> {
       return const Center(child: CircularProgressIndicator());
     }
 
-    if (_healthLoaded && !hs.isAuthorized) {
+    if (_healthLoaded && !_healthService.isAuthorized) {
       return Center(
         child: Padding(
           padding: const EdgeInsets.all(32),
@@ -1617,10 +1590,7 @@ class _StatsScreenState extends State<StatsScreen> {
   // ==================== 앱 사용 탭 ====================
 
   Future<void> _loadAppUsageStats() async {
-    final service = widget.appDetectionService;
-    if (service == null) return;
-
-    final hasPerm = await service.hasPermission();
+    final hasPerm = await _appDetectionService.hasPermission();
     if (!hasPerm) {
       setState(() {
         _hasUsagePermission = false;
@@ -1651,7 +1621,7 @@ class _StatsScreenState extends State<StatsScreen> {
         continue;
       }
 
-      final dayStats = await service.getDailyUsageStats(dateStr);
+      final dayStats = await _appDetectionService.getDailyUsageStats(dateStr);
       final apps = <String, _AppTimeEntry>{};
       for (final entry in dayStats) {
         final pkg = entry['appPackage'] as String? ?? '';
@@ -1670,7 +1640,7 @@ class _StatsScreenState extends State<StatsScreen> {
     for (int i = 0; i < 7; i++) {
       final date = prevMonday.add(Duration(days: i));
       final dateStr = _formatDate(date);
-      final dayStats = await service.getDailyUsageStats(dateStr);
+      final dayStats = await _appDetectionService.getDailyUsageStats(dateStr);
       for (final entry in dayStats) {
         final pkg = entry['appPackage'] as String? ?? '';
         if (_isHiddenApp(pkg)) continue;
@@ -1686,22 +1656,6 @@ class _StatsScreenState extends State<StatsScreen> {
   }
 
   Widget _buildAppUsageTab() {
-    if (widget.appDetectionService == null) {
-      return Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            Icon(Icons.phone_android, size: 64, color: AppColors.grey400),
-            const SizedBox(height: 16),
-            Text(
-              '앱 사용 통계를 사용할 수 없습니다',
-              style: TextStyle(fontSize: 16, color: AppColors.grey500),
-            ),
-          ],
-        ),
-      );
-    }
-
     if (_hasUsagePermission == null && !_appUsageLoading) {
       Future.microtask(() => _loadAppUsageStats());
     }
@@ -1729,7 +1683,7 @@ class _StatsScreenState extends State<StatsScreen> {
               const SizedBox(height: 20),
               FilledButton.icon(
                 onPressed: () async {
-                  await widget.appDetectionService!.requestPermission();
+                  await _appDetectionService.requestPermission();
                   Future.delayed(const Duration(seconds: 1), () {
                     _loadAppUsageStats();
                   });

@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import '../service_locator.dart';
 import '../models/goal.dart';
 import '../models/routine.dart';
 import '../models/todo.dart';
@@ -9,18 +10,10 @@ import '../services/todo_service.dart';
 import '../theme/app_colors.dart';
 
 class GoalScreen extends StatefulWidget {
-  final GoalService goalService;
-  final RoutineService routineService;
-  final RoutineCompletionService completionService;
-  final TodoService todoService;
   final String? title;
 
   const GoalScreen({
     super.key,
-    required this.goalService,
-    required this.routineService,
-    required this.completionService,
-    required this.todoService,
     this.title,
   });
 
@@ -32,6 +25,11 @@ class _GoalScreenState extends State<GoalScreen> {
   List<Goal> _goals = [];
   String _filterCategory = '전체';
 
+  GoalService get _goalService => getIt<GoalService>();
+  RoutineService get _routineService => getIt<RoutineService>();
+  RoutineCompletionService get _completionService => getIt<RoutineCompletionService>();
+  TodoService get _todoService => getIt<TodoService>();
+
   @override
   void initState() {
     super.initState();
@@ -39,7 +37,7 @@ class _GoalScreenState extends State<GoalScreen> {
   }
 
   void _load() {
-    setState(() => _goals = widget.goalService.getAll());
+    setState(() => _goals = _goalService.getAll());
   }
 
   List<Goal> get _filtered {
@@ -120,7 +118,7 @@ class _GoalScreenState extends State<GoalScreen> {
   }
 
   Widget _buildGoalCard(Goal goal, ThemeData theme) {
-    final progress = widget.goalService.getProgress(goal, widget.completionService, widget.todoService);
+    final progress = _goalService.getProgress(goal, _completionService, _todoService);
     final catColor = Goal.categoryColor(goal.category);
 
     return Padding(
@@ -319,7 +317,7 @@ class _GoalScreenState extends State<GoalScreen> {
                       onPressed: () async {
                         final title = titleCtrl.text.trim();
                         if (title.isEmpty) return;
-                        await widget.goalService.add(title,
+                        await _goalService.add(title,
                             description: descCtrl.text.trim(),
                             category: category,
                             targetDate: targetDate);
@@ -345,10 +343,6 @@ class _GoalScreenState extends State<GoalScreen> {
       MaterialPageRoute(
         builder: (_) => _GoalDetailScreen(
           goal: goal,
-          goalService: widget.goalService,
-          routineService: widget.routineService,
-          completionService: widget.completionService,
-          todoService: widget.todoService,
           onChanged: _load,
         ),
       ),
@@ -361,18 +355,10 @@ class _GoalScreenState extends State<GoalScreen> {
 // ═══════════════════════════════════════════════════════════════
 class _GoalDetailScreen extends StatefulWidget {
   final Goal goal;
-  final GoalService goalService;
-  final RoutineService routineService;
-  final RoutineCompletionService completionService;
-  final TodoService todoService;
   final VoidCallback onChanged;
 
   const _GoalDetailScreen({
     required this.goal,
-    required this.goalService,
-    required this.routineService,
-    required this.completionService,
-    required this.todoService,
     required this.onChanged,
   });
 
@@ -383,6 +369,11 @@ class _GoalDetailScreen extends StatefulWidget {
 class _GoalDetailScreenState extends State<_GoalDetailScreen> {
   late Goal _goal;
 
+  GoalService get _goalService => getIt<GoalService>();
+  RoutineService get _routineService => getIt<RoutineService>();
+  RoutineCompletionService get _completionService => getIt<RoutineCompletionService>();
+  TodoService get _todoService => getIt<TodoService>();
+
   @override
   void initState() {
     super.initState();
@@ -390,7 +381,7 @@ class _GoalDetailScreenState extends State<_GoalDetailScreen> {
   }
 
   void _reload() {
-    final updated = widget.goalService.getById(_goal.id);
+    final updated = _goalService.getById(_goal.id);
     if (updated != null) {
       setState(() => _goal = updated);
       widget.onChanged();
@@ -398,7 +389,7 @@ class _GoalDetailScreenState extends State<_GoalDetailScreen> {
   }
 
   double get _progress =>
-      widget.goalService.getProgress(_goal, widget.completionService, widget.todoService);
+      _goalService.getProgress(_goal, _completionService, _todoService);
 
   @override
   Widget build(BuildContext context) {
@@ -414,7 +405,7 @@ class _GoalDetailScreenState extends State<_GoalDetailScreen> {
             icon: Icon(_goal.isCompleted ? Icons.undo : Icons.check_circle_outline),
             tooltip: _goal.isCompleted ? '미완료로 변경' : '완료로 변경',
             onPressed: () async {
-              await widget.goalService.toggleComplete(_goal.id);
+              await _goalService.toggleComplete(_goal.id);
               _reload();
             },
           ),
@@ -551,7 +542,7 @@ class _GoalDetailScreenState extends State<_GoalDetailScreen> {
           leading: Checkbox(
             value: m.isCompleted,
             onChanged: (_) async {
-              await widget.goalService.toggleMilestone(_goal.id, m.id);
+              await _goalService.toggleMilestone(_goal.id, m.id);
               _reload();
             },
           ),
@@ -563,7 +554,7 @@ class _GoalDetailScreenState extends State<_GoalDetailScreen> {
           trailing: IconButton(
             icon: Icon(Icons.close, size: 16, color: theme.colorScheme.onSurfaceVariant),
             onPressed: () async {
-              await widget.goalService.removeMilestone(_goal.id, m.id);
+              await _goalService.removeMilestone(_goal.id, m.id);
               _reload();
             },
           ),
@@ -593,7 +584,7 @@ class _GoalDetailScreenState extends State<_GoalDetailScreen> {
           onSubmitted: (_) async {
             final text = ctrl.text.trim();
             if (text.isEmpty) return;
-            await widget.goalService.addMilestone(_goal.id, text);
+            await _goalService.addMilestone(_goal.id, text);
             if (ctx.mounted) Navigator.pop(ctx);
             _reload();
           },
@@ -604,7 +595,7 @@ class _GoalDetailScreenState extends State<_GoalDetailScreen> {
             onPressed: () async {
               final text = ctrl.text.trim();
               if (text.isEmpty) return;
-              await widget.goalService.addMilestone(_goal.id, text);
+              await _goalService.addMilestone(_goal.id, text);
               if (ctx.mounted) Navigator.pop(ctx);
               _reload();
             },
@@ -617,13 +608,13 @@ class _GoalDetailScreenState extends State<_GoalDetailScreen> {
 
   // ─── 연결된 루틴 ───
   Widget _buildLinkedRoutines(ThemeData theme) {
-    final allRoutines = widget.routineService.getAll();
+    final allRoutines = _routineService.getAll();
     final linked = allRoutines.where((r) => _goal.linkedRoutineIds.contains(r.id)).toList();
 
     return Column(
       children: [
         ...linked.map((r) {
-          final rate = widget.completionService.getCompletionRate(r.id, 7);
+          final rate = _completionService.getCompletionRate(r.id, 7);
           return ListTile(
             dense: true,
             contentPadding: const EdgeInsets.only(left: 4),
@@ -633,7 +624,7 @@ class _GoalDetailScreenState extends State<_GoalDetailScreen> {
             trailing: IconButton(
               icon: Icon(Icons.link_off, size: 16, color: theme.colorScheme.onSurfaceVariant),
               onPressed: () async {
-                await widget.goalService.unlinkRoutine(_goal.id, r.id);
+                await _goalService.unlinkRoutine(_goal.id, r.id);
                 _reload();
               },
             ),
@@ -670,7 +661,7 @@ class _GoalDetailScreenState extends State<_GoalDetailScreen> {
             leading: const Icon(Icons.repeat),
             title: Text(r.name),
             onTap: () async {
-              await widget.goalService.linkRoutine(_goal.id, r.id);
+              await _goalService.linkRoutine(_goal.id, r.id);
               if (ctx.mounted) Navigator.pop(ctx);
               _reload();
             },
@@ -683,7 +674,7 @@ class _GoalDetailScreenState extends State<_GoalDetailScreen> {
 
   // ─── 연결된 할일 ───
   Widget _buildLinkedTodos(ThemeData theme) {
-    final allTodos = widget.todoService.getAll();
+    final allTodos = _todoService.getAll();
     final linked = allTodos.where((t) => _goal.linkedTodoIds.contains(t.id)).toList();
 
     return Column(
@@ -703,7 +694,7 @@ class _GoalDetailScreenState extends State<_GoalDetailScreen> {
           trailing: IconButton(
             icon: Icon(Icons.link_off, size: 16, color: theme.colorScheme.onSurfaceVariant),
             onPressed: () async {
-              await widget.goalService.unlinkTodo(_goal.id, t.id);
+              await _goalService.unlinkTodo(_goal.id, t.id);
               _reload();
             },
           ),
@@ -739,7 +730,7 @@ class _GoalDetailScreenState extends State<_GoalDetailScreen> {
             leading: const Icon(Icons.checklist),
             title: Text(t.title),
             onTap: () async {
-              await widget.goalService.linkTodo(_goal.id, t.id);
+              await _goalService.linkTodo(_goal.id, t.id);
               if (ctx.mounted) Navigator.pop(ctx);
               _reload();
             },
@@ -761,7 +752,7 @@ class _GoalDetailScreenState extends State<_GoalDetailScreen> {
           FilledButton(
             style: FilledButton.styleFrom(backgroundColor: Colors.red),
             onPressed: () async {
-              await widget.goalService.delete(_goal.id);
+              await _goalService.delete(_goal.id);
               widget.onChanged();
               if (ctx.mounted) Navigator.pop(ctx);
               if (context.mounted) Navigator.pop(context);

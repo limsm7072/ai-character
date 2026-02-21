@@ -1,19 +1,20 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import '../services/news_service.dart';
+import '../service_locator.dart';
 import '../models/news_article.dart';
 
 class NewsScreen extends StatefulWidget {
-  final NewsService newsService;
   final String? title;
 
-  const NewsScreen({super.key, required this.newsService, this.title});
+  const NewsScreen({super.key, this.title});
 
   @override
   State<NewsScreen> createState() => _NewsScreenState();
 }
 
 class _NewsScreenState extends State<NewsScreen> {
+  final NewsService _newsService = getIt<NewsService>();
   static const _channel = MethodChannel('com.aicharacter.ai_character/usage_stats');
 
   NewsCategory _category = NewsCategory.top;
@@ -23,13 +24,13 @@ class _NewsScreenState extends State<NewsScreen> {
   @override
   void initState() {
     super.initState();
-    _articles = widget.newsService.getCachedArticles(_category);
+    _articles = _newsService.getCachedArticles(_category);
     _fetch();
   }
 
   Future<void> _fetch() async {
     setState(() => _loading = true);
-    final list = await widget.newsService.fetchArticles(_category);
+    final list = await _newsService.fetchArticles(_category);
     if (mounted) {
       setState(() {
         _articles = list;
@@ -42,7 +43,7 @@ class _NewsScreenState extends State<NewsScreen> {
     if (cat == _category) return;
     setState(() {
       _category = cat;
-      _articles = widget.newsService.getCachedArticles(cat);
+      _articles = _newsService.getCachedArticles(cat);
     });
     _fetch();
   }

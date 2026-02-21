@@ -1,19 +1,20 @@
 import 'package:flutter/material.dart';
 import '../models/psychology_tip.dart';
 import '../services/psychology_service.dart';
+import '../service_locator.dart';
 import '../theme/app_colors.dart';
 
 class PsychologyScreen extends StatefulWidget {
-  final PsychologyService psychologyService;
   final String? title;
 
-  const PsychologyScreen({super.key, required this.psychologyService, this.title});
+  const PsychologyScreen({super.key, this.title});
 
   @override
   State<PsychologyScreen> createState() => _PsychologyScreenState();
 }
 
 class _PsychologyScreenState extends State<PsychologyScreen> {
+  final PsychologyService _psychologyService = getIt<PsychologyService>();
   PsychologyTip? _todayTip;
   List<PsychologyTip> _history = [];
   PsychologyCategory? _filterCategory;
@@ -21,8 +22,8 @@ class _PsychologyScreenState extends State<PsychologyScreen> {
   @override
   void initState() {
     super.initState();
-    _todayTip = widget.psychologyService.generateTodayTip();
-    _history = widget.psychologyService.getHistory();
+    _todayTip = _psychologyService.generateTodayTip();
+    _history = _psychologyService.getHistory();
   }
 
   List<PsychologyTip> get _filteredHistory {

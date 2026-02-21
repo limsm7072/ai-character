@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:table_calendar/table_calendar.dart';
 import 'package:intl/intl.dart';
+import '../service_locator.dart';
 import '../models/calendar_event.dart';
 import '../services/calendar_service.dart';
 import '../services/routine_service.dart';
@@ -11,18 +12,10 @@ import '../utils/lunar_calendar.dart';
 import '../theme/app_colors.dart';
 
 class CalendarScreen extends StatefulWidget {
-  final CalendarService calendarService;
-  final RoutineService? routineService;
-  final RoutineCompletionService? completionService;
-  final SettingsService? settingsService;
   final String? title;
 
   const CalendarScreen({
     super.key,
-    required this.calendarService,
-    this.routineService,
-    this.completionService,
-    this.settingsService,
     this.title,
   });
 
@@ -37,11 +30,16 @@ class _CalendarScreenState extends State<CalendarScreen> {
   late bool _showDDay;
   String? _activeWorkTypeId; // active work type for tap-to-assign
 
+  CalendarService get _calendarService => getIt<CalendarService>();
+  RoutineService get _routineService => getIt<RoutineService>();
+  RoutineCompletionService get _completionService => getIt<RoutineCompletionService>();
+  SettingsService get _settingsService => getIt<SettingsService>();
+
   @override
   void initState() {
     super.initState();
-    _showLunar = widget.settingsService?.showLunar ?? true;
-    _showDDay = widget.settingsService?.showDDay ?? true;
+    _showLunar = _settingsService.showLunar;
+    _showDDay = _settingsService.showDDay;
   }
 
   String _formatDate(DateTime dt) =>
@@ -61,9 +59,9 @@ class _CalendarScreenState extends State<CalendarScreen> {
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
     final selectedStr = _formatDate(_selectedDay);
-    final events = widget.calendarService.getByDate(selectedStr);
+    final events = _calendarService.getByDate(selectedStr);
     final routineInfo = _getRoutineInfo(selectedStr);
-    final ddayEvents = _showDDay ? widget.calendarService.getDDayEvents() : <CalendarEvent>[];
+    final ddayEvents = _showDDay ? _calendarService.getDDayEvents() : <CalendarEvent>[];
 
     return Scaffold(
       appBar: AppBar(
@@ -86,7 +84,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
             tooltip: _showLunar ? '음력 숨기기' : '음력 보기',
             onPressed: () {
               setState(() => _showLunar = !_showLunar);
-              widget.settingsService?.setShowLunar(_showLunar);
+              _settingsService.setShowLunar(_showLunar);
             },
           ),
           // D-Day toggle
@@ -98,7 +96,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
             tooltip: _showDDay ? 'D-Day 숨기기' : 'D-Day 보기',
             onPressed: () {
               setState(() => _showDDay = !_showDDay);
-              widget.settingsService?.setShowDDay(_showDDay);
+              _settingsService.setShowDDay(_showDDay);
             },
           ),
           // Work type management
@@ -176,11 +174,11 @@ class _CalendarScreenState extends State<CalendarScreen> {
                 if (_activeWorkTypeId != null) {
                   // Tap-to-assign mode
                   final dateStr = _formatDate(selected);
-                  final currentWtId = widget.calendarService.getDateWorkType(dateStr);
+                  final currentWtId = _calendarService.getDateWorkType(dateStr);
                   if (currentWtId == _activeWorkTypeId) {
-                    widget.calendarService.setDateWorkType(dateStr, null);
+                    _calendarService.setDateWorkType(dateStr, null);
                   } else {
-                    widget.calendarService.setDateWorkType(dateStr, _activeWorkTypeId);
+                    _calendarService.setDateWorkType(dateStr, _activeWorkTypeId);
                   }
                 }
                 setState(() {
@@ -216,9 +214,9 @@ class _CalendarScreenState extends State<CalendarScreen> {
                   final markers = <Widget>[];
 
                   // Work type indicator
-                  final wtId = widget.calendarService.getDateWorkType(dateStr);
+                  final wtId = _calendarService.getDateWorkType(dateStr);
                   if (wtId != null) {
-                    final wt = widget.calendarService.getWorkTypeById(wtId);
+                    final wt = _calendarService.getWorkTypeById(wtId);
                     if (wt != null) {
                       markers.add(_dot(Theme.of(context).colorScheme.primary));
                     }
@@ -235,7 +233,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
                   }
 
                   // Event marker
-                  if (widget.calendarService.getByDate(dateStr).isNotEmpty) {
+                  if (_calendarService.getByDate(dateStr).isNotEmpty) {
                     markers.add(_dot(AppColors.info));
                   }
 
@@ -259,7 +257,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
             // Active work type banner
             if (_activeWorkTypeId != null)
               Builder(builder: (_) {
-                final wt = widget.calendarService.getWorkTypeById(_activeWorkTypeId!);
+                final wt = _calendarService.getWorkTypeById(_activeWorkTypeId!);
                 if (wt == null) return const SizedBox.shrink();
                 return Container(
                   padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -366,7 +364,7 @@ class _CalendarScreenState extends State<CalendarScreen> {
                           child: const Icon(Icons.delete, color: AppColors.white),
                         ),
                         onDismissed: (_) async {
-                          await widget.calendarService.delete(e.id);
+                          await _calendarService.delete(e.id);
                           setState(() {});
                         },
                         child: ListTile(
@@ -544,19 +542,16 @@ class _CalendarScreenState extends State<CalendarScreen> {
   }
 
   _RoutineInfo _getRoutineInfo(String dateStr) {
-    if (widget.routineService == null || widget.completionService == null) {
-      return _RoutineInfo(total: 0, completed: 0, names: []);
-    }
     final date = DateTime.tryParse(dateStr);
     if (date == null) return _RoutineInfo(total: 0, completed: 0, names: []);
 
-    final routines = widget.routineService!.getAll();
+    final routines = _routineService.getAll();
     final active = routines.where((r) => r.isActiveOnDate(date)).toList();
     int completed = 0;
     final names = <_RoutineNameInfo>[];
     for (final r in active) {
-      final done = widget.completionService!.isCompleted(r.id, dateStr) ||
-          widget.completionService!.isSkipped(r.id, dateStr);
+      final done = _completionService.isCompleted(r.id, dateStr) ||
+          _completionService.isSkipped(r.id, dateStr);
       if (done) completed++;
       names.add(_RoutineNameInfo(name: r.name, done: done));
     }
@@ -566,8 +561,8 @@ class _CalendarScreenState extends State<CalendarScreen> {
   // ─── Work Type UI ────────────────────────────────────
 
   Widget _buildWorkTypeChip(String dateStr, ThemeData theme) {
-    final wtId = widget.calendarService.getDateWorkType(dateStr);
-    final wt = wtId != null ? widget.calendarService.getWorkTypeById(wtId) : null;
+    final wtId = _calendarService.getDateWorkType(dateStr);
+    final wt = wtId != null ? _calendarService.getWorkTypeById(wtId) : null;
 
     return Container(
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
@@ -606,8 +601,6 @@ class _CalendarScreenState extends State<CalendarScreen> {
       context: context,
       isScrollControlled: true,
       builder: (ctx) => _WorkTypeManagerSheet(
-        calendarService: widget.calendarService,
-        settingsService: widget.settingsService,
         activeWorkTypeId: _activeWorkTypeId,
       ),
     ).then((activatedId) {
@@ -636,9 +629,9 @@ class _CalendarScreenState extends State<CalendarScreen> {
     if (event != null) {
       result.id = event.id;
       result.createdAt = event.createdAt;
-      await widget.calendarService.update(result);
+      await _calendarService.update(result);
     } else {
-      await widget.calendarService.add(result);
+      await _calendarService.add(result);
     }
     setState(() {});
   }
@@ -886,13 +879,9 @@ class _EventEditSheetState extends State<_EventEditSheet> {
 // ─── Work Type Manager Sheet ──────────────────────────────
 
 class _WorkTypeManagerSheet extends StatefulWidget {
-  final CalendarService calendarService;
-  final SettingsService? settingsService;
   final String? activeWorkTypeId;
 
   const _WorkTypeManagerSheet({
-    required this.calendarService,
-    this.settingsService,
     this.activeWorkTypeId,
   });
 
@@ -903,6 +892,9 @@ class _WorkTypeManagerSheet extends StatefulWidget {
 class _WorkTypeManagerSheetState extends State<_WorkTypeManagerSheet> {
   late String? _activeId;
 
+  CalendarService get _calendarService => getIt<CalendarService>();
+  SettingsService get _settingsService => getIt<SettingsService>();
+
   @override
   void initState() {
     super.initState();
@@ -911,14 +903,12 @@ class _WorkTypeManagerSheetState extends State<_WorkTypeManagerSheet> {
 
   /// Get all routine section IDs from dashboard order.
   List<_RoutineSectionInfo> _getRoutineSections() {
-    final ss = widget.settingsService;
-    if (ss == null) return [];
-    final order = ss.dashboardOrder;
+    final order = _settingsService.dashboardOrder;
     final sections = <_RoutineSectionInfo>[];
     for (final id in order) {
       if (SettingsService.sectionBaseId(id) == 'routine') {
-        if (ss.isDashboardSectionHidden(id)) continue;
-        final label = ss.getSectionLabel(id) ?? '루틴';
+        if (_settingsService.isDashboardSectionHidden(id)) continue;
+        final label = _settingsService.getSectionLabel(id) ?? '루틴';
         sections.add(_RoutineSectionInfo(id: id, label: label));
       }
     }
@@ -928,7 +918,7 @@ class _WorkTypeManagerSheetState extends State<_WorkTypeManagerSheet> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final workTypes = widget.calendarService.getWorkTypes();
+    final workTypes = _calendarService.getWorkTypes();
 
     return SafeArea(
       child: Padding(
@@ -966,7 +956,7 @@ class _WorkTypeManagerSheetState extends State<_WorkTypeManagerSheet> {
             else
               ...workTypes.map((wt) {
                 final isActive = _activeId == wt.id;
-                final linkedSections = widget.settingsService?.getSectionsForWorkType(wt.id) ?? [];
+                final linkedSections = _settingsService.getSectionsForWorkType(wt.id);
                 return ListTile(
                   contentPadding: EdgeInsets.zero,
                   leading: Container(
@@ -1031,7 +1021,7 @@ class _WorkTypeManagerSheetState extends State<_WorkTypeManagerSheet> {
     final linkedSectionIds = <String>{};
     if (existing != null) {
       linkedSectionIds.addAll(
-        widget.settingsService?.getSectionsForWorkType(existing.id) ?? [],
+        _settingsService.getSectionsForWorkType(existing.id),
       );
     }
 
@@ -1069,9 +1059,9 @@ class _WorkTypeManagerSheetState extends State<_WorkTypeManagerSheet> {
                       ...routineSections.map((s) {
                         final isLinked = linkedSectionIds.contains(s.id);
                         // Check if another work type already links this section
-                        final currentWtId = widget.settingsService?.getSectionWorkType(s.id);
+                        final currentWtId = _settingsService.getSectionWorkType(s.id);
                         final otherWtName = (currentWtId != null && currentWtId != existing?.id)
-                            ? widget.calendarService.getWorkTypeById(currentWtId)?.name
+                            ? _calendarService.getWorkTypeById(currentWtId)?.name
                             : null;
                         return CheckboxListTile(
                           dense: true,
@@ -1109,26 +1099,24 @@ class _WorkTypeManagerSheetState extends State<_WorkTypeManagerSheet> {
                   String wtId;
                   if (existing != null) {
                     existing.name = name;
-                    await widget.calendarService.updateWorkType(existing);
+                    await _calendarService.updateWorkType(existing);
                     wtId = existing.id;
                   } else {
                     wtId = DateTime.now().millisecondsSinceEpoch.toString();
-                    await widget.calendarService.addWorkType(WorkType(
+                    await _calendarService.addWorkType(WorkType(
                       id: wtId,
                       name: name,
                     ));
                   }
                   // Update section links
-                  if (widget.settingsService != null) {
-                    for (final s in routineSections) {
-                      if (linkedSectionIds.contains(s.id)) {
-                        await widget.settingsService!.setSectionWorkType(s.id, wtId);
-                      } else {
-                        // Only clear if this section was linked to this work type
-                        final cur = widget.settingsService!.getSectionWorkType(s.id);
-                        if (cur == wtId) {
-                          await widget.settingsService!.setSectionWorkType(s.id, null);
-                        }
+                  for (final s in routineSections) {
+                    if (linkedSectionIds.contains(s.id)) {
+                      await _settingsService.setSectionWorkType(s.id, wtId);
+                    } else {
+                      // Only clear if this section was linked to this work type
+                      final cur = _settingsService.getSectionWorkType(s.id);
+                      if (cur == wtId) {
+                        await _settingsService.setSectionWorkType(s.id, null);
                       }
                     }
                   }
@@ -1158,13 +1146,11 @@ class _WorkTypeManagerSheetState extends State<_WorkTypeManagerSheet> {
           TextButton(
             onPressed: () async {
               // Unlink sections
-              if (widget.settingsService != null) {
-                final linked = widget.settingsService!.getSectionsForWorkType(wt.id);
-                for (final sId in linked) {
-                  await widget.settingsService!.setSectionWorkType(sId, null);
-                }
+              final linked = _settingsService.getSectionsForWorkType(wt.id);
+              for (final sId in linked) {
+                await _settingsService.setSectionWorkType(sId, null);
               }
-              await widget.calendarService.deleteWorkType(wt.id);
+              await _calendarService.deleteWorkType(wt.id);
               if (_activeId == wt.id) _activeId = null;
               if (ctx.mounted) Navigator.pop(ctx);
               setState(() {});

@@ -2,19 +2,20 @@ import 'package:flutter/material.dart';
 import '../models/alarm.dart';
 import '../services/alarm_service.dart';
 import '../services/notification_service.dart';
+import '../service_locator.dart';
 import '../theme/app_colors.dart';
 
 class AlarmScreen extends StatefulWidget {
-  final AlarmService alarmService;
   final String? title;
 
-  const AlarmScreen({super.key, required this.alarmService, this.title});
+  const AlarmScreen({super.key, this.title});
 
   @override
   State<AlarmScreen> createState() => _AlarmScreenState();
 }
 
 class _AlarmScreenState extends State<AlarmScreen> {
+  final AlarmService _alarmService = getIt<AlarmService>();
   List<Alarm> _alarms = [];
 
   @override
@@ -24,7 +25,7 @@ class _AlarmScreenState extends State<AlarmScreen> {
   }
 
   void _load() {
-    setState(() => _alarms = widget.alarmService.getAll().toList());
+    setState(() => _alarms = _alarmService.getAll().toList());
   }
 
   Future<void> _ensurePermissions() async {
@@ -50,7 +51,7 @@ class _AlarmScreenState extends State<AlarmScreen> {
       // Enabling an alarm — ensure permissions
       await _ensurePermissions();
     }
-    await widget.alarmService.toggleEnabled(alarm.id);
+    await _alarmService.toggleEnabled(alarm.id);
     _load();
   }
 
@@ -64,9 +65,9 @@ class _AlarmScreenState extends State<AlarmScreen> {
           if (existing != null) {
             alarm.id = existing.id;
             alarm.createdAt = existing.createdAt;
-            await widget.alarmService.update(alarm);
+            await _alarmService.update(alarm);
           } else {
-            await widget.alarmService.add(alarm);
+            await _alarmService.add(alarm);
           }
           if (ctx.mounted) Navigator.pop(ctx, true);
         },
@@ -88,7 +89,7 @@ class _AlarmScreenState extends State<AlarmScreen> {
                   ),
                 );
                 if (confirmed == true) {
-                  await widget.alarmService.delete(existing.id);
+                  await _alarmService.delete(existing.id);
                   if (ctx.mounted) Navigator.pop(ctx, true);
                 }
               }

@@ -1,19 +1,20 @@
 import 'package:flutter/material.dart';
 import '../models/diary.dart';
 import '../services/diary_service.dart';
+import '../service_locator.dart';
 import '../theme/app_colors.dart';
 
 class DiaryScreen extends StatefulWidget {
-  final DiaryService diaryService;
   final String? title;
 
-  const DiaryScreen({super.key, required this.diaryService, this.title});
+  const DiaryScreen({super.key, this.title});
 
   @override
   State<DiaryScreen> createState() => _DiaryScreenState();
 }
 
 class _DiaryScreenState extends State<DiaryScreen> {
+  final DiaryService _diaryService = getIt<DiaryService>();
   late DateTime _currentMonth;
   List<Diary> _monthDiaries = [];
   late DateTime _today;
@@ -28,7 +29,7 @@ class _DiaryScreenState extends State<DiaryScreen> {
 
   void _loadMonth() {
     setState(() {
-      _monthDiaries = widget.diaryService.getByMonth(
+      _monthDiaries = _diaryService.getByMonth(
         _currentMonth.year,
         _currentMonth.month,
       );
@@ -62,12 +63,11 @@ class _DiaryScreenState extends State<DiaryScreen> {
 
   Future<void> _openDiary(DateTime date) async {
     final dateStr = _formatDate(date);
-    final existing = widget.diaryService.getByDate(dateStr);
+    final existing = _diaryService.getByDate(dateStr);
     final result = await Navigator.push<bool>(
       context,
       MaterialPageRoute(
         builder: (_) => DiaryEditScreen(
-          diaryService: widget.diaryService,
           date: dateStr,
           diary: existing,
         ),
@@ -79,7 +79,7 @@ class _DiaryScreenState extends State<DiaryScreen> {
   @override
   Widget build(BuildContext context) {
     final theme = Theme.of(context);
-    final streak = widget.diaryService.getCurrentStreak();
+    final streak = _diaryService.getCurrentStreak();
 
     return Scaffold(
       appBar: AppBar(
@@ -316,13 +316,11 @@ class _DiaryScreenState extends State<DiaryScreen> {
 // ─── Diary Edit Screen ──────────────────────────────────────
 
 class DiaryEditScreen extends StatefulWidget {
-  final DiaryService diaryService;
   final String date;
   final Diary? diary;
 
   const DiaryEditScreen({
     super.key,
-    required this.diaryService,
     required this.date,
     this.diary,
   });
@@ -332,6 +330,7 @@ class DiaryEditScreen extends StatefulWidget {
 }
 
 class _DiaryEditScreenState extends State<DiaryEditScreen> {
+  final DiaryService _diaryService = getIt<DiaryService>();
   late TextEditingController _contentController;
   late TextEditingController _tagController;
   late int _mood;
@@ -376,7 +375,7 @@ class _DiaryEditScreenState extends State<DiaryEditScreen> {
       createdAt: widget.diary?.createdAt ?? now,
       updatedAt: now,
     );
-    await widget.diaryService.save(diary);
+    await _diaryService.save(diary);
     if (mounted) Navigator.pop(context, true);
   }
 
@@ -397,7 +396,7 @@ class _DiaryEditScreenState extends State<DiaryEditScreen> {
       ),
     );
     if (confirm == true) {
-      await widget.diaryService.delete(widget.diary!.id);
+      await _diaryService.delete(widget.diary!.id);
       if (mounted) Navigator.pop(context, true);
     }
   }

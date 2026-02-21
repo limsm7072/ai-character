@@ -1,19 +1,16 @@
 import 'package:flutter/material.dart';
 import 'package:geolocator/geolocator.dart';
+import '../service_locator.dart';
 import '../services/weather_service.dart';
 import '../services/settings_service.dart';
 import '../models/weather_data.dart';
 import '../theme/app_colors.dart';
 
 class WeatherScreen extends StatefulWidget {
-  final WeatherService weatherService;
-  final SettingsService settingsService;
   final String? title;
 
   const WeatherScreen({
     super.key,
-    required this.weatherService,
-    required this.settingsService,
     this.title,
   });
 
@@ -26,18 +23,21 @@ class _WeatherScreenState extends State<WeatherScreen> {
   bool _loading = false;
   bool _gpsLoading = false;
 
+  WeatherService get _weatherService => getIt<WeatherService>();
+  SettingsService get _settingsService => getIt<SettingsService>();
+
   @override
   void initState() {
     super.initState();
-    _weather = widget.weatherService.getCached();
+    _weather = _weatherService.getCached();
     _refresh();
   }
 
   Future<void> _refresh() async {
     setState(() => _loading = true);
-    final lat = widget.settingsService.weatherLat;
-    final lon = widget.settingsService.weatherLon;
-    final data = await widget.weatherService.forceRefresh(lat, lon);
+    final lat = _settingsService.weatherLat;
+    final lon = _settingsService.weatherLon;
+    final data = await _weatherService.forceRefresh(lat, lon);
     if (mounted) {
       setState(() {
         if (data != null) _weather = data;
@@ -66,10 +66,10 @@ class _WeatherScreenState extends State<WeatherScreen> {
         final pos = await Geolocator.getCurrentPosition(
           locationSettings: const LocationSettings(accuracy: LocationAccuracy.low, timeLimit: Duration(seconds: 10)),
         );
-        await widget.settingsService.setWeatherLocation(pos.latitude, pos.longitude);
-        final data = await widget.weatherService.forceRefresh(pos.latitude, pos.longitude);
+        await _settingsService.setWeatherLocation(pos.latitude, pos.longitude);
+        final data = await _weatherService.forceRefresh(pos.latitude, pos.longitude);
         if (data != null && data.locationName.isNotEmpty) {
-          await widget.settingsService.setWeatherLocationName(data.locationName);
+          await _settingsService.setWeatherLocationName(data.locationName);
         }
         if (mounted) {
           setState(() {
@@ -418,7 +418,7 @@ class _WeatherScreenState extends State<WeatherScreen> {
   }
 
   Widget _buildLocationSection(ThemeData theme) {
-    final locName = widget.settingsService.weatherLocationName;
+    final locName = _settingsService.weatherLocationName;
     return Container(
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
@@ -436,7 +436,7 @@ class _WeatherScreenState extends State<WeatherScreen> {
                 Text('현재 위치', style: TextStyle(fontSize: 13, color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.7))),
                 const SizedBox(height: 2),
                 Text(
-                  locName.isNotEmpty ? locName : '${widget.settingsService.weatherLat.toStringAsFixed(2)}, ${widget.settingsService.weatherLon.toStringAsFixed(2)}',
+                  locName.isNotEmpty ? locName : '${_settingsService.weatherLat.toStringAsFixed(2)}, ${_settingsService.weatherLon.toStringAsFixed(2)}',
                   style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: theme.colorScheme.onSurface),
                 ),
               ],

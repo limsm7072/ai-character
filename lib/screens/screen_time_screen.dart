@@ -2,19 +2,20 @@ import 'dart:math';
 import 'package:flutter/material.dart';
 import '../models/screen_time_data.dart';
 import '../services/screen_time_service.dart';
+import '../service_locator.dart';
 import '../theme/app_colors.dart';
 
 class ScreenTimeScreen extends StatefulWidget {
-  final ScreenTimeService screenTimeService;
   final String? title;
 
-  const ScreenTimeScreen({super.key, required this.screenTimeService, this.title});
+  const ScreenTimeScreen({super.key, this.title});
 
   @override
   State<ScreenTimeScreen> createState() => _ScreenTimeScreenState();
 }
 
 class _ScreenTimeScreenState extends State<ScreenTimeScreen> {
+  final ScreenTimeService _screenTimeService = getIt<ScreenTimeService>();
   ScreenTimeData? _data;
   bool _loading = true;
 
@@ -25,7 +26,7 @@ class _ScreenTimeScreenState extends State<ScreenTimeScreen> {
   }
 
   Future<void> _load() async {
-    final data = await widget.screenTimeService.fetchToday();
+    final data = await _screenTimeService.fetchToday();
     if (mounted) setState(() { _data = data; _loading = false; });
   }
 

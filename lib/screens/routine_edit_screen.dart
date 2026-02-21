@@ -2,28 +2,18 @@ import 'package:flutter/material.dart';
 import '../models/routine.dart' as model;
 import '../models/alarm.dart';
 import '../models/timer_preset.dart';
+import '../service_locator.dart';
 import '../services/routine_service.dart';
 import '../services/alarm_service.dart';
 import '../services/timer_service.dart';
 import '../services/routine_group_service.dart';
-import '../services/calendar_service.dart';
 import '../theme/app_colors.dart';
 
 class RoutineEditScreen extends StatefulWidget {
-  final RoutineService routineService;
-  final AlarmService? alarmService;
-  final TimerService? timerService;
-  final RoutineGroupService? routineGroupService;
-  final CalendarService? calendarService;
   final model.Routine? routine;
 
   const RoutineEditScreen({
     super.key,
-    required this.routineService,
-    this.alarmService,
-    this.timerService,
-    this.routineGroupService,
-    this.calendarService,
     this.routine,
   });
 
@@ -32,6 +22,11 @@ class RoutineEditScreen extends StatefulWidget {
 }
 
 class _RoutineEditScreenState extends State<RoutineEditScreen> {
+  RoutineService get _routineService => getIt<RoutineService>();
+  AlarmService get _alarmService => getIt<AlarmService>();
+  TimerService get _timerService => getIt<TimerService>();
+  RoutineGroupService get _routineGroupService => getIt<RoutineGroupService>();
+
   final _formKey = GlobalKey<FormState>();
   late TextEditingController _nameController;
   late TextEditingController _descController;
@@ -408,7 +403,7 @@ class _RoutineEditScreenState extends State<RoutineEditScreen> {
   }
 
   Widget _buildAlarmSelector() {
-    final alarms = widget.alarmService?.getAll() ?? [];
+    final alarms = _alarmService.getAll();
     // Validate linked alarm still exists
     if (_linkedAlarmId != null && !alarms.any((a) => a.id == _linkedAlarmId)) {
       _linkedAlarmId = null;
@@ -434,7 +429,7 @@ class _RoutineEditScreenState extends State<RoutineEditScreen> {
   }
 
   Widget _buildTimerSelector() {
-    final presets = widget.timerService?.getAll() ?? [];
+    final presets = _timerService.getAll();
     // Validate linked timer still exists
     if (_linkedTimerId != null && !presets.any((p) => p.id == _linkedTimerId)) {
       _linkedTimerId = null;
@@ -511,9 +506,9 @@ class _RoutineEditScreenState extends State<RoutineEditScreen> {
     );
 
     if (_isEditing) {
-      await widget.routineService.update(routine);
+      await _routineService.update(routine);
     } else {
-      await widget.routineService.add(routine);
+      await _routineService.add(routine);
     }
 
     if (mounted) Navigator.pop(context, true);
@@ -539,8 +534,8 @@ class _RoutineEditScreenState extends State<RoutineEditScreen> {
     );
 
     if (confirm == true) {
-      await widget.routineService.delete(widget.routine!.id);
-      await widget.routineGroupService?.onRoutineDeleted(widget.routine!.id);
+      await _routineService.delete(widget.routine!.id);
+      await _routineGroupService.onRoutineDeleted(widget.routine!.id);
       if (mounted) Navigator.pop(context, true);
     }
   }

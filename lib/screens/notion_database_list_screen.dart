@@ -1,12 +1,11 @@
 import 'package:flutter/material.dart';
 import '../models/notion_database.dart';
+import '../service_locator.dart';
 import '../services/notion_database_service.dart';
 import 'notion_database_view_screen.dart';
 
 class NotionDatabaseListScreen extends StatefulWidget {
-  final NotionDatabaseService service;
-
-  const NotionDatabaseListScreen({super.key, required this.service});
+  const NotionDatabaseListScreen({super.key});
 
   @override
   State<NotionDatabaseListScreen> createState() =>
@@ -14,6 +13,8 @@ class NotionDatabaseListScreen extends StatefulWidget {
 }
 
 class NotionDatabaseListScreenState extends State<NotionDatabaseListScreen> {
+  NotionDatabaseService get _service => getIt<NotionDatabaseService>();
+
   List<NotionDatabase> _dbs = [];
 
   @override
@@ -24,18 +25,17 @@ class NotionDatabaseListScreenState extends State<NotionDatabaseListScreen> {
 
   void _reload() {
     setState(() {
-      _dbs = widget.service.getAll();
+      _dbs = _service.getAll();
     });
   }
 
   Future<void> _createDb() async {
-    final db = await widget.service.add();
+    final db = await _service.add();
     if (!mounted) return;
     await Navigator.push(
       context,
       MaterialPageRoute(
         builder: (_) => NotionDatabaseViewScreen(
-          service: widget.service,
           database: db,
         ),
       ),
@@ -44,12 +44,11 @@ class NotionDatabaseListScreenState extends State<NotionDatabaseListScreen> {
   }
 
   Future<void> _openDb(NotionDatabase db) async {
-    final latest = widget.service.getById(db.id) ?? db;
+    final latest = _service.getById(db.id) ?? db;
     await Navigator.push(
       context,
       MaterialPageRoute(
         builder: (_) => NotionDatabaseViewScreen(
-          service: widget.service,
           database: latest,
         ),
       ),
@@ -96,7 +95,7 @@ class NotionDatabaseListScreenState extends State<NotionDatabaseListScreen> {
                   ),
                 );
                 if (confirm == true) {
-                  await widget.service.delete(db.id);
+                  await _service.delete(db.id);
                   _reload();
                 }
               },
@@ -126,7 +125,7 @@ class NotionDatabaseListScreenState extends State<NotionDatabaseListScreen> {
           TextButton(
             onPressed: () {
               db.title = ctrl.text;
-              widget.service.update(db);
+              _service.update(db);
               Navigator.pop(c);
               _reload();
             },
