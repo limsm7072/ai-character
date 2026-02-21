@@ -171,12 +171,14 @@ class _WeeklyReportScreenState extends State<WeeklyReportScreen> {
           Text('요일별 완료율', style: const TextStyle(fontSize: 15, fontWeight: FontWeight.w600)),
           const SizedBox(height: 16),
           SizedBox(
-            height: 120,
+            height: 130,
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.end,
               children: List.generate(7, (i) {
                 final rate = _report!.dailyRates[keys[i]] ?? 0;
                 final color = _scoreColor(rate);
+                final barMaxHeight = 80.0;
+                final barHeight = (barMaxHeight * max(rate, 0.05)).clamp(4.0, barMaxHeight);
                 return Expanded(
                   child: Padding(
                     padding: const EdgeInsets.symmetric(horizontal: 4),
@@ -186,15 +188,11 @@ class _WeeklyReportScreenState extends State<WeeklyReportScreen> {
                         Text('${(rate * 100).round()}',
                             style: TextStyle(fontSize: 10, color: theme.colorScheme.onSurfaceVariant)),
                         const SizedBox(height: 4),
-                        Flexible(
-                          child: FractionallySizedBox(
-                            heightFactor: max(rate, 0.05),
-                            child: Container(
-                              decoration: BoxDecoration(
-                                color: color,
-                                borderRadius: BorderRadius.circular(4),
-                              ),
-                            ),
+                        Container(
+                          height: barHeight,
+                          decoration: BoxDecoration(
+                            color: color,
+                            borderRadius: BorderRadius.circular(4),
                           ),
                         ),
                         const SizedBox(height: 4),

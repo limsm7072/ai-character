@@ -1957,13 +1957,15 @@ class DashboardScreenState extends State<DashboardScreen> {
                   child: Center(child: Text('${data.level}', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: accentColor))),
                 ),
                 const SizedBox(width: 12),
-                Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(data.title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700)),
-                    const SizedBox(height: 2),
-                    Text('${data.totalXp} XP', style: TextStyle(fontSize: 12, color: theme.colorScheme.onSurfaceVariant)),
-                  ],
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(data.title, style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w700), overflow: TextOverflow.ellipsis),
+                      const SizedBox(height: 2),
+                      Text('${data.totalXp} XP', style: TextStyle(fontSize: 12, color: theme.colorScheme.onSurfaceVariant)),
+                    ],
+                  ),
                 ),
               ],
             ),
@@ -2009,14 +2011,17 @@ class DashboardScreenState extends State<DashboardScreen> {
   }
 
   Widget _growthStat(ThemeData theme, IconData icon, String label, String value) {
-    return Row(
-      mainAxisSize: MainAxisSize.min,
-      children: [
-        Icon(icon, size: 14, color: theme.colorScheme.onSurfaceVariant),
-        const SizedBox(width: 4),
-        Text('$label ', style: TextStyle(fontSize: 11, color: theme.colorScheme.onSurfaceVariant)),
-        Text(value, style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600)),
-      ],
+    return Expanded(
+      child: Row(
+        mainAxisSize: MainAxisSize.min,
+        children: [
+          Icon(icon, size: 14, color: theme.colorScheme.onSurfaceVariant),
+          const SizedBox(width: 4),
+          Flexible(
+            child: Text('$label $value', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600), overflow: TextOverflow.ellipsis),
+          ),
+        ],
+      ),
     );
   }
 
@@ -2156,37 +2161,34 @@ class DashboardScreenState extends State<DashboardScreen> {
   Widget _buildMiniDayBars(ThemeData theme) {
     const keys = ['mon', 'tue', 'wed', 'thu', 'fri', 'sat', 'sun'];
     const days = ['월', '화', '수', '목', '금', '토', '일'];
-    return Row(
-      children: List.generate(7, (i) {
-        final rate = _weeklyReport?.dailyRates[keys[i]] ?? 0;
-        return Expanded(
-          child: Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 1),
-            child: Column(
-              children: [
-                Container(
-                  height: 20,
-                  decoration: BoxDecoration(
-                    color: theme.colorScheme.outline.withValues(alpha: 0.1),
-                    borderRadius: BorderRadius.circular(2),
-                  ),
-                  child: FractionallySizedBox(
-                    alignment: Alignment.bottomCenter,
-                    heightFactor: rate > 0 ? rate : 0.05,
-                    child: Container(
-                      decoration: BoxDecoration(
-                        color: _weeklyScoreColor(rate),
-                        borderRadius: BorderRadius.circular(2),
-                      ),
+    return SizedBox(
+      height: 32,
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.end,
+        children: List.generate(7, (i) {
+          final rate = _weeklyReport?.dailyRates[keys[i]] ?? 0;
+          final barHeight = 20.0 * (rate > 0 ? rate : 0.05);
+          return Expanded(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 1),
+              child: Column(
+                mainAxisAlignment: MainAxisAlignment.end,
+                children: [
+                  Container(
+                    height: barHeight.clamp(1.0, 20.0),
+                    decoration: BoxDecoration(
+                      color: _weeklyScoreColor(rate),
+                      borderRadius: BorderRadius.circular(2),
                     ),
                   ),
-                ),
-                Text(days[i], style: TextStyle(fontSize: 8, color: theme.colorScheme.onSurfaceVariant)),
-              ],
+                  const SizedBox(height: 2),
+                  Text(days[i], style: TextStyle(fontSize: 8, color: theme.colorScheme.onSurfaceVariant)),
+                ],
+              ),
             ),
-          ),
-        );
-      }),
+          );
+        }),
+      ),
     );
   }
 
