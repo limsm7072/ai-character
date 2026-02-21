@@ -276,7 +276,7 @@ class GeminiService {
     int distractionCount = 1,
     int intensity = 1,
   }) async {
-    if (_chat == null) throw Exception('Gemini not initialized');
+    if (_apiKey == null) throw Exception('Gemini not initialized');
 
     String intensityGuide;
     switch (intensity) {
@@ -294,49 +294,92 @@ class GeminiService {
     final contextHint = _routineContextHint(routineName);
     final repeatNote = distractionCount > 1 ? ' 벌써 ${distractionCount}번째야.' : '';
 
-    final prompt = '''사용자가 지금 "$currentApp"을 하고 있어.$repeatNote $intensityGuide
+    final prompt = '''너는 $_characterName이야. 사용자의 귀여운 AI 비서야.
+사용자가 지금 "$currentApp"을 하고 있어.$repeatNote $intensityGuide
 
 [루틴 정보] 지금은 "$routineName" 시간이야.
 $contextHint
 [중요 규칙]
-- "루틴"이라는 단어를 쓰지 마. 딱딱해.
+- 절대 "루틴"이라는 단어를 쓰지 마. 딱딱해.
 - "$routineName"을 그대로 읽지 말고, 자연스러운 일상 표현으로 바꿔서 말해.
 - 예: "취침" → "안 자?" / "자야 될 텐데~" / "잘 시간이야~"
-- 예: "운동" → "득근득근 안 해?" / "몸 좀 움직여야지~"
+- 예: "운동" → "득근득근 안 해?" / "몸 안 만들거야?" / "몸 좀 움직여야지~"
 - 예: "약 복용" → "약 먹는 거 깜빡하면 안 돼~~"
 - 지금 사용자가 하고 있는 "$currentApp" 앱을 자연스럽게 언급해. 재미있게.
-- 짧고 임팩트 있게 1~2문장으로.''';
+- 짧고 임팩트 있게 1~2문장으로.
 
-    return await _chatWithFallback(prompt);
+[응답 형식] 반드시 아래 JSON 형식으로만 답해:
+{"text":"잔소리 내용","emotion":"annoyed","gesture":"pointing"}
+emotion 종류: happy, annoyed, angry, worried, sad, excited, scolding
+gesture 종류: pointing, arms_crossed, head_shake, hands_on_hips, waving, nodding, idle''';
+
+    return await _generateStandalone(prompt);
   }
 
   /// Generate an encouragement when routine starts.
   Future<AiResponse> generateEncouragement(String routineName) async {
-    if (_chat == null) throw Exception('Gemini not initialized');
+    if (_apiKey == null) throw Exception('Gemini not initialized');
     final contextHint = _routineContextHint(routineName);
-    final prompt = '''지금 "$routineName" 시간이 시작됐어. 사용자를 격려해줘.
+    final prompt = '''너는 $_characterName이야. 사용자의 귀여운 AI 비서야.
+지금 "$routineName" 시간이 시작됐어. 사용자를 격려해줘.
 $contextHint
 [규칙]
-- "루틴"이라는 단어 쓰지 마. 자연스럽게 말해.
+- 절대 "루틴"이라는 단어 쓰지 마. 자연스럽게 말해.
 - "$routineName"을 일상 표현으로 바꿔서 말해.
 - 예: "취침" → "슬슬 잘 준비 하자~" / "운동" → "오늘도 득근 가자!!"
-- 짧고 밝게 1~2문장으로.''';
-    return await _chatWithFallback(prompt);
+- 짧고 밝게 1~2문장으로.
+
+[응답 형식] 반드시 아래 JSON 형식으로만 답해:
+{"text":"격려 내용","emotion":"excited","gesture":"waving"}
+emotion 종류: happy, annoyed, angry, worried, sad, excited, scolding
+gesture 종류: pointing, arms_crossed, head_shake, hands_on_hips, waving, nodding, idle''';
+    return await _generateStandalone(prompt);
   }
 
   /// Generate praise when routine is completed.
   Future<AiResponse> generatePraise(String routineName) async {
-    if (_chat == null) throw Exception('Gemini not initialized');
+    if (_apiKey == null) throw Exception('Gemini not initialized');
     final contextHint = _routineContextHint(routineName);
-    final prompt = '''사용자가 "$routineName"을 잘 마쳤어! 칭찬해줘.
+    final prompt = '''너는 $_characterName이야. 사용자의 귀여운 AI 비서야.
+사용자가 "$routineName"을 잘 마쳤어! 칭찬해줘.
 $contextHint
 [규칙]
-- "루틴"이라는 단어 쓰지 마.
+- 절대 "루틴"이라는 단어 쓰지 마.
 - 해당 활동에 맞는 자연스러운 칭찬을 해줘.
 - 예: "운동" → "오늘도 득근 성공! 몸짱 되는 거야~"
 - 예: "공부" → "공부 끝! 머리에 쏙쏙 들었겠지?"
-- 짧고 신나게 1~2문장으로.''';
-    return await _chatWithFallback(prompt);
+- 짧고 신나게 1~2문장으로.
+
+[응답 형식] 반드시 아래 JSON 형식으로만 답해:
+{"text":"칭찬 내용","emotion":"happy","gesture":"nodding"}
+emotion 종류: happy, annoyed, angry, worried, sad, excited, scolding
+gesture 종류: pointing, arms_crossed, head_shake, hands_on_hips, waving, nodding, idle''';
+    return await _generateStandalone(prompt);
+  }
+
+  /// 독립 모델 호출 (채팅 기록 없이 단건 요청)
+  Future<AiResponse> _generateStandalone(String prompt) async {
+    for (int i = 0; i < _chatModels.length; i++) {
+      final model = GenerativeModel(
+        model: _chatModels[i],
+        apiKey: _apiKey!,
+        generationConfig: GenerationConfig(
+          temperature: 0.9,
+          maxOutputTokens: 256,
+        ),
+      );
+      try {
+        final response = await model.generateContent([Content.text(prompt)]);
+        return AiResponse.parse(response.text ?? '');
+      } catch (e) {
+        if (_isQuotaError(e) && i < _chatModels.length - 1) {
+          print('[GeminiService] Standalone quota exceeded on ${_chatModels[i]}, trying ${_chatModels[i + 1]}');
+          continue;
+        }
+        rethrow;
+      }
+    }
+    throw Exception('All models quota exceeded');
   }
 
   /// 루틴 이름에서 키워드를 분석해 자연스러운 표현 힌트를 생성
