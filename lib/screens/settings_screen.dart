@@ -6,22 +6,12 @@ import '../services/app_detection_service.dart';
 import '../services/overlay_service.dart';
 import '../services/tts_service.dart';
 import '../services/weather_service.dart';
+import '../service_locator.dart';
 import '../theme/app_colors.dart';
 import 'package:geolocator/geolocator.dart';
 
 class SettingsScreen extends StatefulWidget {
-  final SettingsService settingsService;
-  final AppDetectionService? appDetection;
-  final TtsService ttsService;
-  final WeatherService weatherService;
-
-  const SettingsScreen({
-    super.key,
-    required this.settingsService,
-    this.appDetection,
-    required this.ttsService,
-    required this.weatherService,
-  });
+  const SettingsScreen({super.key});
 
   @override
   State<SettingsScreen> createState() => _SettingsScreenState();
@@ -32,8 +22,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
 
   late TextEditingController _apiKeyController;
   late TextEditingController _nameController;
-  final _appDetection = AppDetectionService();
-  final _overlayService = OverlayService();
+  AppDetectionService get _appDetection => getIt<AppDetectionService>();
+  OverlayService get _overlayService => getIt<OverlayService>();
   bool _hasUsagePermission = false;
   bool _hasOverlayPermission = false;
 
@@ -41,9 +31,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
   void initState() {
     super.initState();
     _apiKeyController =
-        TextEditingController(text: widget.settingsService.apiKey);
+        TextEditingController(text: getIt<SettingsService>().apiKey);
     _nameController =
-        TextEditingController(text: widget.settingsService.characterName);
+        TextEditingController(text: getIt<SettingsService>().characterName);
     _checkPermissions();
   }
 
@@ -173,7 +163,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     suffixIcon: IconButton(
                       icon: const Icon(Icons.save),
                       onPressed: () async {
-                        await widget.settingsService
+                        await getIt<SettingsService>()
                             .setApiKey(_apiKeyController.text.trim());
                         if (mounted) {
                           ScaffoldMessenger.of(context).showSnackBar(
@@ -195,9 +185,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
           SwitchListTile(
             title: const Text('음성 출력'),
             subtitle: const Text('캐릭터가 말할 때 음성으로 읽어줍니다'),
-            value: widget.settingsService.ttsEnabled,
+            value: getIt<SettingsService>().ttsEnabled,
             onChanged: (v) async {
-              await widget.settingsService.setTtsEnabled(v);
+              await getIt<SettingsService>().setTtsEnabled(v);
               setState(() {});
             },
           ),
@@ -226,7 +216,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   onPressed: () async {
                     final name = _nameController.text.trim();
                     if (name.isNotEmpty) {
-                      await widget.settingsService.setCharacterName(name);
+                      await getIt<SettingsService>().setCharacterName(name);
                       if (mounted) {
                         setState(() {});
                         ScaffoldMessenger.of(context).showSnackBar(
@@ -242,10 +232,10 @@ class _SettingsScreenState extends State<SettingsScreen> {
           ListTile(
             title: const Text('캐릭터 선택'),
             subtitle: Text(CharacterRegistry.getById(
-                    widget.settingsService.selectedCharacter)
+                    getIt<SettingsService>().selectedCharacter)
                 .displayName),
             trailing: DropdownButton<String>(
-              value: widget.settingsService.selectedCharacter,
+              value: getIt<SettingsService>().selectedCharacter,
               items: CharacterRegistry.characters
                   .map((c) => DropdownMenuItem(
                         value: c.id,
@@ -254,7 +244,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   .toList(),
               onChanged: (v) async {
                 if (v != null) {
-                  await widget.settingsService.setSelectedCharacter(v);
+                  await getIt<SettingsService>().setSelectedCharacter(v);
                   setState(() {});
                 }
               },
@@ -263,9 +253,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
           SwitchListTile(
             title: const Text('대화 화면 캐릭터'),
             subtitle: const Text('대화 화면에서 캐릭터를 표시합니다'),
-            value: widget.settingsService.chatCharacterVisible,
+            value: getIt<SettingsService>().chatCharacterVisible,
             onChanged: (v) async {
-              await widget.settingsService.setChatCharacterVisible(v);
+              await getIt<SettingsService>().setChatCharacterVisible(v);
               setState(() {});
             },
           ),
@@ -276,18 +266,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
           SwitchListTile(
             title: const Text('지난 루틴 확인'),
             subtitle: const Text('끝난 루틴의 완료 여부를 자동으로 물어봅니다'),
-            value: widget.settingsService.pastRoutineCheckEnabled,
+            value: getIt<SettingsService>().pastRoutineCheckEnabled,
             onChanged: (v) async {
-              await widget.settingsService.setPastRoutineCheckEnabled(v);
+              await getIt<SettingsService>().setPastRoutineCheckEnabled(v);
               setState(() {});
             },
           ),
-          if (widget.settingsService.pastRoutineCheckEnabled)
+          if (getIt<SettingsService>().pastRoutineCheckEnabled)
             ListTile(
               title: const Text('확인 간격'),
               subtitle: const Text('얼마나 자주 확인할지 설정합니다'),
               trailing: DropdownButton<int>(
-                value: widget.settingsService.routineCheckInterval,
+                value: getIt<SettingsService>().routineCheckInterval,
                 items: const [
                   DropdownMenuItem(value: 1, child: Text('1초')),
                   DropdownMenuItem(value: 5, child: Text('5초')),
@@ -301,7 +291,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                 ],
                 onChanged: (v) async {
                   if (v != null) {
-                    await widget.settingsService.setRoutineCheckInterval(v);
+                    await getIt<SettingsService>().setRoutineCheckInterval(v);
                     setState(() {});
                   }
                 },
@@ -313,13 +303,13 @@ class _SettingsScreenState extends State<SettingsScreen> {
           _buildSectionHeader('날씨'),
           ListTile(
             title: Text(
-              widget.settingsService.weatherLocationName.isNotEmpty
-                  ? widget.settingsService.weatherLocationName
+              getIt<SettingsService>().weatherLocationName.isNotEmpty
+                  ? getIt<SettingsService>().weatherLocationName
                   : '현재 위치',
             ),
             subtitle: Text(
-              '위도 ${widget.settingsService.weatherLat.toStringAsFixed(4)}, '
-              '경도 ${widget.settingsService.weatherLon.toStringAsFixed(4)}',
+              '위도 ${getIt<SettingsService>().weatherLat.toStringAsFixed(4)}, '
+              '경도 ${getIt<SettingsService>().weatherLon.toStringAsFixed(4)}',
             ),
             trailing: const Icon(Icons.my_location),
             onTap: _updateWeatherLocation,
@@ -412,9 +402,9 @@ class _SettingsScreenState extends State<SettingsScreen> {
     required String title,
     required List<VoicePreset> presets,
   }) {
-    final selected = presets.any((p) => p.id == widget.settingsService.voicePreset);
+    final selected = presets.any((p) => p.id == getIt<SettingsService>().voicePreset);
     final current = selected
-        ? presets.firstWhere((p) => p.id == widget.settingsService.voicePreset)
+        ? presets.firstWhere((p) => p.id == getIt<SettingsService>().voicePreset)
         : null;
 
     return ExpansionTile(
@@ -432,16 +422,16 @@ class _SettingsScreenState extends State<SettingsScreen> {
       title: Text(preset.label),
       subtitle: Text(preset.description),
       value: preset.id,
-      groupValue: widget.settingsService.voicePreset,
+      groupValue: getIt<SettingsService>().voicePreset,
       secondary: IconButton(
         icon: const Icon(Icons.play_circle_outline),
         tooltip: '미리 듣기',
         onPressed: () async {
-          await widget.ttsService.applyPreset(preset.id);
-          await widget.ttsService.speak('안녕! 나는 ${widget.settingsService.characterName}야. 오늘도 파이팅!');
+          await getIt<TtsService>().applyPreset(preset.id);
+          await getIt<TtsService>().speak('안녕! 나는 ${getIt<SettingsService>().characterName}야. 오늘도 파이팅!');
           if (mounted) {
-            final used = widget.ttsService.lastUsedEdgeTts;
-            final err = widget.ttsService.lastEdgeError;
+            final used = getIt<TtsService>().lastUsedEdgeTts;
+            final err = getIt<TtsService>().lastEdgeError;
             ScaffoldMessenger.of(context).showSnackBar(
               SnackBar(
                 content: Text(used
@@ -455,8 +445,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
       ),
       onChanged: (v) async {
         if (v != null) {
-          await widget.settingsService.setVoicePreset(v);
-          await widget.ttsService.applyPreset(v);
+          await getIt<SettingsService>().setVoicePreset(v);
+          await getIt<TtsService>().applyPreset(v);
           setState(() {});
         }
       },
@@ -482,15 +472,15 @@ class _SettingsScreenState extends State<SettingsScreen> {
       final pos = await Geolocator.getCurrentPosition(
         locationSettings: const LocationSettings(accuracy: LocationAccuracy.high, timeLimit: Duration(seconds: 10)),
       );
-      await widget.settingsService.setWeatherLocation(pos.latitude, pos.longitude);
+      await getIt<SettingsService>().setWeatherLocation(pos.latitude, pos.longitude);
       // Fetch weather to trigger reverse geocoding for location name
-      final data = await widget.weatherService.fetch(pos.latitude, pos.longitude);
+      final data = await getIt<WeatherService>().fetch(pos.latitude, pos.longitude);
       if (data != null && data.locationName.isNotEmpty) {
-        await widget.settingsService.setWeatherLocationName(data.locationName);
+        await getIt<SettingsService>().setWeatherLocationName(data.locationName);
       }
       if (mounted) {
         setState(() {});
-        final name = widget.settingsService.weatherLocationName;
+        final name = getIt<SettingsService>().weatherLocationName;
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(content: Text(name.isNotEmpty ? '위치 업데이트: $name' : '위치 업데이트 완료')),
         );

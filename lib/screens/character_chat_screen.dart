@@ -21,45 +21,16 @@ import '../services/card_service.dart';
 import '../services/timer_service.dart';
 import '../services/diary_service.dart';
 import '../services/auto_page_service.dart';
+import '../service_locator.dart';
 import '../widgets/spine_character_widget.dart';
 import '../theme/app_colors.dart';
 import 'dress_up_screen.dart';
 
 class CharacterChatScreen extends StatefulWidget {
-  final SettingsService settingsService;
-  final AccessoryService accessoryService;
-  final RoutineService? routineService;
-  final RoutineCompletionService? completionService;
-  final HealthService? healthService;
-  final TodoService? todoService;
-  final MemoService? memoService;
-  final AlarmService? alarmService;
-  final CalendarService? calendarService;
-  final WeatherService? weatherService;
-  final NewsService? newsService;
-  final CardService? cardService;
-  final TimerService? timerService;
-  final DiaryService? diaryService;
-  final AutoPageService? autoPageService;
   final VoidCallback? onRoutinesChanged;
 
   const CharacterChatScreen({
     super.key,
-    required this.settingsService,
-    required this.accessoryService,
-    this.routineService,
-    this.completionService,
-    this.healthService,
-    this.todoService,
-    this.memoService,
-    this.alarmService,
-    this.calendarService,
-    this.weatherService,
-    this.newsService,
-    this.cardService,
-    this.timerService,
-    this.diaryService,
-    this.autoPageService,
     this.onRoutinesChanged,
   });
 
@@ -70,8 +41,8 @@ class CharacterChatScreen extends StatefulWidget {
 class _CharacterChatScreenState extends State<CharacterChatScreen> {
   final _messageController = TextEditingController();
   final _scrollController = ScrollController();
-  final _gemini = GeminiService();
-  final _tts = TtsService();
+  GeminiService get _gemini => getIt<GeminiService>();
+  TtsService get _tts => getIt<TtsService>();
   final _speech = stt.SpeechToText();
   final _messages = <_ChatMessage>[];
   CharacterState _characterState = const CharacterState();
@@ -90,21 +61,21 @@ class _CharacterChatScreenState extends State<CharacterChatScreen> {
     // to avoid conflicting with HomeScreen's wake word SpeechToText
   }
 
-  String get _charName => widget.settingsService.characterName;
+  String get _charName => getIt<SettingsService>().characterName;
 
   void _initGemini() {
-    final apiKey = widget.settingsService.apiKey;
-    if (apiKey.isNotEmpty && widget.routineService != null && widget.completionService != null) {
+    final apiKey = getIt<SettingsService>().apiKey;
+    if (apiKey.isNotEmpty) {
       final agentTools = AgentTools(
-        routineService: widget.routineService!,
-        completionService: widget.completionService!,
-        todoService: widget.todoService,
-        memoService: widget.memoService,
-        alarmService: widget.alarmService,
-        calendarService: widget.calendarService,
-        settingsService: widget.settingsService,
+        routineService: getIt<RoutineService>(),
+        completionService: getIt<RoutineCompletionService>(),
+        todoService: getIt<TodoService>(),
+        memoService: getIt<MemoService>(),
+        alarmService: getIt<AlarmService>(),
+        calendarService: getIt<CalendarService>(),
+        settingsService: getIt<SettingsService>(),
         ttsService: _tts,
-        autoPageService: widget.autoPageService,
+        autoPageService: getIt<AutoPageService>(),
         onOpenUrl: (url) async {
           const channel = MethodChannel('com.aicharacter.ai_character/usage_stats');
           await channel.invokeMethod('openUrl', {'url': url});
@@ -122,7 +93,7 @@ class _CharacterChatScreenState extends State<CharacterChatScreen> {
     parts.add('현재: ${now.year}년 ${now.month}월 ${now.day}일 ${weekdays[now.weekday - 1]}요일 ${now.hour}시 ${now.minute}분');
 
     // 설정 정보
-    final s = widget.settingsService;
+    final s = getIt<SettingsService>();
     final voicePreset = voicePresets.firstWhere(
       (p) => p.id == s.voicePreset,
       orElse: () => voicePresets.first,
@@ -130,8 +101,8 @@ class _CharacterChatScreenState extends State<CharacterChatScreen> {
     parts.add('현재 설정: 캐릭터이름=${s.characterName}, 목소리=${voicePreset.label}, 음성출력=${s.ttsEnabled ? "켜짐" : "꺼짐"}, 잔소리빈도=${s.nagFrequency}초, 잔소리강도=${s.nagIntensity == 0 ? "부드럽게" : s.nagIntensity == 1 ? "보통" : "엄격하게"}, 오버레이=${s.overlayEnabled ? "켜짐" : "꺼짐"}, 캐릭터표시=${s.overlayCharacterVisible ? "켜짐" : "꺼짐(목소리만)"}, 앱잠금=${s.appLockEnabled ? "켜짐" : "꺼짐"}');
 
     // 날씨
-    if (widget.weatherService != null) {
-      final weather = widget.weatherService!.getCached();
+    {
+      final weather = getIt<WeatherService>().getCached();
       if (weather != null) {
         final loc = s.weatherLocationName.isNotEmpty ? s.weatherLocationName : '현재위치';
         parts.add('날씨($loc): ${weather.temperature.toStringAsFixed(1)}°C, ${weather.description}, 습도 ${weather.humidity}%, UV ${weather.uvIndex.toStringAsFixed(1)}');
@@ -139,17 +110,17 @@ class _CharacterChatScreenState extends State<CharacterChatScreen> {
     }
 
     // 루틴
-    if (widget.routineService != null && widget.completionService != null) {
-      final routines = widget.routineService!.getAll();
+    {
+      final routines = getIt<RoutineService>().getAll();
       final active = routines.where((r) => r.isActiveOnDate(now)).toList();
       final done = active.where((r) =>
-          widget.completionService!.isCompleted(r.id, todayStr) ||
-          widget.completionService!.isSkipped(r.id, todayStr)).length;
+          getIt<RoutineCompletionService>().isCompleted(r.id, todayStr) ||
+          getIt<RoutineCompletionService>().isSkipped(r.id, todayStr)).length;
       parts.add('오늘 루틴: ${active.length}개 중 ${done}개 완료');
       if (active.isNotEmpty) {
         final names = active.map((r) {
-          final isDone = widget.completionService!.isCompleted(r.id, todayStr) ||
-              widget.completionService!.isSkipped(r.id, todayStr);
+          final isDone = getIt<RoutineCompletionService>().isCompleted(r.id, todayStr) ||
+              getIt<RoutineCompletionService>().isSkipped(r.id, todayStr);
           return '${r.name}(${r.startTime.format()}~${r.endTime.format()}, ${isDone ? "완료" : "미완료"})';
         }).join(', ');
         parts.add('  - $names');
@@ -157,8 +128,8 @@ class _CharacterChatScreenState extends State<CharacterChatScreen> {
     }
 
     // 할 일
-    if (widget.todoService != null) {
-      final incomplete = widget.todoService!.getIncomplete();
+    {
+      final incomplete = getIt<TodoService>().getIncomplete();
       if (incomplete.isNotEmpty) {
         final names = incomplete.take(5).map((t) => t.title).join(', ');
         parts.add('미완료 할 일: ${incomplete.length}개 ($names)');
@@ -168,8 +139,8 @@ class _CharacterChatScreenState extends State<CharacterChatScreen> {
     }
 
     // 메모
-    if (widget.memoService != null) {
-      final memos = widget.memoService!.getAll();
+    {
+      final memos = getIt<MemoService>().getAll();
       if (memos.isNotEmpty) {
         final titles = memos.take(5).map((m) => m.title).join(', ');
         parts.add('메모: ${memos.length}개 ($titles)');
@@ -177,8 +148,8 @@ class _CharacterChatScreenState extends State<CharacterChatScreen> {
     }
 
     // 알람
-    if (widget.alarmService != null) {
-      final alarms = widget.alarmService!.getAll();
+    {
+      final alarms = getIt<AlarmService>().getAll();
       final enabled = alarms.where((a) => a.isEnabled).toList();
       if (enabled.isNotEmpty) {
         final alarmList = enabled.take(5).map((a) => '${a.label}(${a.timeString})').join(', ');
@@ -187,8 +158,8 @@ class _CharacterChatScreenState extends State<CharacterChatScreen> {
     }
 
     // 타이머 프리셋
-    if (widget.timerService != null) {
-      final presets = widget.timerService!.getAll();
+    {
+      final presets = getIt<TimerService>().getAll();
       if (presets.isNotEmpty) {
         final presetList = presets.take(5).map((p) => '${p.label}(${p.durationSeconds ~/ 60}분)').join(', ');
         parts.add('타이머 프리셋: ${presets.length}개 ($presetList)');
@@ -196,13 +167,13 @@ class _CharacterChatScreenState extends State<CharacterChatScreen> {
     }
 
     // 캘린더
-    if (widget.calendarService != null) {
-      final todayEvents = widget.calendarService!.getByDate(todayStr);
+    {
+      final todayEvents = getIt<CalendarService>().getByDate(todayStr);
       if (todayEvents.isNotEmpty) {
         final eventList = todayEvents.take(5).map((e) => '${e.title}${e.timeString.isNotEmpty ? "(${e.timeString})" : ""}').join(', ');
         parts.add('오늘 일정: ${todayEvents.length}건 ($eventList)');
       }
-      final ddayEvents = widget.calendarService!.getDDayEvents();
+      final ddayEvents = getIt<CalendarService>().getDDayEvents();
       final upcoming = ddayEvents.where((e) {
         final d = DateTime.tryParse(e.date);
         return d != null && !d.isBefore(DateTime(now.year, now.month, now.day));
@@ -214,8 +185,8 @@ class _CharacterChatScreenState extends State<CharacterChatScreen> {
     }
 
     // 명함 (개인정보 요약 - 외부 전송 없음, 앱 내부 컨텍스트용)
-    if (widget.cardService != null) {
-      final card = widget.cardService!.get();
+    {
+      final card = getIt<CardService>().get();
       if (card != null && card.name.isNotEmpty) {
         final cardParts = <String>[];
         cardParts.add('이름=${card.name}');
@@ -237,16 +208,16 @@ class _CharacterChatScreenState extends State<CharacterChatScreen> {
     }
 
     // 일기
-    if (widget.diaryService != null) {
-      final todayDiary = widget.diaryService!.getByDate(todayStr);
-      final streak = widget.diaryService!.getCurrentStreak();
+    {
+      final todayDiary = getIt<DiaryService>().getByDate(todayStr);
+      final streak = getIt<DiaryService>().getCurrentStreak();
       if (todayDiary != null) {
         parts.add('오늘 일기: ${todayDiary.moodLabel} - ${todayDiary.content.isNotEmpty ? todayDiary.content : "(내용 없음)"}');
       }
       if (streak > 0) {
         parts.add('일기 연속 작성: ${streak}일');
       }
-      final recent = widget.diaryService!.getRecent(limit: 3);
+      final recent = getIt<DiaryService>().getRecent(limit: 3);
       if (recent.isNotEmpty) {
         final recentStr = recent.where((d) => d.date != todayStr).take(2).map((d) => '${d.date}: ${d.moodLabel}${d.content.isNotEmpty ? " - ${d.content.length > 30 ? d.content.substring(0, 30) + "..." : d.content}" : ""}').join(', ');
         if (recentStr.isNotEmpty) parts.add('최근 일기: $recentStr');
@@ -254,18 +225,18 @@ class _CharacterChatScreenState extends State<CharacterChatScreen> {
     }
 
     // 뉴스 헤드라인
-    if (widget.newsService != null) {
-      final headlines = widget.newsService!.getCached();
+    {
+      final headlines = getIt<NewsService>().getCached();
       if (headlines.isNotEmpty) {
         parts.add('주요 뉴스: ${headlines.take(3).join(" / ")}');
       }
     }
 
     // 건강
-    if (widget.healthService != null) {
+    {
       try {
-        if (widget.healthService!.isAuthorized) {
-          final healthSummary = await widget.healthService!.buildHealthSummary();
+        if (getIt<HealthService>().isAuthorized) {
+          final healthSummary = await getIt<HealthService>().buildHealthSummary();
           if (healthSummary.isNotEmpty) {
             parts.add(healthSummary);
           }
@@ -306,7 +277,7 @@ class _CharacterChatScreenState extends State<CharacterChatScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final hasApiKey = widget.settingsService.apiKey.isNotEmpty;
+    final hasApiKey = getIt<SettingsService>().apiKey.isNotEmpty;
 
     return Scaffold(
       appBar: AppBar(
@@ -320,7 +291,7 @@ class _CharacterChatScreenState extends State<CharacterChatScreen> {
               onPressed: _clearChat,
             ),
           if (CharacterRegistry.getById(
-                  widget.settingsService.selectedCharacter)
+                  getIt<SettingsService>().selectedCharacter)
               .supportsDressUp)
             IconButton(
               icon: const Icon(Icons.checkroom),
@@ -332,15 +303,15 @@ class _CharacterChatScreenState extends State<CharacterChatScreen> {
       body: Column(
         children: [
           // Spine 2D Character display — hide when keyboard is open or setting is off
-          if (widget.settingsService.chatCharacterVisible && MediaQuery.of(context).viewInsets.bottom < 50)
+          if (getIt<SettingsService>().chatCharacterVisible && MediaQuery.of(context).viewInsets.bottom < 50)
             SizedBox(
               height: 250,
               child: Builder(builder: (_) {
                 final config = CharacterRegistry.getById(
-                    widget.settingsService.selectedCharacter);
-                final customSkins = widget.accessoryService
+                    getIt<SettingsService>().selectedCharacter);
+                final customSkins = getIt<AccessoryService>()
                     .getSelectedSkins(config.id);
-                final customColors = widget.accessoryService
+                final customColors = getIt<AccessoryService>()
                     .getSlotColors(config.id);
                 return SpineCharacterWidget(
                   key: ValueKey('${config.id}_${customSkins.join("_")}_${customColors.hashCode}'),
@@ -670,13 +641,12 @@ class _CharacterChatScreenState extends State<CharacterChatScreen> {
 
   Future<void> _openDressUp() async {
     final config = CharacterRegistry.getById(
-        widget.settingsService.selectedCharacter);
+        getIt<SettingsService>().selectedCharacter);
     final result = await Navigator.push<bool>(
       context,
       MaterialPageRoute(
         builder: (_) => DressUpScreen(
           config: config,
-          accessoryService: widget.accessoryService,
         ),
       ),
     );
@@ -693,7 +663,7 @@ class _CharacterChatScreenState extends State<CharacterChatScreen> {
         gesture: gesture,
       );
     });
-    if (widget.settingsService.ttsEnabled) {
+    if (getIt<SettingsService>().ttsEnabled) {
       _tts.speak(text);
     }
     _scrollToBottom();
@@ -861,7 +831,7 @@ class _CharacterChatScreenState extends State<CharacterChatScreen> {
         );
       });
 
-      if (widget.settingsService.ttsEnabled) {
+      if (getIt<SettingsService>().ttsEnabled) {
         await _tts.speak(result.response.text);
       }
     } catch (e) {
