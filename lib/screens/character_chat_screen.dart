@@ -322,7 +322,7 @@ class _CharacterChatScreenState extends State<CharacterChatScreen> {
                   customColors: customColors.isNotEmpty ? customColors : null,
                   showBubble: false,
                   interactive: true,
-                  growthData: getIt<GrowthService>().currentData,
+                  growthData: null,
                 );
               }),
             ),
