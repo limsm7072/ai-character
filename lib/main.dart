@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import 'package:flutter_localizations/flutter_localizations.dart';
 import 'package:intl/date_symbol_data_local.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:spine_flutter/spine_flutter.dart';
@@ -32,6 +33,7 @@ import 'services/routine_group_service.dart';
 import 'services/diary_service.dart';
 import 'services/bookmark_service.dart';
 import 'services/fortune_service.dart';
+import 'services/goal_service.dart';
 import 'widgets/overlay_character.dart';
 import 'theme/app_theme.dart';
 
@@ -97,6 +99,7 @@ void main() async {
   final diaryService = DiaryService(prefs);
   final bookmarkService = BookmarkService(prefs);
   final fortuneService = FortuneService(prefs);
+  final goalService = GoalService(prefs);
 
   final recommendationService = RecommendationService(
     prefs: prefs,
@@ -158,6 +161,7 @@ void main() async {
     diaryService: diaryService,
     bookmarkService: bookmarkService,
     fortuneService: fortuneService,
+    goalService: goalService,
   ));
 }
 
@@ -184,6 +188,7 @@ class AiCharacterApp extends StatefulWidget {
   final DiaryService diaryService;
   final BookmarkService bookmarkService;
   final FortuneService fortuneService;
+  final GoalService goalService;
 
   const AiCharacterApp({
     super.key,
@@ -209,6 +214,7 @@ class AiCharacterApp extends StatefulWidget {
     required this.diaryService,
     required this.bookmarkService,
     required this.fortuneService,
+    required this.goalService,
   });
 
   @override
@@ -320,6 +326,13 @@ class _AiCharacterAppState extends State<AiCharacterApp>
       navigatorKey: navigatorKey,
       title: 'AI 루틴 잔소리',
       debugShowCheckedModeBanner: false,
+      localizationsDelegates: const [
+        GlobalMaterialLocalizations.delegate,
+        GlobalWidgetsLocalizations.delegate,
+        GlobalCupertinoLocalizations.delegate,
+      ],
+      supportedLocales: const [Locale('ko', 'KR')],
+      locale: const Locale('ko', 'KR'),
       theme: AppTheme.light,
       darkTheme: AppTheme.dark,
       themeMode: ThemeMode.light,
@@ -345,6 +358,7 @@ class _AiCharacterAppState extends State<AiCharacterApp>
         diaryService: widget.diaryService,
         bookmarkService: widget.bookmarkService,
         fortuneService: widget.fortuneService,
+        goalService: widget.goalService,
         onCompletionUnchecked: widget.routineMonitor.forceCheck,
       ),
     );

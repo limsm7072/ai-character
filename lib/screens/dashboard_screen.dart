@@ -19,7 +19,9 @@ import '../services/routine_group_service.dart';
 import '../services/diary_service.dart';
 import '../services/bookmark_service.dart';
 import '../services/fortune_service.dart';
+import '../services/goal_service.dart';
 import '../models/fortune_data.dart';
+import '../models/goal.dart';
 import '../models/weather_data.dart';
 import '../models/recommendation_data.dart';
 import 'package:geolocator/geolocator.dart';
@@ -39,6 +41,7 @@ import 'diary_screen.dart';
 import 'nature_scene_screen.dart';
 import 'bookmark_screen.dart';
 import 'fortune_screen.dart';
+import 'goal_screen.dart';
 import '../theme/app_colors.dart';
 
 class DashboardScreen extends StatefulWidget {
@@ -61,6 +64,7 @@ class DashboardScreen extends StatefulWidget {
   final DiaryService diaryService;
   final BookmarkService bookmarkService;
   final FortuneService fortuneService;
+  final GoalService goalService;
   final VoidCallback? onCompletionUnchecked;
 
   const DashboardScreen({
@@ -84,6 +88,7 @@ class DashboardScreen extends StatefulWidget {
     required this.diaryService,
     required this.bookmarkService,
     required this.fortuneService,
+    required this.goalService,
     this.onCompletionUnchecked,
   });
 
@@ -205,6 +210,8 @@ class DashboardScreenState extends State<DashboardScreen> {
         return large ? _buildBookmarkLarge(context, label) : _buildBookmarkSmall(context, label);
       case 'fortune':
         return large ? _buildFortuneLarge(context, theme, label) : _buildFortuneSmall(context, theme, label);
+      case 'goal':
+        return large ? _buildGoalLarge(context, theme, label) : _buildGoalSmall(context, theme, label);
       default:
         return null;
     }
@@ -1510,7 +1517,7 @@ class DashboardScreenState extends State<DashboardScreen> {
   static const _defaultLabels = {
     'recommend': '맞춤 정보', 'news': '뉴스', 'weather': '날씨', 'routine': '루틴', 'todo': '할 일',
     'diary': '일기장', 'card': '명함', 'calendar': '캘린더', 'stats': '통계', 'alarm': '알람',
-    'timer': '타이머', 'memo': '메모', 'dday': 'D-Day', 'nature': '자연소리', 'bookmark': '바로가기', 'fortune': '오늘의 운세',
+    'timer': '타이머', 'memo': '메모', 'dday': 'D-Day', 'nature': '자연소리', 'bookmark': '바로가기', 'fortune': '오늘의 운세', 'goal': '목표',
   };
 
   String _sectionLabel(String id) {
@@ -1526,7 +1533,7 @@ class DashboardScreenState extends State<DashboardScreen> {
       'stats': Icons.bar_chart_rounded, 'alarm': Icons.alarm_rounded,
       'timer': Icons.timer_outlined, 'memo': Icons.note_alt_outlined,
       'dday': Icons.event_outlined, 'diary': Icons.auto_stories, 'nature': Icons.spa,
-      'bookmark': Icons.language, 'fortune': Icons.auto_awesome,
+      'bookmark': Icons.language, 'fortune': Icons.auto_awesome, 'goal': Icons.track_changes,
     };
     final baseId = SettingsService.sectionBaseId(id);
     return icons[baseId] ?? Icons.widgets_outlined;
@@ -1565,8 +1572,10 @@ class DashboardScreenState extends State<DashboardScreen> {
           children: [
             Icon(Icons.auto_awesome, size: 18, color: theme.colorScheme.primary),
             const SizedBox(width: 10),
-            Text(label, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: theme.colorScheme.onSurface)),
-            const Spacer(),
+            Expanded(
+              child: Text(label, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: theme.colorScheme.onSurface),
+                overflow: TextOverflow.ellipsis),
+            ),
             if (_fortune != null) ...[
               Text(_fortune!.overallLabel,
                 style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700,
@@ -1666,23 +1675,135 @@ class DashboardScreenState extends State<DashboardScreen> {
         const SizedBox(height: 12),
         // Category mini bars
         Wrap(
-          spacing: 8,
+          spacing: 6,
           runSpacing: 4,
           children: f.categoryScores.entries.map((e) {
             final catColor = _fortuneScoreColor(e.value, theme);
-            return SizedBox(
-              width: 80,
-              child: Row(
-                children: [
+            return Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
                   Text(e.key, style: TextStyle(fontSize: 11, color: theme.colorScheme.onSurfaceVariant)),
-                  const SizedBox(width: 4),
+                  const SizedBox(width: 3),
                   Text('${e.value}', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: catColor)),
-                ],
-              ),
+              ],
             );
           }).toList(),
         ),
       ],
+    );
+  }
+
+  // ─── 목표 섹션 ───
+  void _openGoal(BuildContext context, String label) {
+    Navigator.of(context).push(MaterialPageRoute(
+      builder: (_) => GoalScreen(
+        goalService: widget.goalService,
+        routineService: widget.routineService,
+        completionService: widget.completionService,
+        todoService: widget.todoService,
+        title: label,
+      ),
+    ));
+  }
+
+  Widget? _buildGoalSmall(BuildContext context, ThemeData theme, String label) {
+    final all = widget.goalService.getAll();
+    final completed = all.where((g) => g.isCompleted).length;
+    return InkWell(
+      borderRadius: BorderRadius.circular(12),
+      onTap: () => _openGoal(context, label),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        decoration: BoxDecoration(
+          color: theme.colorScheme.surfaceContainerLow,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Row(
+          children: [
+            Icon(Icons.track_changes, size: 18, color: theme.colorScheme.primary),
+            const SizedBox(width: 10),
+            Expanded(
+              child: Text(label, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: theme.colorScheme.onSurface),
+                  overflow: TextOverflow.ellipsis),
+            ),
+            if (all.isNotEmpty)
+              Text('$completed / ${all.length}',
+                  style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: theme.colorScheme.onSurfaceVariant))
+            else
+              Text('추가하기', style: TextStyle(fontSize: 13, color: theme.colorScheme.primary)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget? _buildGoalLarge(BuildContext context, ThemeData theme, String label) {
+    final all = widget.goalService.getAll();
+    final incomplete = all.where((g) => !g.isCompleted).toList();
+    final progress = widget.goalService.getOverallProgress(widget.completionService, widget.todoService);
+    return InkWell(
+      borderRadius: BorderRadius.circular(16),
+      onTap: () => _openGoal(context, label),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: theme.colorScheme.surfaceContainerLow,
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.track_changes, size: 18, color: theme.colorScheme.primary),
+                const SizedBox(width: 8),
+                Expanded(child: Text(label, style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600))),
+                Text('${all.where((g) => g.isCompleted).length} / ${all.length}',
+                    style: TextStyle(fontSize: 13, color: theme.colorScheme.onSurfaceVariant)),
+              ],
+            ),
+            if (all.isNotEmpty) ...[
+              const SizedBox(height: 10),
+              ClipRRect(
+                borderRadius: BorderRadius.circular(4),
+                child: LinearProgressIndicator(
+                  value: progress,
+                  minHeight: 6,
+                  backgroundColor: theme.colorScheme.surfaceContainerHighest,
+                  valueColor: AlwaysStoppedAnimation(theme.colorScheme.primary),
+                ),
+              ),
+              const SizedBox(height: 10),
+              ...incomplete.take(3).map((g) {
+                final gProgress = widget.goalService.getProgress(g, widget.completionService, widget.todoService);
+                final catColor = Goal.categoryColor(g.category);
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 6),
+                  child: Row(
+                    children: [
+                      Icon(Goal.categoryIcon(g.category), size: 14, color: catColor),
+                      const SizedBox(width: 8),
+                      Expanded(
+                        child: Text(g.title, style: TextStyle(fontSize: 13, color: theme.colorScheme.onSurfaceVariant),
+                            overflow: TextOverflow.ellipsis),
+                      ),
+                      Text('${(gProgress * 100).round()}%',
+                          style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: catColor)),
+                    ],
+                  ),
+                );
+              }),
+            ] else ...[
+              const SizedBox(height: 12),
+              Center(
+                child: Text('목표를 추가하고\n루틴과 할일을 연결해보세요',
+                    textAlign: TextAlign.center,
+                    style: TextStyle(fontSize: 13, color: theme.colorScheme.onSurfaceVariant)),
+              ),
+            ],
+          ],
+        ),
+      ),
     );
   }
 
