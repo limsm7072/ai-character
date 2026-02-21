@@ -1,13 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
+import '../service_locator.dart';
 import '../services/routine_service.dart';
 import '../services/routine_completion_service.dart';
 import '../services/settings_service.dart';
 import '../services/todo_service.dart';
 import '../services/memo_service.dart';
-import '../services/health_service.dart';
-import '../services/distraction_log_service.dart';
-import '../services/app_detection_service.dart';
 import '../services/alarm_service.dart';
 import '../services/timer_service.dart';
 import '../services/calendar_service.dart';
@@ -15,7 +13,6 @@ import '../services/news_service.dart';
 import '../services/card_service.dart';
 import '../services/weather_service.dart';
 import '../services/recommendation_service.dart';
-import '../services/routine_group_service.dart';
 import '../services/diary_service.dart';
 import '../services/bookmark_service.dart';
 import '../services/fortune_service.dart';
@@ -54,66 +51,13 @@ import 'activity_screen.dart';
 import 'notion_screen.dart';
 import '../services/notion_page_service.dart';
 import '../services/notion_database_service.dart';
-import '../services/auto_page_service.dart';
 import '../theme/app_colors.dart';
 
 class DashboardScreen extends StatefulWidget {
-  final RoutineService routineService;
-  final RoutineCompletionService completionService;
-  final SettingsService settingsService;
-  final TodoService todoService;
-  final MemoService memoService;
-  final HealthService? healthService;
-  final DistractionLogService distractionLogService;
-  final AppDetectionService? appDetection;
-  final AlarmService alarmService;
-  final TimerService timerService;
-  final CalendarService calendarService;
-  final NewsService newsService;
-  final CardService cardService;
-  final WeatherService weatherService;
-  final RecommendationService recommendationService;
-  final RoutineGroupService routineGroupService;
-  final DiaryService diaryService;
-  final BookmarkService bookmarkService;
-  final FortuneService fortuneService;
-  final GoalService goalService;
-  final PsychologyService psychologyService;
-  final ScreenTimeService screenTimeService;
-  final ActivityService activityService;
-  final NotionPageService notionPageService;
-  final NotionDatabaseService notionDatabaseService;
-  final AutoPageService autoPageService;
   final VoidCallback? onCompletionUnchecked;
 
   const DashboardScreen({
     super.key,
-    required this.routineService,
-    required this.completionService,
-    required this.settingsService,
-    required this.todoService,
-    required this.memoService,
-    required this.distractionLogService,
-    this.healthService,
-    this.appDetection,
-    required this.alarmService,
-    required this.timerService,
-    required this.calendarService,
-    required this.newsService,
-    required this.cardService,
-    required this.weatherService,
-    required this.recommendationService,
-    required this.routineGroupService,
-    required this.diaryService,
-    required this.bookmarkService,
-    required this.fortuneService,
-    required this.goalService,
-    required this.psychologyService,
-    required this.screenTimeService,
-    required this.activityService,
-    required this.notionPageService,
-    required this.notionDatabaseService,
-    required this.autoPageService,
     this.onCompletionUnchecked,
   });
 
@@ -134,13 +78,13 @@ class DashboardScreenState extends State<DashboardScreen> {
   @override
   void initState() {
     super.initState();
-    _headlines = widget.newsService.getCached();
-    _weather = widget.weatherService.getCached();
-    _recommendation = widget.recommendationService.getCached();
-    _fortune = widget.fortuneService.getCached() ?? widget.fortuneService.generateTodayFortune();
-    _psychology = widget.psychologyService.getCached() ?? widget.psychologyService.generateTodayTip();
-    _screenTime = widget.screenTimeService.getCached();
-    _activity = widget.activityService.getCached();
+    _headlines = getIt<NewsService>().getCached();
+    _weather = getIt<WeatherService>().getCached();
+    _recommendation = getIt<RecommendationService>().getCached();
+    _fortune = getIt<FortuneService>().getCached() ?? getIt<FortuneService>().generateTodayFortune();
+    _psychology = getIt<PsychologyService>().getCached() ?? getIt<PsychologyService>().generateTodayTip();
+    _screenTime = getIt<ScreenTimeService>().getCached();
+    _activity = getIt<ActivityService>().getCached();
     _loadNews();
     _loadScreenTime();
     _loadActivity();
@@ -149,59 +93,59 @@ class DashboardScreenState extends State<DashboardScreen> {
   }
 
   Future<void> _loadNews() async {
-    final list = await widget.newsService.fetchHeadlines();
+    final list = await getIt<NewsService>().fetchHeadlines();
     if (mounted && list.isNotEmpty) setState(() => _headlines = list);
   }
 
   Future<void> _loadWeather() async {
-    final lat = widget.settingsService.weatherLat;
-    final lon = widget.settingsService.weatherLon;
+    final lat = getIt<SettingsService>().weatherLat;
+    final lon = getIt<SettingsService>().weatherLon;
     try {
       final perm = await Geolocator.checkPermission();
       if (perm == LocationPermission.always || perm == LocationPermission.whileInUse) {
         final pos = await Geolocator.getCurrentPosition(
           locationSettings: const LocationSettings(accuracy: LocationAccuracy.low, timeLimit: Duration(seconds: 5)),
         );
-        await widget.settingsService.setWeatherLocation(pos.latitude, pos.longitude);
-        final data = await widget.weatherService.fetch(pos.latitude, pos.longitude);
+        await getIt<SettingsService>().setWeatherLocation(pos.latitude, pos.longitude);
+        final data = await getIt<WeatherService>().fetch(pos.latitude, pos.longitude);
         if (data != null && data.locationName.isNotEmpty) {
-          await widget.settingsService.setWeatherLocationName(data.locationName);
+          await getIt<SettingsService>().setWeatherLocationName(data.locationName);
         }
         if (mounted && data != null) setState(() => _weather = data);
         return;
       }
     } catch (_) {}
-    final data = await widget.weatherService.fetch(lat, lon);
+    final data = await getIt<WeatherService>().fetch(lat, lon);
     if (data != null && data.locationName.isNotEmpty) {
-      await widget.settingsService.setWeatherLocationName(data.locationName);
+      await getIt<SettingsService>().setWeatherLocationName(data.locationName);
     }
     if (mounted && data != null) setState(() => _weather = data);
   }
 
   Future<void> _loadRecommendation() async {
     try {
-      final data = await widget.recommendationService.fetch();
+      final data = await getIt<RecommendationService>().fetch();
       if (mounted) setState(() => _recommendation = data);
     } catch (_) {}
   }
 
   Future<void> _loadScreenTime() async {
     try {
-      final data = await widget.screenTimeService.fetchToday();
+      final data = await getIt<ScreenTimeService>().fetchToday();
       if (mounted && data != null) setState(() => _screenTime = data);
     } catch (_) {}
   }
 
   Future<void> _loadActivity() async {
-    if (!widget.activityService.isEnabled) return;
+    if (!getIt<ActivityService>().isEnabled) return;
     try {
-      final data = await widget.activityService.fetchToday();
+      final data = await getIt<ActivityService>().fetchToday();
       if (mounted && data != null) setState(() => _activity = data);
     } catch (_) {}
   }
 
   void refresh() {
-    _fortune = widget.fortuneService.generateTodayFortune();
+    _fortune = getIt<FortuneService>().generateTodayFortune();
     if (mounted) setState(() {});
     _loadNews();
     _loadWeather();
@@ -217,7 +161,7 @@ class DashboardScreenState extends State<DashboardScreen> {
 
   // 섹션 빌더는 외부 Padding 없이 반환 → 레이아웃에서 패딩 적용
   Widget? _buildSection(String id, BuildContext context, DateTime now, String todayStr, ThemeData theme) {
-    final large = widget.settingsService.isDashboardSectionLarge(id);
+    final large = getIt<SettingsService>().isDashboardSectionLarge(id);
     final baseId = SettingsService.sectionBaseId(id);
     final label = _sectionLabel(id);
     switch (baseId) {
@@ -229,10 +173,10 @@ class DashboardScreenState extends State<DashboardScreen> {
         return large ? _buildWeatherLarge(theme, label) : _buildWeatherSmall(theme, label);
       case 'routine':
         // Check if this section is linked to a work type
-        final sectionWtId = widget.settingsService.getSectionWorkType(id);
+        final sectionWtId = getIt<SettingsService>().getSectionWorkType(id);
         if (sectionWtId != null) {
           // Only show if today's work type matches
-          final todayWtId = widget.calendarService.getDateWorkType(todayStr);
+          final todayWtId = getIt<CalendarService>().getDateWorkType(todayStr);
           if (todayWtId != sectionWtId) return null;
         }
         return large ? _buildRoutineLarge(context, now, todayStr, label) : _buildRoutineSmall(context, now, todayStr, label);
@@ -283,7 +227,7 @@ class DashboardScreenState extends State<DashboardScreen> {
     if (tipCount == 0 && articleCount == 0 && _recommendation == null) return null;
     return InkWell(
       borderRadius: BorderRadius.circular(16),
-      onTap: () => _push(context, RecommendationScreen(recommendationService: widget.recommendationService, title: label)),
+      onTap: () => _push(context, RecommendationScreen(title: label)),
       child: Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
@@ -348,7 +292,7 @@ class DashboardScreenState extends State<DashboardScreen> {
     if (tipCount == 0 && articleCount == 0 && _recommendation == null) return null;
     return InkWell(
       borderRadius: BorderRadius.circular(12),
-      onTap: () => _push(context, RecommendationScreen(recommendationService: widget.recommendationService, title: label)),
+      onTap: () => _push(context, RecommendationScreen(title: label)),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         decoration: BoxDecoration(
@@ -374,7 +318,7 @@ class DashboardScreenState extends State<DashboardScreen> {
     if (_headlines.isEmpty) return null;
     return InkWell(
       borderRadius: BorderRadius.circular(16),
-      onTap: () => _push(context, NewsScreen(newsService: widget.newsService, title: label)),
+      onTap: () => _push(context, NewsScreen(title: label)),
       child: Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
@@ -406,7 +350,7 @@ class DashboardScreenState extends State<DashboardScreen> {
     if (_headlines.isEmpty) return null;
     return InkWell(
       borderRadius: BorderRadius.circular(12),
-      onTap: () => _push(context, NewsScreen(newsService: widget.newsService, title: label)),
+      onTap: () => _push(context, NewsScreen(title: label)),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         decoration: BoxDecoration(
@@ -432,7 +376,7 @@ class DashboardScreenState extends State<DashboardScreen> {
     if (_weather == null) return null;
     return InkWell(
       borderRadius: BorderRadius.circular(16),
-      onTap: () => _push(context, WeatherScreen(weatherService: widget.weatherService, settingsService: widget.settingsService, title: label)),
+      onTap: () => _push(context, WeatherScreen(title: label)),
       child: Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
@@ -481,7 +425,7 @@ class DashboardScreenState extends State<DashboardScreen> {
     if (_weather == null) return null;
     return InkWell(
       borderRadius: BorderRadius.circular(12),
-      onTap: () => _push(context, WeatherScreen(weatherService: widget.weatherService, settingsService: widget.settingsService, title: label)),
+      onTap: () => _push(context, WeatherScreen(title: label)),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         decoration: BoxDecoration(
@@ -509,7 +453,7 @@ class DashboardScreenState extends State<DashboardScreen> {
   /// Check if a routine is active for today's work type.
   /// Returns true if: no work type assigned to today, or routine has no workTypeId, or matches.
   bool _isRoutineActiveForWorkType(dynamic r, String todayStr) {
-    final todayWtId = widget.calendarService.getDateWorkType(todayStr);
+    final todayWtId = getIt<CalendarService>().getDateWorkType(todayStr);
     if (todayWtId == null) return true; // no work type assigned → all active
     if (r.workTypeId == null) return true; // routine has no work type → always active
     return r.workTypeId == todayWtId;
@@ -517,23 +461,16 @@ class DashboardScreenState extends State<DashboardScreen> {
 
   Widget _buildRoutineSmall(BuildContext context, DateTime now, String todayStr, String label) {
     final theme = Theme.of(context);
-    final routines = widget.routineService.getAll();
+    final routines = getIt<RoutineService>().getAll();
     final active = routines.where((r) => r.isActiveOnDate(now)).toList();
     final matched = active.where((r) => _isRoutineActiveForWorkType(r, todayStr)).toList();
     final doneCount = matched.where((r) =>
-        widget.completionService.isCompleted(r.id, todayStr) ||
-        widget.completionService.isSkipped(r.id, todayStr)).length;
+        getIt<RoutineCompletionService>().isCompleted(r.id, todayStr) ||
+        getIt<RoutineCompletionService>().isSkipped(r.id, todayStr)).length;
     final total = matched.length;
     return InkWell(
       borderRadius: BorderRadius.circular(12),
       onTap: () => _push(context, RoutineListScreen(
-        routineService: widget.routineService,
-        completionService: widget.completionService,
-        settingsService: widget.settingsService,
-        alarmService: widget.alarmService,
-        timerService: widget.timerService,
-        routineGroupService: widget.routineGroupService,
-        calendarService: widget.calendarService,
         onCompletionUnchecked: widget.onCompletionUnchecked,
         title: label,
       )),
@@ -558,24 +495,17 @@ class DashboardScreenState extends State<DashboardScreen> {
 
   Widget _buildRoutineLarge(BuildContext context, DateTime now, String todayStr, String label) {
     final theme = Theme.of(context);
-    final routines = widget.routineService.getAll();
+    final routines = getIt<RoutineService>().getAll();
     final active = routines.where((r) => r.isActiveOnDate(now)).toList();
     final matched = active.where((r) => _isRoutineActiveForWorkType(r, todayStr)).toList();
     final doneCount = matched.where((r) =>
-        widget.completionService.isCompleted(r.id, todayStr) ||
-        widget.completionService.isSkipped(r.id, todayStr)).length;
+        getIt<RoutineCompletionService>().isCompleted(r.id, todayStr) ||
+        getIt<RoutineCompletionService>().isSkipped(r.id, todayStr)).length;
     final total = matched.length;
     final progress = total > 0 ? doneCount / total : 0.0;
     return InkWell(
       borderRadius: BorderRadius.circular(16),
       onTap: () => _push(context, RoutineListScreen(
-        routineService: widget.routineService,
-        completionService: widget.completionService,
-        settingsService: widget.settingsService,
-        alarmService: widget.alarmService,
-        timerService: widget.timerService,
-        routineGroupService: widget.routineGroupService,
-        calendarService: widget.calendarService,
         onCompletionUnchecked: widget.onCompletionUnchecked,
         title: label,
       )),
@@ -610,8 +540,8 @@ class DashboardScreenState extends State<DashboardScreen> {
                 spacing: 6,
                 runSpacing: 6,
                 children: active.take(6).map((r) {
-                  final done = widget.completionService.isCompleted(r.id, todayStr) ||
-                      widget.completionService.isSkipped(r.id, todayStr);
+                  final done = getIt<RoutineCompletionService>().isCompleted(r.id, todayStr) ||
+                      getIt<RoutineCompletionService>().isSkipped(r.id, todayStr);
                   final isActiveWt = _isRoutineActiveForWorkType(r, todayStr);
                   return Opacity(
                     opacity: isActiveWt ? 1.0 : 0.35,
@@ -647,10 +577,10 @@ class DashboardScreenState extends State<DashboardScreen> {
 
   Widget _buildTodoSmall(BuildContext context, String label) {
     final theme = Theme.of(context);
-    final count = widget.todoService.getIncomplete().length;
+    final count = getIt<TodoService>().getIncomplete().length;
     return InkWell(
       borderRadius: BorderRadius.circular(12),
-      onTap: () => _push(context, TodoScreen(todoService: widget.todoService, title: label)),
+      onTap: () => _push(context, TodoScreen(title: label)),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         decoration: BoxDecoration(
@@ -672,10 +602,10 @@ class DashboardScreenState extends State<DashboardScreen> {
 
   Widget _buildTodoLarge(BuildContext context, String label) {
     final theme = Theme.of(context);
-    final incomplete = widget.todoService.getIncomplete();
+    final incomplete = getIt<TodoService>().getIncomplete();
     return InkWell(
       borderRadius: BorderRadius.circular(16),
-      onTap: () => _push(context, TodoScreen(todoService: widget.todoService, title: label)),
+      onTap: () => _push(context, TodoScreen(title: label)),
       child: Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
@@ -721,10 +651,10 @@ class DashboardScreenState extends State<DashboardScreen> {
 
   Widget _buildCardSmall(BuildContext context, String label) {
     final theme = Theme.of(context);
-    final card = widget.cardService.get();
+    final card = getIt<CardService>().get();
     return InkWell(
       borderRadius: BorderRadius.circular(12),
-      onTap: () => _push(context, CardScreen(cardService: widget.cardService, title: label)),
+      onTap: () => _push(context, CardScreen(title: label)),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         decoration: BoxDecoration(
@@ -749,10 +679,10 @@ class DashboardScreenState extends State<DashboardScreen> {
 
   Widget _buildCardLarge(BuildContext context, String label) {
     final theme = Theme.of(context);
-    final card = widget.cardService.get();
+    final card = getIt<CardService>().get();
     return InkWell(
       borderRadius: BorderRadius.circular(16),
-      onTap: () => _push(context, CardScreen(cardService: widget.cardService, title: label)),
+      onTap: () => _push(context, CardScreen(title: label)),
       child: Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
@@ -807,7 +737,7 @@ class DashboardScreenState extends State<DashboardScreen> {
     final theme = Theme.of(context);
     return InkWell(
       borderRadius: BorderRadius.circular(12),
-      onTap: () => _push(context, CalendarScreen(calendarService: widget.calendarService, routineService: widget.routineService, completionService: widget.completionService, settingsService: widget.settingsService, title: label)),
+      onTap: () => _push(context, CalendarScreen(title: label)),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         decoration: BoxDecoration(color: theme.colorScheme.surfaceContainerLow, borderRadius: BorderRadius.circular(12)),
@@ -826,10 +756,10 @@ class DashboardScreenState extends State<DashboardScreen> {
 
   Widget _buildCalendarLarge(BuildContext context, DateTime now, String todayStr, String label) {
     final theme = Theme.of(context);
-    final events = widget.calendarService.getByDate(todayStr);
+    final events = getIt<CalendarService>().getByDate(todayStr);
     return InkWell(
       borderRadius: BorderRadius.circular(16),
-      onTap: () => _push(context, CalendarScreen(calendarService: widget.calendarService, routineService: widget.routineService, completionService: widget.completionService, settingsService: widget.settingsService, title: label)),
+      onTap: () => _push(context, CalendarScreen(title: label)),
       child: Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(color: theme.colorScheme.surfaceContainerLow, borderRadius: BorderRadius.circular(16)),
@@ -878,7 +808,7 @@ class DashboardScreenState extends State<DashboardScreen> {
     final theme = Theme.of(context);
     return InkWell(
       borderRadius: BorderRadius.circular(12),
-      onTap: () => _push(context, StatsScreen(routineService: widget.routineService, completionService: widget.completionService, distractionLogService: widget.distractionLogService, appDetectionService: widget.appDetection, healthService: widget.healthService, calendarService: widget.calendarService, title: label)),
+      onTap: () => _push(context, StatsScreen(title: label)),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         decoration: BoxDecoration(color: theme.colorScheme.surfaceContainerLow, borderRadius: BorderRadius.circular(12)),
@@ -898,10 +828,10 @@ class DashboardScreenState extends State<DashboardScreen> {
   Widget _buildStatsLarge(BuildContext context, DateTime now, String label) {
     final theme = Theme.of(context);
     final pct = _weeklyPct(now);
-    final routines = widget.routineService.getAll();
+    final routines = getIt<RoutineService>().getAll();
     return InkWell(
       borderRadius: BorderRadius.circular(16),
-      onTap: () => _push(context, StatsScreen(routineService: widget.routineService, completionService: widget.completionService, distractionLogService: widget.distractionLogService, appDetectionService: widget.appDetection, healthService: widget.healthService, calendarService: widget.calendarService, title: label)),
+      onTap: () => _push(context, StatsScreen(title: label)),
       child: Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(color: theme.colorScheme.surfaceContainerLow, borderRadius: BorderRadius.circular(16)),
@@ -924,8 +854,8 @@ class DashboardScreenState extends State<DashboardScreen> {
                 final dateStr = _formatDate(date);
                 final active = routines.where((r) => r.isActiveOnDate(date)).toList();
                 final done = active.where((r) =>
-                    widget.completionService.isCompleted(r.id, dateStr) ||
-                    widget.completionService.isSkipped(r.id, dateStr)).length;
+                    getIt<RoutineCompletionService>().isCompleted(r.id, dateStr) ||
+                    getIt<RoutineCompletionService>().isSkipped(r.id, dateStr)).length;
                 final dayPct = active.isNotEmpty ? done / active.length : 0.0;
                 final isToday = i == 6;
                 return Expanded(
@@ -974,7 +904,7 @@ class DashboardScreenState extends State<DashboardScreen> {
     final theme = Theme.of(context);
     return InkWell(
       borderRadius: BorderRadius.circular(12),
-      onTap: () => _push(context, AlarmScreen(alarmService: widget.alarmService, title: label)),
+      onTap: () => _push(context, AlarmScreen(title: label)),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         decoration: BoxDecoration(color: theme.colorScheme.surfaceContainerLow, borderRadius: BorderRadius.circular(12)),
@@ -984,7 +914,7 @@ class DashboardScreenState extends State<DashboardScreen> {
             const SizedBox(width: 10),
             Text(label, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: theme.colorScheme.onSurface)),
             const Spacer(),
-            Text('${widget.alarmService.enabledCount}개', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: theme.colorScheme.onSurfaceVariant)),
+            Text('${getIt<AlarmService>().enabledCount}개', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: theme.colorScheme.onSurfaceVariant)),
           ],
         ),
       ),
@@ -993,11 +923,11 @@ class DashboardScreenState extends State<DashboardScreen> {
 
   Widget _buildAlarmLarge(BuildContext context, String label) {
     final theme = Theme.of(context);
-    final alarms = widget.alarmService.getAll();
+    final alarms = getIt<AlarmService>().getAll();
     final enabled = alarms.where((a) => a.isEnabled).toList();
     return InkWell(
       borderRadius: BorderRadius.circular(16),
-      onTap: () => _push(context, AlarmScreen(alarmService: widget.alarmService, title: label)),
+      onTap: () => _push(context, AlarmScreen(title: label)),
       child: Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(color: theme.colorScheme.surfaceContainerLow, borderRadius: BorderRadius.circular(16)),
@@ -1039,7 +969,7 @@ class DashboardScreenState extends State<DashboardScreen> {
     final theme = Theme.of(context);
     return InkWell(
       borderRadius: BorderRadius.circular(12),
-      onTap: () => _push(context, TimerScreen(timerService: widget.timerService, title: label)),
+      onTap: () => _push(context, TimerScreen(title: label)),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         decoration: BoxDecoration(color: theme.colorScheme.surfaceContainerLow, borderRadius: BorderRadius.circular(12)),
@@ -1049,7 +979,7 @@ class DashboardScreenState extends State<DashboardScreen> {
             const SizedBox(width: 10),
             Text(label, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: theme.colorScheme.onSurface)),
             const Spacer(),
-            Text('${widget.timerService.getAll().length}개', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: theme.colorScheme.onSurfaceVariant)),
+            Text('${getIt<TimerService>().getAll().length}개', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: theme.colorScheme.onSurfaceVariant)),
           ],
         ),
       ),
@@ -1058,10 +988,10 @@ class DashboardScreenState extends State<DashboardScreen> {
 
   Widget _buildTimerLarge(BuildContext context, String label) {
     final theme = Theme.of(context);
-    final timers = widget.timerService.getAll();
+    final timers = getIt<TimerService>().getAll();
     return InkWell(
       borderRadius: BorderRadius.circular(16),
-      onTap: () => _push(context, TimerScreen(timerService: widget.timerService, title: label)),
+      onTap: () => _push(context, TimerScreen(title: label)),
       child: Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(color: theme.colorScheme.surfaceContainerLow, borderRadius: BorderRadius.circular(16)),
@@ -1106,11 +1036,11 @@ class DashboardScreenState extends State<DashboardScreen> {
   Widget _buildDiarySmall(BuildContext context, String label) {
     final theme = Theme.of(context);
     final todayStr = _formatDate(DateTime.now());
-    final todayDiary = widget.diaryService.getByDate(todayStr);
-    final streak = widget.diaryService.getCurrentStreak();
+    final todayDiary = getIt<DiaryService>().getByDate(todayStr);
+    final streak = getIt<DiaryService>().getCurrentStreak();
     return InkWell(
       borderRadius: BorderRadius.circular(12),
-      onTap: () => _push(context, DiaryScreen(diaryService: widget.diaryService, title: label)),
+      onTap: () => _push(context, DiaryScreen(title: label)),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         decoration: BoxDecoration(
@@ -1141,13 +1071,13 @@ class DashboardScreenState extends State<DashboardScreen> {
     final theme = Theme.of(context);
     final now = DateTime.now();
     final todayStr = _formatDate(now);
-    final todayDiary = widget.diaryService.getByDate(todayStr);
-    final recent = widget.diaryService.getRecent(limit: 3);
-    final streak = widget.diaryService.getCurrentStreak();
+    final todayDiary = getIt<DiaryService>().getByDate(todayStr);
+    final recent = getIt<DiaryService>().getRecent(limit: 3);
+    final streak = getIt<DiaryService>().getCurrentStreak();
 
     return InkWell(
       borderRadius: BorderRadius.circular(16),
-      onTap: () => _push(context, DiaryScreen(diaryService: widget.diaryService, title: label)),
+      onTap: () => _push(context, DiaryScreen(title: label)),
       child: Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
@@ -1237,7 +1167,7 @@ class DashboardScreenState extends State<DashboardScreen> {
     final theme = Theme.of(context);
     return InkWell(
       borderRadius: BorderRadius.circular(12),
-      onTap: () => _push(context, MemoListScreen(memoService: widget.memoService, title: label)),
+      onTap: () => _push(context, MemoListScreen(title: label)),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         decoration: BoxDecoration(color: theme.colorScheme.surfaceContainerLow, borderRadius: BorderRadius.circular(12)),
@@ -1247,7 +1177,7 @@ class DashboardScreenState extends State<DashboardScreen> {
             const SizedBox(width: 10),
             Text(label, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: theme.colorScheme.onSurface)),
             const Spacer(),
-            Text('${widget.memoService.getAll().length}개', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: theme.colorScheme.onSurfaceVariant)),
+            Text('${getIt<MemoService>().getAll().length}개', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: theme.colorScheme.onSurfaceVariant)),
           ],
         ),
       ),
@@ -1256,10 +1186,10 @@ class DashboardScreenState extends State<DashboardScreen> {
 
   Widget _buildMemoLarge(BuildContext context, String label) {
     final theme = Theme.of(context);
-    final memos = widget.memoService.getRecent(limit: 3);
+    final memos = getIt<MemoService>().getRecent(limit: 3);
     return InkWell(
       borderRadius: BorderRadius.circular(16),
-      onTap: () => _push(context, MemoListScreen(memoService: widget.memoService, title: label)),
+      onTap: () => _push(context, MemoListScreen(title: label)),
       child: Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(color: theme.colorScheme.surfaceContainerLow, borderRadius: BorderRadius.circular(16)),
@@ -1272,7 +1202,7 @@ class DashboardScreenState extends State<DashboardScreen> {
                 const SizedBox(width: 12),
                 Text(label, style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600)),
                 const Spacer(),
-                Text('${widget.memoService.getAll().length}개', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: theme.colorScheme.primary)),
+                Text('${getIt<MemoService>().getAll().length}개', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: theme.colorScheme.primary)),
               ],
             ),
             if (memos.isNotEmpty) ...[
@@ -1301,7 +1231,7 @@ class DashboardScreenState extends State<DashboardScreen> {
 
   Widget? _buildDDaySmall(BuildContext context, DateTime now, String label) {
     final theme = Theme.of(context);
-    final ddayEvents = widget.calendarService.getDDayEvents();
+    final ddayEvents = getIt<CalendarService>().getDDayEvents();
     final upcoming = ddayEvents.where((e) {
       final d = DateTime.tryParse(e.date);
       return d != null && !d.isBefore(DateTime(now.year, now.month, now.day));
@@ -1335,7 +1265,7 @@ class DashboardScreenState extends State<DashboardScreen> {
 
   Widget? _buildDDayLarge(BuildContext context, DateTime now, String label) {
     final theme = Theme.of(context);
-    final ddayEvents = widget.calendarService.getDDayEvents();
+    final ddayEvents = getIt<CalendarService>().getDDayEvents();
     final upcoming = ddayEvents.where((e) {
       final d = DateTime.tryParse(e.date);
       return d != null && !d.isBefore(DateTime(now.year, now.month, now.day));
@@ -1481,10 +1411,10 @@ class DashboardScreenState extends State<DashboardScreen> {
 
   Widget _buildBookmarkSmall(BuildContext context, String label) {
     final theme = Theme.of(context);
-    final bookmarks = widget.bookmarkService.getAll();
+    final bookmarks = getIt<BookmarkService>().getAll();
     return InkWell(
       borderRadius: BorderRadius.circular(12),
-      onTap: () => _push(context, BookmarkScreen(bookmarkService: widget.bookmarkService, title: label)),
+      onTap: () => _push(context, BookmarkScreen(title: label)),
       child: Container(
         padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
         decoration: BoxDecoration(
@@ -1506,10 +1436,10 @@ class DashboardScreenState extends State<DashboardScreen> {
 
   Widget _buildBookmarkLarge(BuildContext context, String label) {
     final theme = Theme.of(context);
-    final bookmarks = widget.bookmarkService.getAll();
+    final bookmarks = getIt<BookmarkService>().getAll();
     return InkWell(
       borderRadius: BorderRadius.circular(16),
-      onTap: () => _push(context, BookmarkScreen(bookmarkService: widget.bookmarkService, title: label)),
+      onTap: () => _push(context, BookmarkScreen(title: label)),
       child: Container(
         padding: const EdgeInsets.all(16),
         decoration: BoxDecoration(
@@ -1581,7 +1511,7 @@ class DashboardScreenState extends State<DashboardScreen> {
 
   String _sectionLabel(String id) {
     final baseId = SettingsService.sectionBaseId(id);
-    return widget.settingsService.getSectionLabel(id) ?? _defaultLabels[baseId] ?? baseId;
+    return getIt<SettingsService>().getSectionLabel(id) ?? _defaultLabels[baseId] ?? baseId;
   }
 
   IconData _sectionIcon(String id) {
@@ -1604,10 +1534,10 @@ class DashboardScreenState extends State<DashboardScreen> {
 
   void _openFortune(BuildContext context, String label) {
     Navigator.of(context).push(MaterialPageRoute(
-      builder: (_) => FortuneScreen(fortuneService: widget.fortuneService, title: label),
+      builder: (_) => FortuneScreen(title: label),
     )).then((_) {
       // Refresh after returning (user may have set profile)
-      final newFortune = widget.fortuneService.generateTodayFortune();
+      final newFortune = getIt<FortuneService>().generateTodayFortune();
       if (mounted && newFortune != null) setState(() => _fortune = newFortune);
     });
   }
@@ -1758,17 +1688,13 @@ class DashboardScreenState extends State<DashboardScreen> {
   void _openGoal(BuildContext context, String label) {
     Navigator.of(context).push(MaterialPageRoute(
       builder: (_) => GoalScreen(
-        goalService: widget.goalService,
-        routineService: widget.routineService,
-        completionService: widget.completionService,
-        todoService: widget.todoService,
         title: label,
       ),
     ));
   }
 
   Widget? _buildGoalSmall(BuildContext context, ThemeData theme, String label) {
-    final all = widget.goalService.getAll();
+    final all = getIt<GoalService>().getAll();
     final completed = all.where((g) => g.isCompleted).length;
     return InkWell(
       borderRadius: BorderRadius.circular(12),
@@ -1799,9 +1725,9 @@ class DashboardScreenState extends State<DashboardScreen> {
   }
 
   Widget? _buildGoalLarge(BuildContext context, ThemeData theme, String label) {
-    final all = widget.goalService.getAll();
+    final all = getIt<GoalService>().getAll();
     final incomplete = all.where((g) => !g.isCompleted).toList();
-    final progress = widget.goalService.getOverallProgress(widget.completionService, widget.todoService);
+    final progress = getIt<GoalService>().getOverallProgress(getIt<RoutineCompletionService>(), getIt<TodoService>());
     return InkWell(
       borderRadius: BorderRadius.circular(16),
       onTap: () => _openGoal(context, label),
@@ -1836,7 +1762,7 @@ class DashboardScreenState extends State<DashboardScreen> {
               ),
               const SizedBox(height: 10),
               ...incomplete.take(3).map((g) {
-                final gProgress = widget.goalService.getProgress(g, widget.completionService, widget.todoService);
+                final gProgress = getIt<GoalService>().getProgress(g, getIt<RoutineCompletionService>(), getIt<TodoService>());
                 final catColor = Goal.categoryColor(g.category);
                 return Padding(
                   padding: const EdgeInsets.only(bottom: 6),
@@ -1871,7 +1797,7 @@ class DashboardScreenState extends State<DashboardScreen> {
   // ─── 오늘의 심리학 ───
   void _openPsychology(BuildContext context, String label) {
     Navigator.of(context).push(MaterialPageRoute(
-      builder: (_) => PsychologyScreen(psychologyService: widget.psychologyService, title: label),
+      builder: (_) => PsychologyScreen(title: label),
     ));
   }
 
@@ -1995,7 +1921,7 @@ class DashboardScreenState extends State<DashboardScreen> {
   // ─── 스크린타임 ───
   void _openScreenTime(BuildContext context, String label) {
     Navigator.of(context).push(MaterialPageRoute(
-      builder: (_) => ScreenTimeScreen(screenTimeService: widget.screenTimeService, title: label),
+      builder: (_) => ScreenTimeScreen(title: label),
     )).then((_) => _loadScreenTime());
   }
 
@@ -2140,7 +2066,7 @@ class DashboardScreenState extends State<DashboardScreen> {
   // ─── 활동 ───
   void _openActivity(BuildContext context, String label) {
     Navigator.of(context).push(MaterialPageRoute(
-      builder: (_) => ActivityScreen(activityService: widget.activityService, title: label),
+      builder: (_) => ActivityScreen(title: label),
     )).then((_) => _loadActivity());
   }
 
@@ -2172,7 +2098,7 @@ class DashboardScreenState extends State<DashboardScreen> {
                 Text('정지 ${_activity!.stillMinutes}분',
                     style: TextStyle(fontSize: 13, color: theme.colorScheme.onSurfaceVariant)),
             ] else
-              Text(widget.activityService.isEnabled ? '감지 중...' : '시작하기',
+              Text(getIt<ActivityService>().isEnabled ? '감지 중...' : '시작하기',
                   style: TextStyle(fontSize: 13, color: theme.colorScheme.primary)),
           ],
         ),
@@ -2204,7 +2130,7 @@ class DashboardScreenState extends State<DashboardScreen> {
                   const SizedBox(height: 16),
                   Icon(Icons.directions_walk, size: 40, color: theme.colorScheme.primary.withValues(alpha: 0.4)),
                   const SizedBox(height: 8),
-                  Text(widget.activityService.isEnabled
+                  Text(getIt<ActivityService>().isEnabled
                       ? '활동을 감지하고 있습니다\n이동하면 자동으로 기록됩니다'
                       : '활동 자동 감지를\n시작해보세요',
                       textAlign: TextAlign.center,
@@ -2296,17 +2222,13 @@ class DashboardScreenState extends State<DashboardScreen> {
 
   void _openNotion(BuildContext context) {
     Navigator.of(context).push(MaterialPageRoute(
-      builder: (_) => NotionScreen(
-        pageService: widget.notionPageService,
-        dbService: widget.notionDatabaseService,
-        autoPageService: widget.autoPageService,
-      ),
+      builder: (_) => const NotionScreen(),
     ));
   }
 
   Widget? _buildNotionSmall(BuildContext context, ThemeData theme, String label) {
-    final pageCount = widget.notionPageService.getAll().length;
-    final dbCount = widget.notionDatabaseService.getAll().length;
+    final pageCount = getIt<NotionPageService>().getAll().length;
+    final dbCount = getIt<NotionDatabaseService>().getAll().length;
     return InkWell(
       borderRadius: BorderRadius.circular(12),
       onTap: () => _openNotion(context),
@@ -2334,11 +2256,11 @@ class DashboardScreenState extends State<DashboardScreen> {
 
   Widget? _buildNotionLarge(BuildContext context, ThemeData theme, String label) {
     // Prioritize auto-generated pages, then recent
-    final allPages = widget.notionPageService.getRecent(limit: 10);
+    final allPages = getIt<NotionPageService>().getRecent(limit: 10);
     final autoPages = allPages.where((p) => p.isAutoGenerated).take(2).toList();
     final userPages = allPages.where((p) => !p.isAutoGenerated).take(2).toList();
     final displayPages = [...autoPages, ...userPages].take(3).toList();
-    final dbCount = widget.notionDatabaseService.getAll().length;
+    final dbCount = getIt<NotionDatabaseService>().getAll().length;
     return InkWell(
       borderRadius: BorderRadius.circular(16),
       onTap: () => _openNotion(context),
@@ -2410,7 +2332,7 @@ class DashboardScreenState extends State<DashboardScreen> {
 
   void _showSectionOptions(String id) {
     final theme = Theme.of(context);
-    final isHalf = widget.settingsService.isDashboardSectionHalf(id);
+    final isHalf = getIt<SettingsService>().isDashboardSectionHalf(id);
     final isDuplicate = SettingsService.isDuplicate(id);
     showModalBottomSheet(
       context: context,
@@ -2428,7 +2350,7 @@ class DashboardScreenState extends State<DashboardScreen> {
                 children: [
                   Expanded(
                     child: _optionCard(ctx, theme, icon: Icons.fullscreen, label: '전체', selected: !isHalf, onTap: () async {
-                      await widget.settingsService.setDashboardSectionHalf(id, false);
+                      await getIt<SettingsService>().setDashboardSectionHalf(id, false);
                       if (ctx.mounted) Navigator.pop(ctx);
                       setState(() {});
                     }),
@@ -2436,7 +2358,7 @@ class DashboardScreenState extends State<DashboardScreen> {
                   const SizedBox(width: 8),
                   Expanded(
                     child: _optionCard(ctx, theme, icon: Icons.splitscreen, label: '반쪽', selected: isHalf, onTap: () async {
-                      await widget.settingsService.setDashboardSectionHalf(id, true);
+                      await getIt<SettingsService>().setDashboardSectionHalf(id, true);
                       if (ctx.mounted) Navigator.pop(ctx);
                       setState(() {});
                     }),
@@ -2462,14 +2384,14 @@ class DashboardScreenState extends State<DashboardScreen> {
                     onPressed: () async {
                       final baseId = SettingsService.sectionBaseId(id);
                       final newId = '$baseId:${DateTime.now().millisecondsSinceEpoch}';
-                      final order = widget.settingsService.dashboardOrder;
+                      final order = getIt<SettingsService>().dashboardOrder;
                       final idx = order.indexOf(id);
                       if (idx >= 0) {
                         order.insert(idx + 1, newId);
                       } else {
                         order.add(newId);
                       }
-                      await widget.settingsService.setDashboardOrder(order);
+                      await getIt<SettingsService>().setDashboardOrder(order);
                       if (ctx.mounted) Navigator.pop(ctx);
                       setState(() {});
                     },
@@ -2481,7 +2403,7 @@ class DashboardScreenState extends State<DashboardScreen> {
                 width: double.infinity,
                 child: TextButton.icon(
                   onPressed: () async {
-                    await widget.settingsService.setDashboardSectionHidden(id, true);
+                    await getIt<SettingsService>().setDashboardSectionHidden(id, true);
                     if (ctx.mounted) Navigator.pop(ctx);
                     setState(() {});
                   },
@@ -2494,12 +2416,12 @@ class DashboardScreenState extends State<DashboardScreen> {
                   width: double.infinity,
                   child: TextButton.icon(
                     onPressed: () async {
-                      final order = widget.settingsService.dashboardOrder;
+                      final order = getIt<SettingsService>().dashboardOrder;
                       order.remove(id);
-                      await widget.settingsService.setDashboardOrder(order);
+                      await getIt<SettingsService>().setDashboardOrder(order);
                       // Clean up related settings
-                      await widget.settingsService.setSectionLabel(id, '');
-                      await widget.settingsService.setDashboardSectionHidden(id, false);
+                      await getIt<SettingsService>().setSectionLabel(id, '');
+                      await getIt<SettingsService>().setDashboardSectionHidden(id, false);
                       if (ctx.mounted) Navigator.pop(ctx);
                       setState(() {});
                     },
@@ -2532,7 +2454,7 @@ class DashboardScreenState extends State<DashboardScreen> {
           ),
           onSubmitted: (_) async {
             final name = controller.text.trim();
-            await widget.settingsService.setSectionLabel(
+            await getIt<SettingsService>().setSectionLabel(
               id,
               name == defaultLabel ? '' : name,
             );
@@ -2543,7 +2465,7 @@ class DashboardScreenState extends State<DashboardScreen> {
         actions: [
           TextButton(
             onPressed: () async {
-              await widget.settingsService.setSectionLabel(id, '');
+              await getIt<SettingsService>().setSectionLabel(id, '');
               if (ctx.mounted) Navigator.pop(ctx);
               setState(() {});
             },
@@ -2552,7 +2474,7 @@ class DashboardScreenState extends State<DashboardScreen> {
           TextButton(
             onPressed: () async {
               final name = controller.text.trim();
-              await widget.settingsService.setSectionLabel(
+              await getIt<SettingsService>().setSectionLabel(
                 id,
                 name == defaultLabel ? '' : name,
               );
@@ -2567,7 +2489,7 @@ class DashboardScreenState extends State<DashboardScreen> {
   }
 
   void _toggleSectionSize(String id) async {
-    await widget.settingsService.toggleDashboardSectionSize(id);
+    await getIt<SettingsService>().toggleDashboardSectionSize(id);
     setState(() {});
   }
 
@@ -2610,9 +2532,9 @@ class DashboardScreenState extends State<DashboardScreen> {
     final theme = Theme.of(context);
     final now = DateTime.now();
     final todayStr = _formatDate(now);
-    final order = widget.settingsService.dashboardOrder;
+    final order = getIt<SettingsService>().dashboardOrder;
 
-    final hidden = widget.settingsService.dashboardHidden;
+    final hidden = getIt<SettingsService>().dashboardHidden;
     final visible = <String>[];
     final sectionWidgets = <String, Widget>{};
     for (final id in order) {
@@ -2657,7 +2579,7 @@ class DashboardScreenState extends State<DashboardScreen> {
     int i = 0;
     while (i < visible.length) {
       final id = visible[i];
-      final isHalf = widget.settingsService.isDashboardSectionHalf(id);
+      final isHalf = getIt<SettingsService>().isDashboardSectionHalf(id);
       if (!isHalf) {
         rows.add(
           GestureDetector(
@@ -2671,7 +2593,7 @@ class DashboardScreenState extends State<DashboardScreen> {
         );
         i++;
       } else {
-        if (i + 1 < visible.length && widget.settingsService.isDashboardSectionHalf(visible[i + 1])) {
+        if (i + 1 < visible.length && getIt<SettingsService>().isDashboardSectionHalf(visible[i + 1])) {
           final id2 = visible[i + 1];
           rows.add(
             Padding(
@@ -2747,7 +2669,7 @@ class DashboardScreenState extends State<DashboardScreen> {
           for (final id in order) {
             if (!newOrder.contains(id)) newOrder.add(id);
           }
-          widget.settingsService.setDashboardOrder(newOrder);
+          getIt<SettingsService>().setDashboardOrder(newOrder);
         });
       },
       itemBuilder: (context, index) {
@@ -2756,7 +2678,7 @@ class DashboardScreenState extends State<DashboardScreen> {
         if (sectionWidget == null) {
           return SizedBox.shrink(key: ValueKey(id));
         }
-        final isHalf = widget.settingsService.isDashboardSectionHalf(id);
+        final isHalf = getIt<SettingsService>().isDashboardSectionHalf(id);
         return ReorderableDragStartListener(
           key: ValueKey(id),
           index: index,
@@ -2781,7 +2703,7 @@ class DashboardScreenState extends State<DashboardScreen> {
   }
 
   Widget _buildHiddenSliver(Set<String> hidden, ThemeData theme) {
-    final hiddenList = widget.settingsService.dashboardOrder
+    final hiddenList = getIt<SettingsService>().dashboardOrder
         .where((id) => hidden.contains(id))
         .toList();
     if (hiddenList.isEmpty) return const SliverToBoxAdapter(child: SizedBox.shrink());
@@ -2800,7 +2722,7 @@ class DashboardScreenState extends State<DashboardScreen> {
                 avatar: Icon(_sectionIcon(id), size: 16),
                 label: Text(_sectionLabel(id)),
                 onPressed: () async {
-                  await widget.settingsService.setDashboardSectionHidden(id, false);
+                  await getIt<SettingsService>().setDashboardSectionHidden(id, false);
                   setState(() {});
                 },
               )).toList(),
@@ -2814,7 +2736,7 @@ class DashboardScreenState extends State<DashboardScreen> {
   // ─── Helpers ──────────────────────────────────────
 
   int _weeklyPct(DateTime now) {
-    final routines = widget.routineService.getAll();
+    final routines = getIt<RoutineService>().getAll();
     int totalActive = 0, totalDone = 0;
     for (int i = 0; i < 7; i++) {
       final date = now.subtract(Duration(days: i));
@@ -2822,14 +2744,14 @@ class DashboardScreenState extends State<DashboardScreen> {
       final active = routines.where((r) => r.isActiveOnDate(date)).toList();
       totalActive += active.length;
       totalDone += active.where((r) =>
-          widget.completionService.isCompleted(r.id, dateStr) ||
-          widget.completionService.isSkipped(r.id, dateStr)).length;
+          getIt<RoutineCompletionService>().isCompleted(r.id, dateStr) ||
+          getIt<RoutineCompletionService>().isSkipped(r.id, dateStr)).length;
     }
     return totalActive > 0 ? (totalDone / totalActive * 100).round() : 0;
   }
 
   String _calendarValue(String todayStr, DateTime now) {
-    final count = widget.calendarService.countByDate(todayStr);
+    final count = getIt<CalendarService>().countByDate(todayStr);
     return count > 0 ? '오늘 ${count}건' : '${now.month}월';
   }
 

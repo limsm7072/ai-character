@@ -1,97 +1,15 @@
 import 'package:flutter/material.dart';
-import '../services/routine_service.dart';
+import '../service_locator.dart';
 import '../services/settings_service.dart';
-import '../services/app_detection_service.dart';
-import '../services/distraction_log_service.dart';
-import '../services/routine_completion_service.dart';
-import '../services/tts_service.dart';
-import '../services/accessory_service.dart';
-import '../services/health_service.dart';
-import '../services/todo_service.dart';
-import '../services/memo_service.dart';
-import '../services/alarm_service.dart';
-import '../services/timer_service.dart';
-import '../services/calendar_service.dart';
-import '../services/news_service.dart';
-import '../services/card_service.dart';
-import '../services/weather_service.dart';
-import '../services/recommendation_service.dart';
-import '../services/routine_group_service.dart';
-import '../services/diary_service.dart';
-import '../services/bookmark_service.dart';
-import '../services/fortune_service.dart';
-import '../services/goal_service.dart';
-import '../services/psychology_service.dart';
-import '../services/screen_time_service.dart';
-import '../services/activity_service.dart';
-import '../services/notion_page_service.dart';
-import '../services/notion_database_service.dart';
-import '../services/auto_page_service.dart';
 import 'dashboard_screen.dart';
 import 'settings_screen.dart';
 import 'character_chat_screen.dart';
 
 class HomeScreen extends StatefulWidget {
-  final RoutineService routineService;
-  final SettingsService settingsService;
-  final AppDetectionService? appDetection;
-  final DistractionLogService distractionLogService;
-  final RoutineCompletionService completionService;
-  final TtsService ttsService;
-  final AccessoryService accessoryService;
-  final HealthService? healthService;
-  final TodoService todoService;
-  final MemoService memoService;
-  final AlarmService alarmService;
-  final TimerService timerService;
-  final CalendarService calendarService;
-  final NewsService newsService;
-  final CardService cardService;
-  final WeatherService weatherService;
-  final RecommendationService recommendationService;
-  final RoutineGroupService routineGroupService;
-  final DiaryService diaryService;
-  final BookmarkService bookmarkService;
-  final FortuneService fortuneService;
-  final GoalService goalService;
-  final PsychologyService psychologyService;
-  final ScreenTimeService screenTimeService;
-  final ActivityService activityService;
-  final NotionPageService notionPageService;
-  final NotionDatabaseService notionDatabaseService;
-  final AutoPageService autoPageService;
   final VoidCallback? onCompletionUnchecked;
 
   const HomeScreen({
     super.key,
-    required this.routineService,
-    required this.settingsService,
-    this.appDetection,
-    required this.distractionLogService,
-    required this.completionService,
-    required this.ttsService,
-    required this.accessoryService,
-    this.healthService,
-    required this.todoService,
-    required this.memoService,
-    required this.alarmService,
-    required this.timerService,
-    required this.calendarService,
-    required this.newsService,
-    required this.cardService,
-    required this.weatherService,
-    required this.recommendationService,
-    required this.routineGroupService,
-    required this.diaryService,
-    required this.bookmarkService,
-    required this.fortuneService,
-    required this.goalService,
-    required this.psychologyService,
-    required this.screenTimeService,
-    required this.activityService,
-    required this.notionPageService,
-    required this.notionDatabaseService,
-    required this.autoPageService,
     this.onCompletionUnchecked,
   });
 
@@ -113,58 +31,12 @@ class _HomeScreenState extends State<HomeScreen> {
         children: [
           DashboardScreen(
             key: _dashboardKey,
-            routineService: widget.routineService,
-            completionService: widget.completionService,
-            settingsService: widget.settingsService,
-            todoService: widget.todoService,
-            memoService: widget.memoService,
-            distractionLogService: widget.distractionLogService,
-            healthService: widget.healthService,
-            appDetection: widget.appDetection,
-            alarmService: widget.alarmService,
-            timerService: widget.timerService,
-            calendarService: widget.calendarService,
-            newsService: widget.newsService,
-            cardService: widget.cardService,
-            weatherService: widget.weatherService,
-            recommendationService: widget.recommendationService,
-            routineGroupService: widget.routineGroupService,
-            diaryService: widget.diaryService,
-            bookmarkService: widget.bookmarkService,
-            fortuneService: widget.fortuneService,
-            goalService: widget.goalService,
-            psychologyService: widget.psychologyService,
-            screenTimeService: widget.screenTimeService,
-            activityService: widget.activityService,
-            notionPageService: widget.notionPageService,
-            notionDatabaseService: widget.notionDatabaseService,
-            autoPageService: widget.autoPageService,
             onCompletionUnchecked: widget.onCompletionUnchecked,
           ),
           CharacterChatScreen(
-            settingsService: widget.settingsService,
-            accessoryService: widget.accessoryService,
-            routineService: widget.routineService,
-            completionService: widget.completionService,
-            healthService: widget.healthService,
-            todoService: widget.todoService,
-            memoService: widget.memoService,
-            alarmService: widget.alarmService,
-            calendarService: widget.calendarService,
-            weatherService: widget.weatherService,
-            newsService: widget.newsService,
-            cardService: widget.cardService,
-            timerService: widget.timerService,
-            diaryService: widget.diaryService,
-            autoPageService: widget.autoPageService,
             onRoutinesChanged: () => _dashboardKey.currentState?.refresh(),
           ),
-          SettingsScreen(
-            settingsService: widget.settingsService,
-            appDetection: widget.appDetection,
-            ttsService: widget.ttsService,
-            weatherService: widget.weatherService,
-          ),
+          const SettingsScreen(),
         ],
       ),
       bottomNavigationBar: NavigationBar(
@@ -177,7 +49,7 @@ class _HomeScreenState extends State<HomeScreen> {
           const NavigationDestination(icon: Icon(Icons.home), label: '홈'),
           NavigationDestination(
             icon: const Icon(Icons.chat_bubble_outline),
-            label: widget.settingsService.characterName,
+            label: getIt<SettingsService>().characterName,
           ),
           const NavigationDestination(icon: Icon(Icons.settings), label: '설정'),
         ],
