@@ -121,7 +121,7 @@ class RoutineMonitor {
         if (prev != null && _wasDisabledByUser(prev.id)) return;
 
         final today = _completionService.todayStr();
-        await _promptCompletion(prev?.id ?? '', prev?.name ?? '루틴', today, 0);
+        await _promptCompletion(prev?.id ?? '', prev?.name ?? '할 일', today, 0);
         return;
       }
 

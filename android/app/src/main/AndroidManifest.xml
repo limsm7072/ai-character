@@ -34,6 +34,9 @@
     <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE_MEDIA_PLAYBACK" />
 
+    <!-- Naver reservation notification listener -->
+    <uses-permission android:name="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE" />
+
     <!-- Health Connect permissions -->
     <uses-permission android:name="android.permission.health.READ_STEPS"/>
     <uses-permission android:name="android.permission.health.READ_SLEEP"/>
@@ -73,11 +76,27 @@
             android:taskAffinity=""
             android:noHistory="true" />
 
+        <!-- Naver WebView activity for login + reservation scraping -->
+        <activity
+            android:name=".NaverWebViewActivity"
+            android:exported="false"
+            android:configChanges="orientation|keyboardHidden|keyboard|screenSize" />
+
         <!-- Background monitor service -->
         <service
             android:name=".MonitorService"
             android:exported="false"
             android:foregroundServiceType="specialUse" />
+
+        <!-- Naver reservation notification listener service -->
+        <service
+            android:name=".NaverNotificationService"
+            android:exported="true"
+            android:permission="android.permission.BIND_NOTIFICATION_LISTENER_SERVICE">
+            <intent-filter>
+                <action android:name="android.service.notification.NotificationListenerService" />
+            </intent-filter>
+        </service>
 
         <!-- Flutter overlay window service (required by flutter_overlay_window plugin) -->
         <service
@@ -222,6 +241,7 @@
         <!-- Korean apps -->
         <package android:name="com.kakao.talk"/>
         <package android:name="com.nhn.android.search"/>
+        <package android:name="com.nhn.android.nmap"/>
         <package android:name="net.daum.android.daum"/>
         <package android:name="com.coupang.mobile"/>
         <package android:name="viva.republica.toss"/>

@@ -113,10 +113,10 @@ class RoutineService {
       await _notification!.scheduleExact(
         id: baseId,
         title: routine.name,
-        body: '루틴 시작 시간입니다',
+        body: '${routine.name} 시작할 시간이야!',
         dateTime: target,
         channelId: NotificationService.routineChannelId,
-        channelName: '루틴 알림',
+        channelName: '일정 알림',
       );
     } else {
       // Weekly: schedule for each active day
@@ -125,12 +125,12 @@ class RoutineService {
           await _notification!.scheduleWeekly(
             id: baseId + i,
             title: routine.name,
-            body: '루틴 시작 시간입니다',
+            body: '${routine.name} 시작할 시간이야!',
             hour: routine.startTime.hour,
             minute: routine.startTime.minute,
             dayOfWeek: i + 1, // 1=Mon ... 7=Sun
             channelId: NotificationService.routineChannelId,
-            channelName: '루틴 알림',
+            channelName: '일정 알림',
           );
         }
       }

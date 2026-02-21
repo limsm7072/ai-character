@@ -30,13 +30,17 @@ class MainActivity : FlutterFragmentActivity() {
     private val AUDIO_CHANNEL = "com.aicharacter.ai_character/audio"
     private val SPEECH_CHANNEL = "com.aicharacter.ai_character/speech"
     private val EVENT_CHANNEL = "com.aicharacter.ai_character/distraction_events"
+    private val NAVER_CHANNEL = "com.aicharacter.ai_character/naver_reservation"
+    private val NAVER_EVENT_CHANNEL = "com.aicharacter.ai_character/naver_events"
     private var eventSink: EventChannel.EventSink? = null
+    private var naverEventSink: EventChannel.EventSink? = null
     private var mediaPlayer: MediaPlayer? = null
     private var alarmPlayer: MediaPlayer? = null
     private var alarmRingtone: android.media.Ringtone? = null
     private var fallbackTone: android.media.ToneGenerator? = null
     private var ambientGenerator: AmbientSoundGenerator? = null
     private var speechResult: MethodChannel.Result? = null
+    private var naverResult: MethodChannel.Result? = null
     private var pickImageResult: MethodChannel.Result? = null
     private val PICK_IMAGE_REQUEST = 2001
 
@@ -61,6 +65,20 @@ class MainActivity : FlutterFragmentActivity() {
                     "routine_name" to (intent.getStringExtra("routine_name") ?: "")
                 )
                 eventSink?.success(data)
+            }
+        }
+    }
+
+    private val naverReservationReceiver = object : BroadcastReceiver() {
+        override fun onReceive(context: Context?, intent: Intent?) {
+            if (intent?.action == NaverNotificationService.ACTION_RESERVATION_DETECTED) {
+                val data = mapOf(
+                    "title" to (intent.getStringExtra("title") ?: ""),
+                    "text" to (intent.getStringExtra("text") ?: ""),
+                    "bigText" to (intent.getStringExtra("bigText") ?: ""),
+                    "timestamp" to (intent.getLongExtra("timestamp", 0L).toString())
+                )
+                naverEventSink?.success(data)
             }
         }
     }
@@ -299,6 +317,26 @@ class MainActivity : FlutterFragmentActivity() {
             }
         }
 
+        // Naver reservation channel
+        MethodChannel(flutterEngine.dartExecutor.binaryMessenger, NAVER_CHANNEL).setMethodCallHandler { call, result ->
+            when (call.method) {
+                "fetchReservations" -> fetchNaverReservations(result)
+                "hasNotificationListenerPermission" -> {
+                    result.success(hasNotificationListenerPermission())
+                }
+                "requestNotificationListenerPermission" -> {
+                    try {
+                        startActivity(Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS))
+                    } catch (_: Exception) {}
+                    result.success(null)
+                }
+                "getPendingNotifications" -> {
+                    result.success(getAndClearPendingNotifications())
+                }
+                else -> result.notImplemented()
+            }
+        }
+
         EventChannel(flutterEngine.dartExecutor.binaryMessenger, EVENT_CHANNEL).setStreamHandler(
             object : EventChannel.StreamHandler {
                 override fun onListen(arguments: Any?, events: EventChannel.EventSink?) {
@@ -310,11 +348,31 @@ class MainActivity : FlutterFragmentActivity() {
             }
         )
 
+        // Naver reservation event channel (real-time notification delivery)
+        EventChannel(flutterEngine.dartExecutor.binaryMessenger, NAVER_EVENT_CHANNEL).setStreamHandler(
+            object : EventChannel.StreamHandler {
+                override fun onListen(arguments: Any?, events: EventChannel.EventSink?) {
+                    naverEventSink = events
+                }
+                override fun onCancel(arguments: Any?) {
+                    naverEventSink = null
+                }
+            }
+        )
+
         val filter = IntentFilter("com.aicharacter.DISTRACTION_DETECTED")
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             registerReceiver(distractionReceiver, filter, RECEIVER_NOT_EXPORTED)
         } else {
             registerReceiver(distractionReceiver, filter)
+        }
+
+        // Naver reservation broadcast receiver
+        val naverFilter = IntentFilter(NaverNotificationService.ACTION_RESERVATION_DETECTED)
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+            registerReceiver(naverReservationReceiver, naverFilter, RECEIVER_NOT_EXPORTED)
+        } else {
+            registerReceiver(naverReservationReceiver, naverFilter)
         }
     }
 
@@ -407,6 +465,7 @@ class MainActivity : FlutterFragmentActivity() {
         ambientGenerator?.stop()
         ambientGenerator = null
         try { unregisterReceiver(distractionReceiver) } catch (_: Exception) {}
+        try { unregisterReceiver(naverReservationReceiver) } catch (_: Exception) {}
         super.onDestroy()
     }
 
@@ -768,6 +827,59 @@ class MainActivity : FlutterFragmentActivity() {
         }
         return apps
     }
+
+    // ─── Naver Reservation Helpers ─────────────────────────
+
+    private fun fetchNaverReservations(result: MethodChannel.Result) {
+        naverResult?.success(mapOf("status" to "cancelled", "text" to ""))
+        naverResult = result
+
+        NaverWebViewActivity.onResult = { text ->
+            naverResult?.success(mapOf("status" to "ok", "text" to text))
+            naverResult = null
+        }
+        NaverWebViewActivity.onError = { err ->
+            naverResult?.success(mapOf("status" to "error", "text" to "", "error" to err))
+            naverResult = null
+        }
+
+        try {
+            val intent = Intent(this, NaverWebViewActivity::class.java)
+            intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            startActivity(intent)
+        } catch (e: Exception) {
+            naverResult?.error("NAVER_ERROR", e.message, null)
+            naverResult = null
+        }
+    }
+
+    private fun hasNotificationListenerPermission(): Boolean {
+        val pkgName = packageName
+        val flat = Settings.Secure.getString(contentResolver, "enabled_notification_listeners") ?: ""
+        return flat.split(":").any { it.contains(pkgName) }
+    }
+
+    private fun getAndClearPendingNotifications(): List<Map<String, Any>> {
+        val prefs = getSharedPreferences("FlutterSharedPreferences", MODE_PRIVATE)
+        val raw = prefs.getString("flutter.naver_pending_notifications", "[]") ?: "[]"
+        val arr = try { org.json.JSONArray(raw) } catch (_: Exception) { org.json.JSONArray() }
+
+        val result = mutableListOf<Map<String, Any>>()
+        for (i in 0 until arr.length()) {
+            val obj = arr.optJSONObject(i) ?: continue
+            result.add(mapOf(
+                "title" to (obj.optString("title", "")),
+                "text" to (obj.optString("text", "")),
+                "bigText" to (obj.optString("bigText", "")),
+                "timestamp" to obj.optLong("timestamp", 0L),
+            ))
+        }
+        // Clear pending
+        prefs.edit().putString("flutter.naver_pending_notifications", "[]").apply()
+        return result
+    }
+
+    // ─── Speech Recognition ─────────────────────────────────
 
     private fun startSpeechRecognition(result: MethodChannel.Result) {
         // Cancel any previous pending result

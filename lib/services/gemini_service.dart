@@ -276,85 +276,155 @@ class GeminiService {
     int distractionCount = 1,
     int intensity = 1,
   }) async {
-    if (_apiKey == null) throw Exception('Gemini not initialized');
+    // 1차: 맥락별 메시지에서 랜덤 선택 (항상 동작, 절대 "루틴" 안 씀)
+    final fallback = _contextualNag(routineName, currentApp, distractionCount, intensity);
 
-    String intensityGuide;
-    switch (intensity) {
-      case 0:
-        intensityGuide = '부드럽고 다정하게 격려하듯이 말해줘. 화내지 말고, 걱정하는 친구처럼 따뜻하게. emotion은 worried나 happy 위주로.';
-        break;
-      case 2:
-        intensityGuide = '엄격하고 단호하게 혼내줘. 진지하게 화내면서 잔소리해. emotion은 angry나 scolding 위주로.';
-        break;
-      default:
-        intensityGuide = '적당히 잔소리해줘. 살짝 짜증내면서도 귀엽게.';
-        break;
-    }
+    // 2차: AI 시도 (실패하거나 "루틴" 포함 시 폴백 사용)
+    if (_apiKey == null) return fallback;
+    try {
+      final friendly = _friendlyName(routineName);
+      final prompt = '''너는 $_characterName이야. 귀여운 AI 비서.
+사용자가 "$currentApp" 앱을 쓰고 있어. 지금은 $friendly 할 시간인데!
+$currentApp 하지 말고 $friendly 하라고 짧게 잔소리해줘. 1문장.
+절대 "루틴"이라는 말 쓰지 마.
+JSON으로만 답해: {"text":"내용","emotion":"annoyed","gesture":"pointing"}''';
+      final result = await _generateStandalone(prompt);
+      if (!result.text.contains('루틴') && result.text.length > 2) return result;
+    } catch (_) {}
 
-    final contextHint = _routineContextHint(routineName);
-    final repeatNote = distractionCount > 1 ? ' 벌써 ${distractionCount}번째야.' : '';
-
-    final prompt = '''너는 $_characterName이야. 사용자의 귀여운 AI 비서야.
-사용자가 지금 "$currentApp"을 하고 있어.$repeatNote $intensityGuide
-
-[루틴 정보] 지금은 "$routineName" 시간이야.
-$contextHint
-[중요 규칙]
-- 절대 "루틴"이라는 단어를 쓰지 마. 딱딱해.
-- "$routineName"을 그대로 읽지 말고, 자연스러운 일상 표현으로 바꿔서 말해.
-- 예: "취침" → "안 자?" / "자야 될 텐데~" / "잘 시간이야~"
-- 예: "운동" → "득근득근 안 해?" / "몸 안 만들거야?" / "몸 좀 움직여야지~"
-- 예: "약 복용" → "약 먹는 거 깜빡하면 안 돼~~"
-- 지금 사용자가 하고 있는 "$currentApp" 앱을 자연스럽게 언급해. 재미있게.
-- 짧고 임팩트 있게 1~2문장으로.
-
-[응답 형식] 반드시 아래 JSON 형식으로만 답해:
-{"text":"잔소리 내용","emotion":"annoyed","gesture":"pointing"}
-emotion 종류: happy, annoyed, angry, worried, sad, excited, scolding
-gesture 종류: pointing, arms_crossed, head_shake, hands_on_hips, waving, nodding, idle''';
-
-    return await _generateStandalone(prompt);
+    return fallback;
   }
 
   /// Generate an encouragement when routine starts.
   Future<AiResponse> generateEncouragement(String routineName) async {
-    if (_apiKey == null) throw Exception('Gemini not initialized');
-    final contextHint = _routineContextHint(routineName);
-    final prompt = '''너는 $_characterName이야. 사용자의 귀여운 AI 비서야.
-지금 "$routineName" 시간이 시작됐어. 사용자를 격려해줘.
-$contextHint
-[규칙]
-- 절대 "루틴"이라는 단어 쓰지 마. 자연스럽게 말해.
-- "$routineName"을 일상 표현으로 바꿔서 말해.
-- 예: "취침" → "슬슬 잘 준비 하자~" / "운동" → "오늘도 득근 가자!!"
-- 짧고 밝게 1~2문장으로.
-
-[응답 형식] 반드시 아래 JSON 형식으로만 답해:
-{"text":"격려 내용","emotion":"excited","gesture":"waving"}
-emotion 종류: happy, annoyed, angry, worried, sad, excited, scolding
-gesture 종류: pointing, arms_crossed, head_shake, hands_on_hips, waving, nodding, idle''';
-    return await _generateStandalone(prompt);
+    final fallback = _contextualEncourage(routineName);
+    if (_apiKey == null) return fallback;
+    try {
+      final friendly = _friendlyName(routineName);
+      final prompt = '''너는 $_characterName이야. 귀여운 AI 비서.
+$friendly 시간이 시작됐어! 사용자를 격려해줘. 1문장.
+절대 "루틴"이라는 말 쓰지 마.
+JSON으로만 답해: {"text":"내용","emotion":"excited","gesture":"waving"}''';
+      final result = await _generateStandalone(prompt);
+      if (!result.text.contains('루틴') && result.text.length > 2) return result;
+    } catch (_) {}
+    return fallback;
   }
 
   /// Generate praise when routine is completed.
   Future<AiResponse> generatePraise(String routineName) async {
-    if (_apiKey == null) throw Exception('Gemini not initialized');
-    final contextHint = _routineContextHint(routineName);
-    final prompt = '''너는 $_characterName이야. 사용자의 귀여운 AI 비서야.
-사용자가 "$routineName"을 잘 마쳤어! 칭찬해줘.
-$contextHint
-[규칙]
-- 절대 "루틴"이라는 단어 쓰지 마.
-- 해당 활동에 맞는 자연스러운 칭찬을 해줘.
-- 예: "운동" → "오늘도 득근 성공! 몸짱 되는 거야~"
-- 예: "공부" → "공부 끝! 머리에 쏙쏙 들었겠지?"
-- 짧고 신나게 1~2문장으로.
+    final fallback = _contextualPraise(routineName);
+    if (_apiKey == null) return fallback;
+    try {
+      final friendly = _friendlyName(routineName);
+      final prompt = '''너는 $_characterName이야. 귀여운 AI 비서.
+사용자가 $friendly 잘 했어! 칭찬해줘. 1문장.
+절대 "루틴"이라는 말 쓰지 마.
+JSON으로만 답해: {"text":"내용","emotion":"happy","gesture":"nodding"}''';
+      final result = await _generateStandalone(prompt);
+      if (!result.text.contains('루틴') && result.text.length > 2) return result;
+    } catch (_) {}
+    return fallback;
+  }
 
-[응답 형식] 반드시 아래 JSON 형식으로만 답해:
-{"text":"칭찬 내용","emotion":"happy","gesture":"nodding"}
-emotion 종류: happy, annoyed, angry, worried, sad, excited, scolding
-gesture 종류: pointing, arms_crossed, head_shake, hands_on_hips, waving, nodding, idle''';
-    return await _generateStandalone(prompt);
+  /// 루틴 이름 → 자연스러운 표현
+  String _friendlyName(String name) {
+    final n = name.toLowerCase();
+    if (_matchAny(n, ['취침', '수면', '잠', '자기'])) return '잘';
+    if (_matchAny(n, ['운동', '헬스', '근력', '홈트'])) return '운동';
+    if (_matchAny(n, ['스트레칭', '요가'])) return '스트레칭';
+    if (_matchAny(n, ['달리기', '러닝', '조깅'])) return '달리기';
+    if (_matchAny(n, ['산책', '걷기'])) return '산책';
+    if (_matchAny(n, ['약', '복용', '복약', '영양제', '비타민'])) return '약 먹을';
+    if (_matchAny(n, ['공부', '학습', '스터디', '시험'])) return '공부할';
+    if (_matchAny(n, ['독서', '책'])) return '책 읽을';
+    if (_matchAny(n, ['식사', '밥', '아침', '점심', '저녁'])) return '밥 먹을';
+    if (_matchAny(n, ['명상', '릴렉스'])) return '명상할';
+    if (_matchAny(n, ['휴식', '쉬기'])) return '쉴';
+    if (_matchAny(n, ['청소', '정리'])) return '청소할';
+    if (_matchAny(n, ['빨래'])) return '빨래할';
+    if (_matchAny(n, ['스킨케어', '피부', '세안'])) return '피부 관리할';
+    if (_matchAny(n, ['양치'])) return '양치할';
+    if (_matchAny(n, ['샤워'])) return '씻을';
+    if (_matchAny(n, ['일기', '다이어리', '저널'])) return '일기 쓸';
+    if (_matchAny(n, ['물', '수분'])) return '물 마실';
+    if (_matchAny(n, ['코딩', '프로그래밍'])) return '코딩할';
+    if (_matchAny(n, ['일', '업무', '회사', '작업'])) return '일할';
+    return name;
+  }
+
+  /// 맥락별 잔소리 메시지
+  AiResponse _contextualNag(String routineName, String app, int count, int intensity) {
+    final n = routineName.toLowerCase();
+    final msgs = <String>[];
+    final appMention = app.isNotEmpty ? ' $app 그만하고' : '';
+    final friendly = _friendlyName(routineName);
+
+    if (_matchAny(n, ['운동', '헬스', '근력', '홈트'])) {
+      msgs.addAll(['몸 안 만들거야?$appMention 일어나!', '득근득근 해야지!$appMention 움직여~', '오늘 빼먹으면 근손실이야!', '근육이 기다리고 있다고!$appMention 가자~', '몸 좀 움직여야지~']);
+    } else if (_matchAny(n, ['취침', '수면', '잠', '자기'])) {
+      msgs.addAll(['안 자?$appMention 자!', '자야 될 텐데~ 눈 좀 감아봐!', '잘 시간이야~$appMention 눈 감아~', '내일 또 피곤할 거야~ 자!']);
+    } else if (_matchAny(n, ['약', '복용', '복약', '영양제', '비타민'])) {
+      msgs.addAll(['약 먹는 거 깜빡하면 안 돼~', '약 챙겨 먹었어?', '건강이 최고야, 약부터 먹자!']);
+    } else if (_matchAny(n, ['공부', '학습', '독서', '스터디', '시험', '코딩'])) {
+      msgs.addAll(['$appMention 공부해!', '딴짓하면 나중에 후회해~', '머리에 지식 좀 넣자!$appMention 책 펴~']);
+    } else if (_matchAny(n, ['식사', '밥', '아침', '점심', '저녁'])) {
+      msgs.addAll(['밥 먹을 시간이야~ 배고프지 않아?', '잘 먹어야 힘이 나지!', '밥부터 먹어!']);
+    } else if (_matchAny(n, ['청소', '정리', '빨래', '설거지'])) {
+      msgs.addAll(['집 좀 치우자~', '먼지가 쌓이고 있어~$appMention 청소해!', '깨끗한 방이 기분도 좋게 만들어!']);
+    } else if (_matchAny(n, ['명상', '휴식', '릴렉스'])) {
+      msgs.addAll(['$appMention 쉬어가~ 마음 좀 편하게!', '깊게 숨 한번 쉬어봐~', '잠깐 쉬어가는 시간이야~']);
+    } else if (_matchAny(n, ['스킨케어', '피부', '세안', '양치', '샤워'])) {
+      msgs.addAll(['얼굴 좀 관리하자~', '피부가 울고 있어~', '깨끗이 씻어야지~']);
+    } else if (_matchAny(n, ['일기', '다이어리', '저널'])) {
+      msgs.addAll(['오늘 하루 정리할 시간이야~', '일기 쓰면 마음이 편해진다~']);
+    } else if (_matchAny(n, ['물', '수분'])) {
+      msgs.addAll(['물 마셨어?', '수분 보충할 시간이야~']);
+    } else if (_matchAny(n, ['스트레칭', '요가'])) {
+      msgs.addAll(['몸 좀 풀자~ 스트레칭!', '뻣뻣해지기 전에 몸 좀 풀어~']);
+    } else if (_matchAny(n, ['달리기', '러닝', '조깅', '산책', '걷기'])) {
+      msgs.addAll(['밖에 나가자~ 바람 쐬야지!', '몸 좀 움직이자~ 나가!']);
+    } else if (_matchAny(n, ['일', '업무', '회사', '작업', '미팅'])) {
+      msgs.addAll(['일할 시간인데~?$appMention 집중!', '딴짓하다 야근하게 된다?', '집중 모드 ON!']);
+    } else {
+      msgs.addAll(['$appMention $friendly 해야지~ 딴짓 그만!', '$friendly 할 시간인데 뭐해~?', '$appMention $friendly 안 할 거야?']);
+    }
+
+    if (count > 2) {
+      msgs.addAll(['벌써 $count번째야! 진짜 그만해!', '또?! $count번째라고!']);
+    }
+
+    msgs.shuffle();
+    final emotion = intensity == 0 ? 'worried' : (intensity == 2 ? 'angry' : 'annoyed');
+    final gesture = intensity == 2 ? 'arms_crossed' : 'pointing';
+    return AiResponse(text: msgs.first, emotion: emotion, gesture: gesture);
+  }
+
+  /// 맥락별 격려 메시지
+  AiResponse _contextualEncourage(String routineName) {
+    final n = routineName.toLowerCase();
+    final friendly = _friendlyName(routineName);
+    final msgs = <String>[];
+    if (_matchAny(n, ['운동', '헬스', '근력', '홈트'])) msgs.addAll(['오늘도 득근 가자!!', '몸짱 되는 날이다~ 파이팅!']);
+    else if (_matchAny(n, ['취침', '수면', '잠'])) msgs.addAll(['슬슬 잘 준비 하자~', '좋은 꿈 꿔~']);
+    else if (_matchAny(n, ['공부', '학습', '독서'])) msgs.addAll(['지식 충전 시간이다!', '집중해서 끝내자~']);
+    else if (_matchAny(n, ['약', '복용', '영양제'])) msgs.addAll(['건강 챙기자! 약 먹을 시간~', '약 먹고 건강해지자!']);
+    else msgs.addAll(['$friendly 시간이야! 파이팅~', '$friendly 시작하자! 화이팅!']);
+    msgs.shuffle();
+    return AiResponse(text: msgs.first, emotion: 'excited', gesture: 'waving');
+  }
+
+  /// 맥락별 칭찬 메시지
+  AiResponse _contextualPraise(String routineName) {
+    final n = routineName.toLowerCase();
+    final friendly = _friendlyName(routineName);
+    final msgs = <String>[];
+    if (_matchAny(n, ['운동', '헬스', '근력', '홈트'])) msgs.addAll(['오늘도 득근 성공! 몸짱 되는 거야~', '운동 끝! 수고했어~']);
+    else if (_matchAny(n, ['공부', '학습', '독서'])) msgs.addAll(['공부 끝! 머리에 쏙쏙 들었겠지?', '열공 수고했어!']);
+    else if (_matchAny(n, ['청소', '정리'])) msgs.addAll(['깨끗해졌다~ 역시!', '청소 끝! 기분 좋지?']);
+    else msgs.addAll(['$friendly 잘했어! 역시 대단해~', '$friendly 끝! 수고했어~']);
+    msgs.shuffle();
+    return AiResponse(text: msgs.first, emotion: 'happy', gesture: 'nodding');
   }
 
   /// 독립 모델 호출 (채팅 기록 없이 단건 요청)
@@ -370,12 +440,7 @@ gesture 종류: pointing, arms_crossed, head_shake, hands_on_hips, waving, noddi
       );
       try {
         final response = await model.generateContent([Content.text(prompt)]);
-        final parsed = AiResponse.parse(response.text ?? '');
-        // "루틴"이 포함되면 폴백
-        if (parsed.text.contains('루틴')) {
-          return _fallbackNagging(prompt, parsed.emotion, parsed.gesture);
-        }
-        return parsed;
+        return AiResponse.parse(response.text ?? '');
       } catch (e) {
         if (_isQuotaError(e) && i < _chatModels.length - 1) {
           print('[GeminiService] Standalone quota exceeded on ${_chatModels[i]}, trying ${_chatModels[i + 1]}');
@@ -385,55 +450,6 @@ gesture 종류: pointing, arms_crossed, head_shake, hands_on_hips, waving, noddi
       }
     }
     throw Exception('All models quota exceeded');
-  }
-
-  /// AI가 "루틴"이라는 단어를 사용했을 때 폴백 메시지 생성
-  AiResponse _fallbackNagging(String prompt, String emotion, String gesture) {
-    final messages = _extractFallbackMessages(prompt);
-    if (messages.isNotEmpty) {
-      messages.shuffle();
-      return AiResponse(text: messages.first, emotion: emotion.isEmpty ? 'annoyed' : emotion, gesture: gesture.isEmpty ? 'pointing' : gesture);
-    }
-    return AiResponse(text: '폰 좀 내려놔~', emotion: 'annoyed', gesture: 'pointing');
-  }
-
-  /// 프롬프트에서 루틴 카테고리에 맞는 폴백 메시지 추출
-  List<String> _extractFallbackMessages(String prompt) {
-    final messages = <String>[];
-    if (prompt.contains('운동') || prompt.contains('헬스') || prompt.contains('근력') || prompt.contains('홈트')) {
-      messages.addAll(['몸 안 만들거야?', '득근득근 해야지!', '근육이 기다리고 있다고!', '오늘 빼먹으면 근손실이야!', '몸 좀 움직여야지~']);
-    }
-    if (prompt.contains('취침') || prompt.contains('수면') || prompt.contains('잠') || prompt.contains('자기')) {
-      messages.addAll(['안 자?', '자야 될 텐데~', '잘 시간이야~', '눈 좀 감아봐~']);
-    }
-    if (prompt.contains('약') || prompt.contains('복용') || prompt.contains('영양제') || prompt.contains('비타민')) {
-      messages.addAll(['약 먹는 거 깜빡하면 안 돼~', '약 챙겨 먹었어?', '건강이 최고야, 약부터!']);
-    }
-    if (prompt.contains('공부') || prompt.contains('학습') || prompt.contains('독서') || prompt.contains('코딩')) {
-      messages.addAll(['책 펼칠 시간인데~', '공부할 때 딴짓하면 나중에 후회해~', '머리에 지식 좀 넣자!']);
-    }
-    if (prompt.contains('식사') || prompt.contains('밥') || prompt.contains('아침') || prompt.contains('점심') || prompt.contains('저녁')) {
-      messages.addAll(['밥 먹을 시간이야~', '배고프지 않아?', '잘 먹어야 힘이 나지!']);
-    }
-    if (prompt.contains('청소') || prompt.contains('정리') || prompt.contains('빨래') || prompt.contains('설거지')) {
-      messages.addAll(['집 좀 치우자~', '먼지가 쌓이고 있어~', '깨끗한 방이 기분도 좋게 만들어!']);
-    }
-    if (prompt.contains('명상') || prompt.contains('휴식') || prompt.contains('릴렉스')) {
-      messages.addAll(['잠깐 쉬어가는 시간이야~', '마음 좀 편하게 해봐~', '깊게 숨 한번 쉬어봐~']);
-    }
-    if (prompt.contains('스킨케어') || prompt.contains('피부') || prompt.contains('세안') || prompt.contains('양치') || prompt.contains('샤워')) {
-      messages.addAll(['얼굴 좀 관리하자~', '피부가 울고 있어~', '깨끗이 씻어야지~']);
-    }
-    if (prompt.contains('일기') || prompt.contains('다이어리') || prompt.contains('저널')) {
-      messages.addAll(['오늘 하루 정리할 시간이야~', '일기 쓰면 마음이 편해진다~']);
-    }
-    if (prompt.contains('물') || prompt.contains('수분')) {
-      messages.addAll(['물 마셨어?', '수분 보충할 시간이야~']);
-    }
-    if (messages.isEmpty) {
-      messages.addAll(['폰 좀 내려놔~', '지금 할 거 있잖아~', '딴짓 그만!']);
-    }
-    return messages;
   }
 
   /// 루틴 이름에서 키워드를 분석해 자연스러운 표현 힌트를 생성

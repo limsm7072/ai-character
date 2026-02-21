@@ -37,6 +37,7 @@ import 'services/auto_page_service.dart';
 import 'services/recommendation_service.dart';
 import 'services/character_controller.dart';
 import 'services/routine_monitor.dart';
+import 'services/naver_reservation_service.dart';
 
 final getIt = GetIt.instance;
 
@@ -74,6 +75,13 @@ Future<void> setupServiceLocator() async {
   getIt.registerSingleton<OverlayService>(OverlayService());
   getIt.registerSingleton<AppDetectionService>(AppDetectionService());
   getIt.registerSingleton<HealthService>(HealthService());
+
+  // 네이버 예약 연동 (CalendarService + GeminiService 의존)
+  getIt.registerSingleton<NaverReservationService>(NaverReservationService(
+    prefs: prefs,
+    calendar: getIt<CalendarService>(),
+    gemini: getIt<GeminiService>(),
+  ));
 
   // ── Layer 3: NotificationService (async) ──
   final notificationService = NotificationService();

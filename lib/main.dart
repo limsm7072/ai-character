@@ -13,6 +13,7 @@ import 'services/alarm_service.dart';
 import 'services/routine_service.dart';
 import 'services/routine_monitor.dart';
 import 'services/settings_service.dart';
+import 'services/naver_reservation_service.dart';
 import 'widgets/overlay_character.dart';
 import 'theme/app_theme.dart';
 
@@ -138,6 +139,11 @@ class _AiCharacterAppState extends State<AiCharacterApp>
 
     // Start monitoring
     await getIt<RoutineMonitor>().start();
+
+    // Start Naver reservation notification listener (if enabled)
+    if (getIt<SettingsService>().naverReservationEnabled) {
+      getIt<NaverReservationService>().startListeningNotifications();
+    }
   }
 
   @override

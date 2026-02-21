@@ -6,6 +6,7 @@ import '../services/app_detection_service.dart';
 import '../services/overlay_service.dart';
 import '../services/tts_service.dart';
 import '../services/weather_service.dart';
+import '../services/naver_reservation_service.dart';
 import '../service_locator.dart';
 import '../theme/app_colors.dart';
 import 'package:geolocator/geolocator.dart';
@@ -299,6 +300,55 @@ class _SettingsScreenState extends State<SettingsScreen> {
             ),
           const Divider(),
 
+          // Naver Reservation Section
+          _buildSectionHeader('네이버 예약 연동'),
+          SwitchListTile(
+            title: const Text('네이버 예약 연동'),
+            subtitle: const Text('네이버 예약 내역을 캘린더에 등록'),
+            value: getIt<SettingsService>().naverReservationEnabled,
+            onChanged: (v) async {
+              await getIt<SettingsService>().setNaverReservationEnabled(v);
+              if (v) {
+                getIt<NaverReservationService>().startListeningNotifications();
+              }
+              setState(() {});
+            },
+          ),
+          if (getIt<SettingsService>().naverReservationEnabled) ...[
+            SwitchListTile(
+              title: const Text('알림 자동 감지'),
+              subtitle: const Text('네이버 앱 알림으로 신규 예약 자동 등록'),
+              value: getIt<SettingsService>().naverNotificationEnabled,
+              onChanged: (v) async {
+                await getIt<SettingsService>().setNaverNotificationEnabled(v);
+                setState(() {});
+              },
+            ),
+            FutureBuilder<bool>(
+              future: getIt<NaverReservationService>().hasNotificationListenerPermission(),
+              builder: (context, snapshot) {
+                final granted = snapshot.data ?? false;
+                return ListTile(
+                  title: const Text('알림 접근 권한'),
+                  subtitle: Text(granted ? '허용됨' : '알림 감지에 필요합니다'),
+                  trailing: granted
+                      ? Icon(Icons.check_circle, color: AppColors.success)
+                      : Icon(Icons.warning_amber, color: AppColors.warning),
+                  onTap: granted ? null : () {
+                    getIt<NaverReservationService>().requestNotificationListenerPermission();
+                  },
+                );
+              },
+            ),
+            ListTile(
+              title: const Text('지금 동기화'),
+              subtitle: Text(getIt<NaverReservationService>().lastSyncText),
+              trailing: const Icon(Icons.sync),
+              onTap: () => _syncNaverReservations(),
+            ),
+          ],
+          const Divider(),
+
           // Weather Section
           _buildSectionHeader('날씨'),
           ListTile(
@@ -326,6 +376,28 @@ class _SettingsScreenState extends State<SettingsScreen> {
         ],
       ),
     );
+  }
+
+  Future<void> _syncNaverReservations() async {
+    try {
+      final result = await getIt<NaverReservationService>().syncReservations();
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text(
+            result.added > 0
+                ? '${result.added}건 등록 완료 (${result.skipped}건 중복 건너뜀)'
+                : '새로 등록할 예약이 없습니다',
+          )),
+        );
+        setState(() {}); // Update last sync text
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('$e')),
+        );
+      }
+    }
   }
 
   Future<void> _testDetection() async {

@@ -316,4 +316,18 @@ class SettingsService {
   Future<void> setShakeCount(int v) =>
       _prefs.setInt(_shakeCountKey, v);
 
+  // ─── Naver Reservation Integration ─────────────────────
+  static const _naverReservationEnabledKey = 'naver_reservation_enabled';
+  static const _naverNotificationEnabledKey = 'naver_notification_enabled';
+
+  bool get naverReservationEnabled =>
+      _prefs.getBool(_naverReservationEnabledKey) ?? false;
+  Future<void> setNaverReservationEnabled(bool v) =>
+      _prefs.setBool(_naverReservationEnabledKey, v);
+
+  bool get naverNotificationEnabled =>
+      _prefs.getBool(_naverNotificationEnabledKey) ?? true;
+  Future<void> setNaverNotificationEnabled(bool v) =>
+      _prefs.setBool(_naverNotificationEnabledKey, v);
+
 }
