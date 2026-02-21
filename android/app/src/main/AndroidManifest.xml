@@ -178,6 +178,9 @@
             android:exported="false"
             android:permission="android.permission.BIND_REMOTEVIEWS" />
 
+        <!-- Activity Recognition -->
+        <receiver android:name=".ActivityRecognitionReceiver" android:exported="false" />
+
         <!-- Boot receiver for rescheduling flutter_local_notifications after reboot -->
         <receiver android:name="com.dexterous.flutterlocalnotifications.ScheduledNotificationBootReceiver"
             android:exported="false">
