@@ -29,16 +29,21 @@ class GeminiService {
   String _characterName = '루나';
   String? _apiKey;
 
-  // Model fallback chains (free tier quota: lite 15RPM/1000RPD, flash 10RPM/250RPD, pro 5RPM/100RPD)
+  // Model fallback chains (free tier quota per day)
+  // flash-lite 1000, flash 250, pro 100, 2.0-flash 1500, 1.5-flash 1500
   static const _chatModels = [
-    'gemini-2.5-flash-lite',  // 가장 넉넉한 무료 한도
+    'gemini-2.5-flash-lite',
     'gemini-2.5-flash',
     'gemini-2.5-pro',
+    'gemini-2.0-flash',
+    'gemini-1.5-flash',
   ];
   static const _agentModels = [
-    'gemini-2.5-flash',       // function calling 최적
+    'gemini-2.5-flash',
     'gemini-2.5-flash-lite',
     'gemini-2.5-pro',
+    'gemini-2.0-flash',
+    'gemini-1.5-flash',
   ];
 
   int _chatModelIndex = 0;

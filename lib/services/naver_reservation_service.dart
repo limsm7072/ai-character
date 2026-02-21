@@ -362,31 +362,23 @@ JSON 배열로만 답해 (마크다운 코드블록 없이):
           final targetDow = dayOfWeekMap[dowChar] ?? 0;
           int year = now.year;
           if (targetDow > 0) {
-            // Find the year where weekday matches, closest to today
-            // Check range: 3 years back ~ 1 year forward
-            int bestYear = now.year;
-            int bestDiff = 99999;
-            for (int y = now.year + 1; y >= now.year - 3; y--) {
+            // Only check this year and last year
+            // Weekday shifts 1~2 per year, so older dates can NEVER match
+            bool matched = false;
+            for (final y in [now.year, now.year - 1]) {
               try {
                 if (DateTime(y, month, day).weekday == targetDow) {
-                  final diff = (now.difference(DateTime(y, month, day)).inDays).abs();
-                  if (diff < bestDiff) {
-                    bestDiff = diff;
-                    bestYear = y;
-                  }
+                  year = y;
+                  matched = true;
+                  break;
                 }
               } catch (_) {}
             }
-            year = bestYear;
-          }
-          // Skip reservations older than 3 years
-          try {
-            final reservationDate = DateTime(year, month, day);
-            if (now.difference(reservationDate).inDays > 3 * 365) {
-              print('[NAVER-PARSE] Skip old reservation (>3yr): $year-$month-$day');
+            if (!matched) {
+              print('[NAVER-PARSE] Skip (not this/last year): $month/$day $dowChar');
               continue;
             }
-          } catch (_) {}
+          }
           date = '$year-${month.toString().padLeft(2, '0')}-${day.toString().padLeft(2, '0')}';
           dateMatch = shortMatch;
         }
@@ -407,6 +399,15 @@ JSON 배열로만 답해 (마크다운 코드블록 없이):
       }
 
       if (date == null) continue;
+
+      // 1년 넘은 날짜가 나오면 파싱 중단 (네이버는 최신순 → 이후는 전부 더 오래됨)
+      try {
+        final parsedDate = DateTime.parse(date);
+        if (now.difference(parsedDate).inDays > 365) {
+          print('[NAVER-PARSE] Over 1 year ($date) — stop parsing');
+          break;
+        }
+      } catch (_) {}
 
       // ★ STRICT FILTER: Only treat as reservation if nearby lines (±3) contain
       // specific patterns like "10:00 예약" or "1박 2일" — NOT just "예약" alone
@@ -494,6 +495,19 @@ JSON 배열로만 답해 (마크다운 코드블록 없이):
         ));
       }
     }
+
+    // Final filter: only keep reservations within 1 year
+    final cutoff = now.subtract(const Duration(days: 365));
+    results.removeWhere((r) {
+      try {
+        final d = DateTime.parse(r.date);
+        if (d.isBefore(cutoff)) {
+          print('[NAVER-PARSE] Final filter removed: ${r.title} ${r.date}');
+          return true;
+        }
+      } catch (_) {}
+      return false;
+    });
 
     return results;
   }
