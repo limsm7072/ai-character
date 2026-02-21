@@ -291,12 +291,21 @@ class GeminiService {
         break;
     }
 
-    String prompt;
-    if (distractionCount > 1) {
-      prompt = '사용자가 "$routineName" 루틴 시간에 또 "$currentApp" 앱을 사용하고 있어. 벌써 ${distractionCount}번째야. $intensityGuide';
-    } else {
-      prompt = '사용자가 "$routineName" 루틴 시간에 "$currentApp" 앱을 사용하고 있어. $intensityGuide';
-    }
+    final contextHint = _routineContextHint(routineName);
+    final repeatNote = distractionCount > 1 ? ' 벌써 ${distractionCount}번째야.' : '';
+
+    final prompt = '''사용자가 지금 "$currentApp"을 하고 있어.$repeatNote $intensityGuide
+
+[루틴 정보] 지금은 "$routineName" 시간이야.
+$contextHint
+[중요 규칙]
+- "루틴"이라는 단어를 쓰지 마. 딱딱해.
+- "$routineName"을 그대로 읽지 말고, 자연스러운 일상 표현으로 바꿔서 말해.
+- 예: "취침" → "안 자?" / "자야 될 텐데~" / "잘 시간이야~"
+- 예: "운동" → "득근득근 안 해?" / "몸 좀 움직여야지~"
+- 예: "약 복용" → "약 먹는 거 깜빡하면 안 돼~~"
+- 지금 사용자가 하고 있는 "$currentApp" 앱을 자연스럽게 언급해. 재미있게.
+- 짧고 임팩트 있게 1~2문장으로.''';
 
     return await _chatWithFallback(prompt);
   }
@@ -304,15 +313,90 @@ class GeminiService {
   /// Generate an encouragement when routine starts.
   Future<AiResponse> generateEncouragement(String routineName) async {
     if (_chat == null) throw Exception('Gemini not initialized');
-    final prompt = '"$routineName" 루틴이 시작됐어. 사용자를 격려해줘.';
+    final contextHint = _routineContextHint(routineName);
+    final prompt = '''지금 "$routineName" 시간이 시작됐어. 사용자를 격려해줘.
+$contextHint
+[규칙]
+- "루틴"이라는 단어 쓰지 마. 자연스럽게 말해.
+- "$routineName"을 일상 표현으로 바꿔서 말해.
+- 예: "취침" → "슬슬 잘 준비 하자~" / "운동" → "오늘도 득근 가자!!"
+- 짧고 밝게 1~2문장으로.''';
     return await _chatWithFallback(prompt);
   }
 
   /// Generate praise when routine is completed.
   Future<AiResponse> generatePraise(String routineName) async {
     if (_chat == null) throw Exception('Gemini not initialized');
-    final prompt = '사용자가 "$routineName" 루틴을 성공적으로 완료했어! 칭찬해줘.';
+    final contextHint = _routineContextHint(routineName);
+    final prompt = '''사용자가 "$routineName"을 잘 마쳤어! 칭찬해줘.
+$contextHint
+[규칙]
+- "루틴"이라는 단어 쓰지 마.
+- 해당 활동에 맞는 자연스러운 칭찬을 해줘.
+- 예: "운동" → "오늘도 득근 성공! 몸짱 되는 거야~"
+- 예: "공부" → "공부 끝! 머리에 쏙쏙 들었겠지?"
+- 짧고 신나게 1~2문장으로.''';
     return await _chatWithFallback(prompt);
+  }
+
+  /// 루틴 이름에서 키워드를 분석해 자연스러운 표현 힌트를 생성
+  String _routineContextHint(String routineName) {
+    final name = routineName.toLowerCase();
+    final hints = <String>[];
+
+    // 수면/취침
+    if (_matchAny(name, ['취침', '수면', '잠', '자기', '잘시간', '굿나잇', '나잇'])) {
+      hints.add('수면 관련: "안 자?", "자야 될 텐데~", "일찍 자야지~", "눈 좀 감아봐~", "양 세고 있어야지~"');
+    }
+    // 운동
+    if (_matchAny(name, ['운동', '헬스', '근력', '스트레칭', '요가', '달리기', '러닝', '걷기', '산책', '조깅', '홈트'])) {
+      hints.add('운동 관련: "득근득근 해야지!", "몸 좀 움직여야지~", "근육이 기다리고 있다고!", "오늘 빼먹으면 근손실이야!"');
+    }
+    // 약 복용
+    if (_matchAny(name, ['약', '복용', '복약', '영양제', '비타민', '유산균'])) {
+      hints.add('약/영양제 관련: "약 먹는 거 깜빡하면 안 돼~", "약 챙겨 먹었어?", "건강이 최고야, 약부터 먹자!"');
+    }
+    // 공부/학습
+    if (_matchAny(name, ['공부', '학습', '독서', '책', '영어', '수학', '코딩', '스터디', '시험'])) {
+      hints.add('학습 관련: "책 펼칠 시간인데~", "머리에 지식 좀 넣자!", "공부할 때 딴짓하면 나중에 후회해~"');
+    }
+    // 식사
+    if (_matchAny(name, ['식사', '밥', '아침', '점심', '저녁', '브런치', '먹기'])) {
+      hints.add('식사 관련: "밥 먹을 시간이야~", "배고프지 않아?", "잘 먹어야 힘이 나지!"');
+    }
+    // 명상/휴식
+    if (_matchAny(name, ['명상', '휴식', '쉬기', '마음', '릴렉스', '테라피'])) {
+      hints.add('휴식 관련: "잠깐 쉬어가는 시간이야~", "마음 좀 편하게 해봐~", "깊게 숨 한번 쉬어봐~"');
+    }
+    // 청소/정리
+    if (_matchAny(name, ['청소', '정리', '빨래', '설거지', '집안일'])) {
+      hints.add('청소 관련: "집 좀 치우자~", "깨끗한 방이 기분도 좋게 만들어!", "먼지가 쌓이고 있어~"');
+    }
+    // 일/업무
+    if (_matchAny(name, ['일', '업무', '회사', '프로젝트', '작업', '미팅', '회의'])) {
+      hints.add('업무 관련: "일할 시간인데~?", "집중 모드 ON!", "딴짓하다 야근하게 된다?"');
+    }
+    // 물 마시기
+    if (_matchAny(name, ['물', '수분', '하이드'])) {
+      hints.add('수분 관련: "물 마셨어?", "수분 보충할 시간이야~", "물 한 잔이면 충분해!"');
+    }
+    // 일기/기록
+    if (_matchAny(name, ['일기', '다이어리', '기록', '저널'])) {
+      hints.add('기록 관련: "오늘 하루 정리할 시간이야~", "일기 쓰면 마음이 편해진다~"');
+    }
+    // 피부/미용
+    if (_matchAny(name, ['스킨케어', '피부', '세안', '세수', '양치', '샤워'])) {
+      hints.add('관리 관련: "얼굴 좀 관리하자~", "피부가 울고 있어~", "깨끗이 씻어야지~"');
+    }
+
+    if (hints.isEmpty) {
+      return '[표현 힌트] 루틴 이름을 자연스러운 일상 표현으로 바꿔서 말해. 딱딱하게 읽지 마.';
+    }
+    return '[표현 힌트] ${hints.join(' / ')}';
+  }
+
+  bool _matchAny(String text, List<String> keywords) {
+    return keywords.any((k) => text.contains(k));
   }
 
   /// Generate a response for general conversation.

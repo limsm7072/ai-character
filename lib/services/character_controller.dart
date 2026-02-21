@@ -176,13 +176,14 @@ class CharacterController {
         await _overlay.hide();
       } else {
         // Build question text based on daysAgo
+        final friendlyName = _friendlyRoutineName(routineName);
         String askText;
         if (daysAgo == 0) {
-          askText = '$routineName 시간 끝났는데, 완료 체크 해줄까?';
+          askText = '$friendlyName 끝났는데, 잘 했어?';
         } else if (daysAgo == 1) {
-          askText = '어제 $routineName 했어?';
+          askText = '어제 $friendlyName 했어?';
         } else {
-          askText = '$daysAgo일 전 $routineName 했어?';
+          askText = '$daysAgo일 전 $friendlyName 했어?';
         }
 
         _updateState(CharacterState(
@@ -327,6 +328,28 @@ class CharacterController {
     ));
     await _speak(response.text);
     return response;
+  }
+
+  /// 루틴 이름을 자연스러운 표현으로 변환
+  String _friendlyRoutineName(String routineName) {
+    final name = routineName.toLowerCase();
+    if (_containsAny(name, ['취침', '수면', '잠', '자기'])) return '잘 시간';
+    if (_containsAny(name, ['운동', '헬스', '근력', '홈트'])) return '운동';
+    if (_containsAny(name, ['약', '복용', '복약', '영양제', '비타민'])) return '약 먹기';
+    if (_containsAny(name, ['공부', '학습', '독서', '스터디'])) return '공부';
+    if (_containsAny(name, ['명상', '휴식', '릴렉스'])) return '쉬는 시간';
+    if (_containsAny(name, ['청소', '정리', '빨래', '설거지'])) return '청소';
+    if (_containsAny(name, ['스킨케어', '피부', '세안', '양치', '샤워'])) return '씻기';
+    if (_containsAny(name, ['식사', '밥', '브런치'])) return '밥 먹기';
+    if (_containsAny(name, ['일기', '다이어리', '저널'])) return '일기 쓰기';
+    if (_containsAny(name, ['물', '수분'])) return '물 마시기';
+    if (_containsAny(name, ['스트레칭', '요가'])) return '스트레칭';
+    if (_containsAny(name, ['달리기', '러닝', '조깅', '산책', '걷기'])) return '산책';
+    return routineName;
+  }
+
+  bool _containsAny(String text, List<String> keywords) {
+    return keywords.any((k) => text.contains(k));
   }
 
   void _updateState(CharacterState state) {
