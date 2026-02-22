@@ -1,0 +1,385 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width,initial-scale=1.0,user-scalable=no">
+<title>My 3D Room</title>
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  html, body { width: 100%; height: 100%; overflow: hidden; background: #1a1a2e; touch-action: none; }
+  canvas { display: block; width: 100%; height: 100%; }
+  #label {
+    position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%);
+    background: rgba(0,150,136,0.85); color: #fff; padding: 8px 20px;
+    border-radius: 20px; font: 600 14px/1.4 sans-serif; text-align: center;
+    pointer-events: none; opacity: 0; transition: opacity 0.3s;
+    backdrop-filter: blur(8px); box-shadow: 0 4px 16px rgba(0,0,0,0.3);
+  }
+  #label.show { opacity: 1; }
+  #empty {
+    position: fixed; top: 50%; left: 50%; transform: translate(-50%,-50%);
+    color: rgba(255,255,255,0.5); font: 400 16px/1.6 sans-serif; text-align: center;
+    pointer-events: none;
+  }
+  #loading {
+    position: fixed; top: 50%; left: 50%; transform: translate(-50%,-50%);
+    color: rgba(255,255,255,0.7); font: 400 13px/1.6 sans-serif; text-align: center;
+  }
+  .spinner {
+    width: 32px; height: 32px; margin: 0 auto 10px;
+    border: 3px solid rgba(255,255,255,0.2); border-top-color: #009688;
+    border-radius: 50%; animation: spin 0.8s linear infinite;
+  }
+  @keyframes spin { to { transform: rotate(360deg); } }
+</style>
+</head>
+<body>
+
+<div id="label"></div>
+<div id="empty" style="display:none;">아직 캐릭터가 없어요<br>상점에서 구매해보세요! 🛒</div>
+<div id="loading"><div class="spinner"></div>3D 공간 준비 중...</div>
+
+<script src="https://unpkg.com/three@0.149.0/build/three.min.js"></script>
+<script src="https://unpkg.com/three@0.149.0/examples/js/controls/OrbitControls.js"></script>
+<script src="https://unpkg.com/three@0.149.0/examples/js/loaders/GLTFLoader.js"></script>
+<script>
+(function() {
+  'use strict';
+
+  // ── Parse URL hash params ──
+  const params = new URLSearchParams(window.location.hash.substring(1));
+  const modelFiles = (params.get('models') || '').split(',').filter(Boolean);
+  const modelNames = (params.get('names') || '').split(',').map(decodeURIComponent);
+  const modelAnimated = (params.get('animated') || '').split(',');
+  const isEmpty = params.get('empty') === '1' || modelFiles.length === 0;
+
+  if (isEmpty) {
+    document.getElementById('loading').style.display = 'none';
+    document.getElementById('empty').style.display = 'block';
+    initEmptyScene();
+    return;
+  }
+
+  // ── Scene setup ──
+  const scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x1a1a2e);
+  scene.fog = new THREE.FogExp2(0x1a1a2e, 0.06);
+
+  const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 100);
+  camera.position.set(0, 3.5, 6);
+
+  const renderer = new THREE.WebGLRenderer({ antialias: true, alpha: false });
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  renderer.shadowMap.enabled = true;
+  renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+  renderer.toneMapping = THREE.ACESFilmicToneMapping;
+  renderer.toneMappingExposure = 1.2;
+  document.body.appendChild(renderer.domElement);
+
+  // ── Controls ──
+  const controls = new THREE.OrbitControls(camera, renderer.domElement);
+  controls.enableDamping = true;
+  controls.dampingFactor = 0.08;
+  controls.minDistance = 2;
+  controls.maxDistance = 12;
+  controls.maxPolarAngle = Math.PI / 2.1;
+  controls.target.set(0, 0.8, 0);
+
+  // ── Lights ──
+  const ambientLight = new THREE.AmbientLight(0x404060, 0.6);
+  scene.add(ambientLight);
+
+  const hemiLight = new THREE.HemisphereLight(0x606080, 0x202040, 0.4);
+  scene.add(hemiLight);
+
+  const dirLight = new THREE.DirectionalLight(0xffffff, 1.2);
+  dirLight.position.set(5, 8, 5);
+  dirLight.castShadow = true;
+  dirLight.shadow.mapSize.set(512, 512);
+  dirLight.shadow.camera.near = 0.5;
+  dirLight.shadow.camera.far = 20;
+  dirLight.shadow.camera.left = -6;
+  dirLight.shadow.camera.right = 6;
+  dirLight.shadow.camera.top = 6;
+  dirLight.shadow.camera.bottom = -6;
+  scene.add(dirLight);
+
+  const tealLight = new THREE.PointLight(0x009688, 0.4, 10);
+  tealLight.position.set(0, 3, 0);
+  scene.add(tealLight);
+
+  // ── Ground platform ──
+  const groundGeo = new THREE.CircleGeometry(5, 64);
+  const groundMat = new THREE.MeshStandardMaterial({
+    color: 0x252545,
+    roughness: 0.8,
+    metalness: 0.1,
+  });
+  const ground = new THREE.Mesh(groundGeo, groundMat);
+  ground.rotation.x = -Math.PI / 2;
+  ground.receiveShadow = true;
+  scene.add(ground);
+
+  // Grid ring
+  const ringGeo = new THREE.RingGeometry(4.9, 5.0, 64);
+  const ringMat = new THREE.MeshBasicMaterial({ color: 0x009688, opacity: 0.3, transparent: true });
+  const ring = new THREE.Mesh(ringGeo, ringMat);
+  ring.rotation.x = -Math.PI / 2;
+  ring.position.y = 0.01;
+  scene.add(ring);
+
+  // Grid lines
+  const gridHelper = new THREE.PolarGridHelper(5, 8, 5, 64, 0x2a2a4e, 0x2a2a4e);
+  gridHelper.position.y = 0.02;
+  scene.add(gridHelper);
+
+  // ── Stars ──
+  const starGeo = new THREE.BufferGeometry();
+  const starCount = 200;
+  const starPositions = new Float32Array(starCount * 3);
+  for (let i = 0; i < starCount; i++) {
+    const r = 20 + Math.random() * 20;
+    const theta = Math.random() * Math.PI * 2;
+    const phi = Math.random() * Math.PI * 0.6;
+    starPositions[i * 3] = r * Math.sin(phi) * Math.cos(theta);
+    starPositions[i * 3 + 1] = r * Math.cos(phi) + 5;
+    starPositions[i * 3 + 2] = r * Math.sin(phi) * Math.sin(theta);
+  }
+  starGeo.setAttribute('position', new THREE.BufferAttribute(starPositions, 3));
+  const starMat = new THREE.PointsMaterial({ color: 0xffffff, size: 0.15, transparent: true, opacity: 0.6 });
+  scene.add(new THREE.Points(starGeo, starMat));
+
+  // ── Load models ──
+  const loader = new THREE.GLTFLoader();
+  const modelGroup = new THREE.Group();
+  scene.add(modelGroup);
+  const mixers = [];
+  const modelData = []; // { mesh, name, position }
+  let loadedCount = 0;
+
+  modelFiles.forEach((file, i) => {
+    const url = 'file:///android_asset/models/' + file;
+    loader.load(url, (gltf) => {
+      const model = gltf.scene;
+      normalizeModel(model, 1.5);
+
+      // Circular placement
+      const count = modelFiles.length;
+      const radius = count === 1 ? 0 : Math.min(3, 1.2 * count);
+      const angle = count === 1 ? 0 : (i / count) * Math.PI * 2 - Math.PI / 2;
+      model.position.set(
+        Math.cos(angle) * radius,
+        0,
+        Math.sin(angle) * radius
+      );
+      if (count > 1) {
+        model.rotation.y = -angle + Math.PI;
+      }
+
+      model.traverse((child) => {
+        if (child.isMesh) {
+          child.castShadow = true;
+          child.receiveShadow = true;
+        }
+      });
+
+      model.userData = { id: file, nameKo: modelNames[i] || file, index: i };
+      modelGroup.add(model);
+
+      // Animation
+      if (gltf.animations && gltf.animations.length > 0 && modelAnimated[i] === '1') {
+        const mixer = new THREE.AnimationMixer(model);
+        mixer.clipAction(gltf.animations[0]).play();
+        mixers.push(mixer);
+      }
+
+      modelData.push({ mesh: model, name: modelNames[i] || file });
+
+      loadedCount++;
+      if (loadedCount === modelFiles.length) {
+        document.getElementById('loading').style.display = 'none';
+        if (typeof RoomBridge !== 'undefined') {
+          RoomBridge.onSceneReady();
+        }
+      }
+    }, undefined, (err) => {
+      console.error('Failed to load', file, err);
+      loadedCount++;
+      if (loadedCount === modelFiles.length) {
+        document.getElementById('loading').style.display = 'none';
+      }
+    });
+  });
+
+  function normalizeModel(obj, maxSize) {
+    const box = new THREE.Box3().setFromObject(obj);
+    const size = box.getSize(new THREE.Vector3());
+    const maxDim = Math.max(size.x, size.y, size.z);
+    if (maxDim > 0) {
+      const scale = maxSize / maxDim;
+      obj.scale.multiplyScalar(scale);
+    }
+    // Re-center on ground
+    const box2 = new THREE.Box3().setFromObject(obj);
+    obj.position.y -= box2.min.y;
+  }
+
+  // ── Tap / Click to focus ──
+  const raycaster = new THREE.Raycaster();
+  const pointer = new THREE.Vector2();
+  const label = document.getElementById('label');
+  let labelTimeout = null;
+  let focusAnim = null;
+
+  renderer.domElement.addEventListener('pointerup', (e) => {
+    // Ignore if user dragged (orbit control)
+    if (Math.abs(e.movementX) > 3 || Math.abs(e.movementY) > 3) return;
+
+    pointer.x = (e.clientX / window.innerWidth) * 2 - 1;
+    pointer.y = -(e.clientY / window.innerHeight) * 2 + 1;
+    raycaster.setFromCamera(pointer, camera);
+    const hits = raycaster.intersectObjects(modelGroup.children, true);
+    if (hits.length > 0) {
+      let target = hits[0].object;
+      while (target.parent && target.parent !== modelGroup) target = target.parent;
+      if (target.userData && target.userData.nameKo) {
+        focusOn(target);
+      }
+    }
+  });
+
+  function focusOn(model) {
+    const pos = model.position;
+    const name = model.userData.nameKo;
+
+    // Show label
+    label.textContent = name;
+    label.classList.add('show');
+    clearTimeout(labelTimeout);
+    labelTimeout = setTimeout(() => label.classList.remove('show'), 2500);
+
+    // Smooth camera move
+    const targetPos = new THREE.Vector3(pos.x, 0.8, pos.z);
+    const camTarget = new THREE.Vector3(
+      pos.x + Math.sign(pos.x || 1) * 1.5,
+      2.0,
+      pos.z + 3
+    );
+
+    if (focusAnim) cancelAnimationFrame(focusAnim);
+    const startTarget = controls.target.clone();
+    const startCam = camera.position.clone();
+    let t = 0;
+
+    function animStep() {
+      t += 0.03;
+      if (t >= 1) t = 1;
+      const ease = 1 - Math.pow(1 - t, 3); // ease out cubic
+      controls.target.lerpVectors(startTarget, targetPos, ease);
+      camera.position.lerpVectors(startCam, camTarget, ease);
+      if (t < 1) focusAnim = requestAnimationFrame(animStep);
+    }
+    focusAnim = requestAnimationFrame(animStep);
+
+    // Notify Flutter
+    if (typeof RoomBridge !== 'undefined') {
+      RoomBridge.onModelTapped(model.userData.id, name);
+    }
+  }
+
+  // ── Animate ──
+  const clock = new THREE.Clock();
+  function animate() {
+    requestAnimationFrame(animate);
+    const delta = Math.min(clock.getDelta(), 0.05); // clamp 30fps
+    mixers.forEach(m => m.update(delta));
+    controls.update();
+
+    // Subtle ground glow pulse
+    const pulse = 0.25 + 0.05 * Math.sin(clock.elapsedTime * 1.5);
+    tealLight.intensity = pulse;
+
+    renderer.render(scene, camera);
+  }
+  animate();
+
+  // ── Resize ──
+  window.addEventListener('resize', () => {
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+  });
+
+  // ── Empty scene with just stars and platform ──
+  function initEmptyScene() {
+    // Minimal scene for empty state
+  }
+
+})();
+
+function initEmptyScene() {
+  const scene = new THREE.Scene();
+  scene.background = new THREE.Color(0x1a1a2e);
+  const camera = new THREE.PerspectiveCamera(50, window.innerWidth / window.innerHeight, 0.1, 100);
+  camera.position.set(0, 3, 5);
+  camera.lookAt(0, 0, 0);
+
+  const renderer = new THREE.WebGLRenderer({ antialias: true });
+  renderer.setSize(window.innerWidth, window.innerHeight);
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  document.body.appendChild(renderer.domElement);
+
+  const controls = new THREE.OrbitControls(camera, renderer.domElement);
+  controls.enableDamping = true;
+  controls.target.set(0, 0, 0);
+
+  // Ground
+  const ground = new THREE.Mesh(
+    new THREE.CircleGeometry(5, 64),
+    new THREE.MeshBasicMaterial({ color: 0x252545 })
+  );
+  ground.rotation.x = -Math.PI / 2;
+  scene.add(ground);
+
+  // Ring
+  const ring = new THREE.Mesh(
+    new THREE.RingGeometry(4.9, 5.0, 64),
+    new THREE.MeshBasicMaterial({ color: 0x009688, opacity: 0.2, transparent: true })
+  );
+  ring.rotation.x = -Math.PI / 2;
+  ring.position.y = 0.01;
+  scene.add(ring);
+
+  scene.add(new THREE.AmbientLight(0x404060, 0.5));
+
+  // Stars
+  const starGeo = new THREE.BufferGeometry();
+  const sp = new Float32Array(150 * 3);
+  for (let i = 0; i < 150; i++) {
+    const r = 20 + Math.random() * 20;
+    const th = Math.random() * Math.PI * 2;
+    const ph = Math.random() * Math.PI * 0.5;
+    sp[i*3] = r * Math.sin(ph) * Math.cos(th);
+    sp[i*3+1] = r * Math.cos(ph) + 5;
+    sp[i*3+2] = r * Math.sin(ph) * Math.sin(th);
+  }
+  starGeo.setAttribute('position', new THREE.BufferAttribute(sp, 3));
+  scene.add(new THREE.Points(starGeo, new THREE.PointsMaterial({ color: 0xffffff, size: 0.15, opacity: 0.5, transparent: true })));
+
+  function anim() {
+    requestAnimationFrame(anim);
+    controls.update();
+    renderer.render(scene, camera);
+  }
+  anim();
+
+  window.addEventListener('resize', () => {
+    camera.aspect = window.innerWidth / window.innerHeight;
+    camera.updateProjectionMatrix();
+    renderer.setSize(window.innerWidth, window.innerHeight);
+  });
+}
+</script>
+</body>
+</html>

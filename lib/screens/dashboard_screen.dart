@@ -61,6 +61,15 @@ import 'activity_screen.dart';
 import 'notion_screen.dart';
 import '../services/notion_page_service.dart';
 import '../services/notion_database_service.dart';
+import '../models/asset_item.dart';
+import '../data/asset_catalog.dart';
+import '../data/local_models.dart';
+import 'asset_gallery_screen.dart';
+import 'local_model_screen.dart';
+import 'my_room_screen.dart';
+import 'model_shop_screen.dart';
+import '../services/coin_service.dart';
+import '../services/purchase_service.dart';
 import '../theme/app_colors.dart';
 
 class DashboardScreen extends StatefulWidget {
@@ -241,6 +250,10 @@ class DashboardScreenState extends State<DashboardScreen> {
         return large ? _buildActivityLarge(context, theme, label) : _buildActivitySmall(context, theme, label);
       case 'notion':
         return large ? _buildNotionLarge(context, theme, label) : _buildNotionSmall(context, theme, label);
+      case 'asset':
+        return large ? _buildAssetLarge(context, theme, label) : _buildAssetSmall(context, theme, label);
+      case 'myroom':
+        return large ? _buildMyRoomLarge(context, theme, label) : _buildMyRoomSmall(context, theme, label);
       default:
         return null;
     }
@@ -1723,7 +1736,7 @@ class DashboardScreenState extends State<DashboardScreen> {
     'briefing': '모닝 브리핑', 'recommend': '맞춤 정보', 'growth': '루나 성장', 'weekly': '주간 리포트', 'news': '뉴스', 'weather': '날씨', 'routine': '루틴', 'todo': '할 일',
     'diary': '일기장', 'card': '명함', 'calendar': '캘린더', 'stats': '통계', 'alarm': '알람',
     'timer': '타이머', 'memo': '메모', 'dday': 'D-Day', 'nature': '자연소리', 'bookmark': '바로가기', 'fortune': '오늘의 운세', 'goal': '목표',
-    'psychology': '오늘의 인사이트', 'screentime': '스크린타임', 'activity': '활동', 'notion': '워크스페이스',
+    'psychology': '오늘의 인사이트', 'screentime': '스크린타임', 'activity': '활동', 'notion': '워크스페이스', 'asset': '에셋 보관함', 'myroom': '나의 룸',
   };
 
   String _sectionLabel(String id) {
@@ -1742,6 +1755,8 @@ class DashboardScreenState extends State<DashboardScreen> {
       'bookmark': Icons.language, 'fortune': Icons.auto_awesome, 'goal': Icons.track_changes,
       'psychology': Icons.lightbulb, 'screentime': Icons.phone_android, 'activity': Icons.directions_walk,
       'notion': Icons.article_outlined,
+      'asset': Icons.inventory_2_outlined,
+      'myroom': Icons.view_in_ar,
     };
     final baseId = SettingsService.sectionBaseId(id);
     return icons[baseId] ?? Icons.widgets_outlined;
@@ -1946,19 +1961,46 @@ class DashboardScreenState extends State<DashboardScreen> {
             // 칭호 + 레벨
             Row(
               children: [
-                Container(
-                  width: 44, height: 44,
-                  decoration: BoxDecoration(
-                    gradient: LinearGradient(
-                      begin: Alignment.topLeft,
-                      end: Alignment.bottomRight,
-                      colors: [accentColor.withValues(alpha: 0.2), accentColor.withValues(alpha: 0.05)],
-                    ),
-                    borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: accentColor.withValues(alpha: 0.3)),
-                  ),
-                  child: Center(child: Text('${data.level}', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: accentColor))),
-                ),
+                Builder(builder: (_) {
+                  final assetId = getIt<SettingsService>().selectedGrowthAsset;
+                  final asset = assetId.isNotEmpty
+                      ? assetCatalog.cast<AssetItem?>().firstWhere((a) => a!.id == assetId, orElse: () => null)
+                      : null;
+                  return Stack(
+                    clipBehavior: Clip.none,
+                    children: [
+                      Container(
+                        width: 44, height: 44,
+                        decoration: BoxDecoration(
+                          gradient: LinearGradient(
+                            begin: Alignment.topLeft,
+                            end: Alignment.bottomRight,
+                            colors: [accentColor.withValues(alpha: 0.2), accentColor.withValues(alpha: 0.05)],
+                          ),
+                          borderRadius: BorderRadius.circular(14),
+                          border: Border.all(color: accentColor.withValues(alpha: 0.3)),
+                        ),
+                        child: Center(
+                          child: asset != null
+                              ? Text(asset.emoji, style: const TextStyle(fontSize: 24))
+                              : Text('${data.level}', style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: accentColor)),
+                        ),
+                      ),
+                      if (asset != null && asset.has3dViewer)
+                        Positioned(
+                          right: -4, bottom: -4,
+                          child: Container(
+                            padding: const EdgeInsets.all(2),
+                            decoration: BoxDecoration(
+                              color: AppColors.info,
+                              borderRadius: BorderRadius.circular(6),
+                            ),
+                            child: const Icon(Icons.view_in_ar, size: 10, color: Colors.white),
+                          ),
+                        ),
+                    ],
+                  );
+                }),
                 const SizedBox(width: 12),
                 Expanded(
                   child: Column(
@@ -2915,7 +2957,7 @@ class DashboardScreenState extends State<DashboardScreen> {
                   label: const Text('이름 변경'),
                 ),
               ),
-              if (_editMode)
+              if (_editMode) ...[
                 SizedBox(
                   width: double.infinity,
                   child: TextButton.icon(
@@ -2937,6 +2979,18 @@ class DashboardScreenState extends State<DashboardScreen> {
                     label: const Text('복제'),
                   ),
                 ),
+                SizedBox(
+                  width: double.infinity,
+                  child: TextButton.icon(
+                    onPressed: () {
+                      Navigator.pop(ctx);
+                      _showNewSectionPicker(id);
+                    },
+                    icon: const Icon(Icons.add_circle_outline, size: 18),
+                    label: const Text('새로만들기'),
+                  ),
+                ),
+              ],
               SizedBox(
                 width: double.infinity,
                 child: TextButton.icon(
@@ -2968,6 +3022,56 @@ class DashboardScreenState extends State<DashboardScreen> {
                   ),
                 ),
               const SizedBox(height: 8),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+  void _showNewSectionPicker(String afterId) {
+    final theme = Theme.of(context);
+    final entries = _defaultLabels.entries.toList();
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      builder: (ctx) => SafeArea(
+        child: ConstrainedBox(
+          constraints: BoxConstraints(maxHeight: MediaQuery.of(ctx).size.height * 0.6),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Padding(
+                padding: const EdgeInsets.all(16),
+                child: Text('섹션 추가', style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w700)),
+              ),
+              Flexible(
+                child: ListView.builder(
+                  shrinkWrap: true,
+                  itemCount: entries.length,
+                  itemBuilder: (_, i) {
+                    final type = entries[i].key;
+                    final label = entries[i].value;
+                    return ListTile(
+                      leading: Icon(_sectionIcon(type), size: 22),
+                      title: Text(label),
+                      onTap: () async {
+                        final newId = '$type:${DateTime.now().millisecondsSinceEpoch}';
+                        final order = getIt<SettingsService>().dashboardOrder;
+                        final idx = order.indexOf(afterId);
+                        if (idx >= 0) {
+                          order.insert(idx + 1, newId);
+                        } else {
+                          order.add(newId);
+                        }
+                        await getIt<SettingsService>().setDashboardOrder(order);
+                        if (ctx.mounted) Navigator.pop(ctx);
+                        setState(() {});
+                      },
+                    );
+                  },
+                ),
+              ),
             ],
           ),
         ),
@@ -3296,6 +3400,236 @@ class DashboardScreenState extends State<DashboardScreen> {
   Future<void> _push(BuildContext context, Widget screen) async {
     await Navigator.push(context, MaterialPageRoute(builder: (_) => screen));
     if (mounted) setState(() {});
+  }
+
+  // ─── 에셋 보관함 ────────────────────────────────────
+  Widget _buildAssetSmall(BuildContext context, ThemeData theme, String label) {
+    final selectedId = getIt<SettingsService>().selectedGrowthAsset;
+    final selected = selectedId.isNotEmpty
+        ? assetCatalog.cast<AssetItem?>().firstWhere((a) => a!.id == selectedId, orElse: () => null)
+        : null;
+    return InkWell(
+      borderRadius: BorderRadius.circular(12),
+      onTap: () => _push(context, const AssetGalleryScreen()),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        decoration: BoxDecoration(
+          color: theme.colorScheme.surfaceContainerLow,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Row(
+          children: [
+            Icon(Icons.inventory_2_outlined, size: 18, color: AppColors.primary),
+            const SizedBox(width: 10),
+            Text(label, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: theme.colorScheme.onSurface)),
+            const Spacer(),
+            if (selected != null) ...[
+              Text(selected.emoji, style: const TextStyle(fontSize: 18)),
+              const SizedBox(width: 6),
+              Text(selected.nameKo, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: theme.colorScheme.onSurfaceVariant)),
+            ] else
+              Text('${assetCatalog.length}개', style: TextStyle(fontSize: 14, fontWeight: FontWeight.w700, color: theme.colorScheme.onSurfaceVariant)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildAssetLarge(BuildContext context, ThemeData theme, String label) {
+    final selectedId = getIt<SettingsService>().selectedGrowthAsset;
+    final selected = selectedId.isNotEmpty
+        ? assetCatalog.cast<AssetItem?>().firstWhere((a) => a!.id == selectedId, orElse: () => null)
+        : null;
+    final preview = (List<AssetItem>.from(assetCatalog)..shuffle()).take(4).toList();
+    return InkWell(
+      borderRadius: BorderRadius.circular(16),
+      onTap: () => _push(context, const AssetGalleryScreen()),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: theme.colorScheme.surfaceContainerLow,
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.inventory_2_outlined, size: 20, color: AppColors.primary),
+                const SizedBox(width: 12),
+                Text(label, style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600)),
+                const Spacer(),
+                Icon(Icons.chevron_right, size: 18, color: theme.colorScheme.onSurfaceVariant.withValues(alpha: 0.5)),
+              ],
+            ),
+            const SizedBox(height: 14),
+            if (selected != null) ...[
+              Row(
+                children: [
+                  Text(selected.emoji, style: const TextStyle(fontSize: 28)),
+                  const SizedBox(width: 10),
+                  Expanded(
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      children: [
+                        Text('현재 캐릭터', style: TextStyle(fontSize: 11, color: AppColors.grey500)),
+                        Text(selected.nameKo, style: const TextStyle(fontSize: 14, fontWeight: FontWeight.w600), overflow: TextOverflow.ellipsis),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 10),
+            ],
+            Row(
+              children: [
+                Expanded(
+                  child: Wrap(
+                    spacing: 8,
+                    children: preview.map((a) => Text(a.emoji, style: const TextStyle(fontSize: 20))).toList(),
+                  ),
+                ),
+                InkWell(
+                  onTap: () => _push(context, const LocalModelScreen()),
+                  borderRadius: BorderRadius.circular(8),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                    decoration: BoxDecoration(
+                      color: AppColors.info.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.view_in_ar, size: 14, color: AppColors.info),
+                        const SizedBox(width: 4),
+                        Text('3D', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.info)),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  // ─── 나의 룸 ────────────────────────────────────────
+
+  Widget _buildMyRoomSmall(BuildContext context, ThemeData theme, String label) {
+    final count = getIt<PurchaseService>().purchasedCount;
+    final coins = getIt<CoinService>().balance;
+    return InkWell(
+      borderRadius: BorderRadius.circular(12),
+      onTap: () => _push(context, const MyRoomScreen()),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+        decoration: BoxDecoration(
+          color: theme.colorScheme.surfaceContainerLow,
+          borderRadius: BorderRadius.circular(12),
+        ),
+        child: Row(
+          children: [
+            Icon(Icons.view_in_ar, size: 18, color: AppColors.info),
+            const SizedBox(width: 10),
+            Text(label, style: TextStyle(fontSize: 14, fontWeight: FontWeight.w600, color: theme.colorScheme.onSurface)),
+            const Spacer(),
+            Text('$count/${localModels.length}', style: TextStyle(fontSize: 13, color: AppColors.grey500)),
+            const SizedBox(width: 8),
+            Icon(Icons.monetization_on, size: 14, color: AppColors.accent),
+            const SizedBox(width: 2),
+            Text('$coins', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600, color: AppColors.accent)),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildMyRoomLarge(BuildContext context, ThemeData theme, String label) {
+    final purchased = getIt<PurchaseService>().purchasedIds;
+    final coins = getIt<CoinService>().balance;
+    final ownedModels = localModels.where((m) => purchased.contains(m.id)).toList();
+    return InkWell(
+      borderRadius: BorderRadius.circular(16),
+      onTap: () => _push(context, const MyRoomScreen()),
+      child: Container(
+        padding: const EdgeInsets.all(16),
+        decoration: BoxDecoration(
+          color: theme.colorScheme.surfaceContainerLow,
+          borderRadius: BorderRadius.circular(16),
+        ),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Row(
+              children: [
+                Icon(Icons.view_in_ar, size: 20, color: AppColors.info),
+                const SizedBox(width: 12),
+                Text(label, style: theme.textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w600)),
+                const Spacer(),
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+                  decoration: BoxDecoration(
+                    color: AppColors.accent.withValues(alpha: 0.15),
+                    borderRadius: BorderRadius.circular(10),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.monetization_on, size: 12, color: AppColors.accent),
+                      const SizedBox(width: 3),
+                      Text('$coins', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: AppColors.accent)),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 14),
+            if (ownedModels.isNotEmpty) ...[
+              Wrap(
+                spacing: 8,
+                runSpacing: 4,
+                children: ownedModels.map((m) => Chip(
+                  avatar: Text(m.emoji, style: const TextStyle(fontSize: 16)),
+                  label: Text(m.nameKo, style: const TextStyle(fontSize: 12)),
+                  visualDensity: VisualDensity.compact,
+                  padding: EdgeInsets.zero,
+                )).toList(),
+              ),
+            ] else
+              Text('아직 캐릭터가 없어요. 상점에서 구매해보세요!', style: TextStyle(fontSize: 13, color: AppColors.grey500)),
+            const SizedBox(height: 10),
+            Row(
+              children: [
+                Text('${purchased.length}/${localModels.length} 캐릭터', style: TextStyle(fontSize: 12, color: AppColors.grey500)),
+                const Spacer(),
+                InkWell(
+                  onTap: () => _push(context, const ModelShopScreen()),
+                  borderRadius: BorderRadius.circular(8),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                    decoration: BoxDecoration(
+                      color: AppColors.info.withValues(alpha: 0.1),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.storefront, size: 14, color: AppColors.info),
+                        const SizedBox(width: 4),
+                        Text('상점', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: AppColors.info)),
+                      ],
+                    ),
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ),
+    );
   }
 
 }
