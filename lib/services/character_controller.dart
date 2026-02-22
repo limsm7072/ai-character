@@ -9,6 +9,7 @@ import 'overlay_service.dart';
 import 'settings_service.dart';
 import 'routine_completion_service.dart';
 import 'growth_service.dart';
+import 'coin_service.dart';
 import '../service_locator.dart';
 
 /// Orchestrates the character's behavior:
@@ -219,9 +220,10 @@ class CharacterController {
         } else if (voiceText != null && _isAffirmative(voiceText)) {
           await _completionService.toggleCompletion(routineId, date);
 
-          // XP 보상
+          // XP + 코인 보상
           final growth = getIt<GrowthService>();
           await growth.onRoutineCompleted(routineId);
+          await getIt<CoinService>().onRoutineCompleted(routineId);
           final xpMsg = growth.didLevelUp
               ? '완료! 레벨 ${growth.currentData.level} 달성!'
               : '완료 체크했어! 수고했어~';

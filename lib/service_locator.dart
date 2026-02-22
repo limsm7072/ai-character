@@ -38,6 +38,9 @@ import 'services/recommendation_service.dart';
 import 'services/character_controller.dart';
 import 'services/routine_monitor.dart';
 import 'services/naver_reservation_service.dart';
+import 'services/memory_service.dart';
+import 'services/coin_service.dart';
+import 'services/purchase_service.dart';
 
 final getIt = GetIt.instance;
 
@@ -68,6 +71,12 @@ Future<void> setupServiceLocator() async {
   getIt.registerSingleton<GrowthService>(GrowthService(prefs));
   getIt.registerSingleton<NotionPageService>(NotionPageService(prefs));
   getIt.registerSingleton<NotionDatabaseService>(NotionDatabaseService(prefs));
+  getIt.registerSingleton<MemoryService>(MemoryService(prefs));
+  getIt.registerSingleton<CoinService>(CoinService(prefs));
+  getIt.registerSingleton<PurchaseService>(PurchaseService(
+    prefs: prefs,
+    coinService: getIt<CoinService>(),
+  ));
 
   // 인자 없는 서비스
   getIt.registerSingleton<GeminiService>(GeminiService());
@@ -171,11 +180,18 @@ Future<void> setupServiceLocator() async {
   ));
 
   // ── Layer 7: GeminiService + TtsService 초기화 ──
+  getIt<GeminiService>().initUsageTracking(prefs);
+
   final settings = getIt<SettingsService>();
   final apiKey = settings.apiKey;
   if (apiKey.isNotEmpty) {
     getIt<GeminiService>().initialize(apiKey, characterName: settings.characterName);
   }
+  final groqKey = settings.groqApiKey;
+  if (groqKey.isNotEmpty) {
+    getIt<GeminiService>().initializeGroq(groqKey);
+  }
+  getIt<GeminiService>().setAiProvider(settings.aiProvider);
 
   await getIt<TtsService>().initialize();
   await getIt<TtsService>().applyPreset(settings.voicePreset);
