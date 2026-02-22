@@ -86,6 +86,11 @@ class MainActivity : FlutterFragmentActivity() {
     override fun configureFlutterEngine(flutterEngine: FlutterEngine) {
         super.configureFlutterEngine(flutterEngine)
 
+        // Register native WebView PlatformView for 3D model viewer
+        flutterEngine.platformViewsController.registry
+            .registerViewFactory("model-webview",
+                ModelWebViewFactory(flutterEngine.dartExecutor.binaryMessenger))
+
         usageStatsChannel = MethodChannel(flutterEngine.dartExecutor.binaryMessenger, CHANNEL)
         usageStatsChannel!!.setMethodCallHandler { call, result ->
             when (call.method) {
@@ -1087,23 +1092,81 @@ class MainActivity : FlutterFragmentActivity() {
         "org.chromium.webview_shell",
         "com.UCMobile.intl",
         "com.mi.globalbrowser",
+        "com.android.browser",
+        "com.huawei.browser",
+        "com.coloros.browser",
+        "com.heytap.browser",
+        "com.oppo.browser",
+        "com.vivo.browser",
+        "com.transsion.browser",
+        "org.lineageos.jelly",
     )
 
     /**
      * Open a URL, preferring native apps over browsers.
      *
      * Strategy:
-     * 1. Query all apps that can handle this URL via ACTION_VIEW
-     * 2. If a non-browser app claims to handle it → use that app
-     * 3. Else, check hardcoded urlToPackage map → try ACTION_VIEW with package → try just launching the app
-     * 4. Final fallback → open in default browser
+     * 1. If we have a hardcoded package mapping, try that app first
+     *    a) ACTION_VIEW with package set (preserves URL context for deep links)
+     *    b) getLaunchIntentForPackage (just open the app)
+     *    c) Manual MAIN+LAUNCHER query (fallback for stubborn devices)
+     * 2. Query all apps that can handle this URL via ACTION_VIEW
+     *    Filter out browsers → use the first non-browser app
+     * 3. Final fallback → open in default browser
      */
     private fun openUrlPreferApp(url: String) {
+        // Step 1: Hardcoded package mapping — try the app directly
+        val pkg = urlToPackage(url)
+        if (pkg != null) {
+            // 1a: Try ACTION_VIEW with explicit package (deep link support)
+            try {
+                val pkgViewIntent = Intent(Intent.ACTION_VIEW, Uri.parse(url)).apply {
+                    setPackage(pkg)
+                    addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                }
+                startActivity(pkgViewIntent)
+                return
+            } catch (_: Exception) {}
+
+            // 1b: Try getLaunchIntentForPackage
+            try {
+                val launchIntent = packageManager.getLaunchIntentForPackage(pkg)
+                if (launchIntent != null) {
+                    launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    startActivity(launchIntent)
+                    return
+                }
+            } catch (_: Exception) {}
+
+            // 1c: Manual MAIN+LAUNCHER query
+            try {
+                val mainIntent = Intent(Intent.ACTION_MAIN).apply {
+                    addCategory(Intent.CATEGORY_LAUNCHER)
+                    setPackage(pkg)
+                }
+                val launchActivities = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                    packageManager.queryIntentActivities(mainIntent, PackageManager.ResolveInfoFlags.of(0))
+                } else {
+                    @Suppress("DEPRECATION")
+                    packageManager.queryIntentActivities(mainIntent, 0)
+                }
+                if (launchActivities.isNotEmpty()) {
+                    val ai = launchActivities[0].activityInfo
+                    val explicitIntent = Intent(Intent.ACTION_MAIN).apply {
+                        addCategory(Intent.CATEGORY_LAUNCHER)
+                        component = ComponentName(ai.packageName, ai.name)
+                        addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                    }
+                    startActivity(explicitIntent)
+                    return
+                }
+            } catch (_: Exception) {}
+        }
+
+        // Step 2: Generic intent resolution
         val viewIntent = Intent(Intent.ACTION_VIEW, Uri.parse(url)).apply {
             addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
         }
-
-        // Step 1: Query all apps that can handle this URL
         val resolved = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
             packageManager.queryIntentActivities(
                 viewIntent,
@@ -1114,10 +1177,9 @@ class MainActivity : FlutterFragmentActivity() {
             packageManager.queryIntentActivities(viewIntent, PackageManager.MATCH_DEFAULT_ONLY)
         }
 
-        // Step 2: Find non-browser apps (exclude our own app too)
         val nonBrowserApps = resolved.filter { ri ->
-            val pkg = ri.activityInfo.packageName
-            pkg != packageName && !BROWSER_PACKAGES.contains(pkg)
+            val p = ri.activityInfo.packageName
+            p != packageName && !BROWSER_PACKAGES.contains(p)
         }
 
         if (nonBrowserApps.isNotEmpty()) {
@@ -1132,21 +1194,7 @@ class MainActivity : FlutterFragmentActivity() {
             } catch (_: Exception) {}
         }
 
-        // Step 3: Hardcoded fallback — try launching the mapped app
-        val pkg = urlToPackage(url)
-        if (pkg != null) {
-            // 3a: Check if app is installed → launch it directly
-            try {
-                val launchIntent = packageManager.getLaunchIntentForPackage(pkg)
-                if (launchIntent != null) {
-                    launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
-                    startActivity(launchIntent)
-                    return
-                }
-            } catch (_: Exception) {}
-        }
-
-        // Step 4: Final fallback — open in browser
+        // Step 3: Final fallback — open in browser
         startActivity(viewIntent)
     }
 
