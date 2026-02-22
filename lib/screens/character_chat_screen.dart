@@ -21,6 +21,9 @@ import '../services/card_service.dart';
 import '../services/timer_service.dart';
 import '../services/diary_service.dart';
 import '../services/auto_page_service.dart';
+import '../services/memory_service.dart';
+import '../services/groq_service.dart';
+import '../services/memory_service.dart';
 import '../service_locator.dart';
 import '../widgets/spine_character_widget.dart';
 import '../services/growth_service.dart';
@@ -66,23 +69,35 @@ class _CharacterChatScreenState extends State<CharacterChatScreen> {
 
   void _initGemini() {
     final apiKey = getIt<SettingsService>().apiKey;
-    if (apiKey.isNotEmpty) {
-      final agentTools = AgentTools(
-        routineService: getIt<RoutineService>(),
-        completionService: getIt<RoutineCompletionService>(),
-        todoService: getIt<TodoService>(),
-        memoService: getIt<MemoService>(),
-        alarmService: getIt<AlarmService>(),
-        calendarService: getIt<CalendarService>(),
-        settingsService: getIt<SettingsService>(),
-        ttsService: _tts,
-        autoPageService: getIt<AutoPageService>(),
-        onOpenUrl: (url) async {
-          const channel = MethodChannel('com.aicharacter.ai_character/usage_stats');
-          await channel.invokeMethod('openUrl', {'url': url});
-        },
-      );
+    final hasGemini = apiKey.isNotEmpty;
+    final hasGroq = _gemini.hasGroq;
+
+    if (!hasGemini && !hasGroq) return;
+
+    final memoryService = getIt<MemoryService>();
+    final agentTools = AgentTools(
+      routineService: getIt<RoutineService>(),
+      completionService: getIt<RoutineCompletionService>(),
+      todoService: getIt<TodoService>(),
+      memoService: getIt<MemoService>(),
+      alarmService: getIt<AlarmService>(),
+      calendarService: getIt<CalendarService>(),
+      settingsService: getIt<SettingsService>(),
+      ttsService: _tts,
+      autoPageService: getIt<AutoPageService>(),
+      memoryService: memoryService,
+      onOpenUrl: (url) async {
+        const channel = MethodChannel('com.aicharacter.ai_character/usage_stats');
+        await channel.invokeMethod('openUrl', {'url': url});
+      },
+    );
+    _gemini.setMemoryBlock(memoryService.buildPromptBlock());
+
+    if (hasGemini) {
       _gemini.initializeAgent(apiKey, agentTools: agentTools, characterName: _charName);
+    } else {
+      // Groq만 있을 때: AgentTools만 세팅 (Gemini agent 없이)
+      _gemini.setAgentTools(agentTools);
     }
   }
 
@@ -278,13 +293,23 @@ class _CharacterChatScreenState extends State<CharacterChatScreen> {
 
   @override
   Widget build(BuildContext context) {
-    final hasApiKey = getIt<SettingsService>().apiKey.isNotEmpty;
+    final hasApiKey = getIt<SettingsService>().apiKey.isNotEmpty || _gemini.hasGroq;
 
     return Scaffold(
       appBar: AppBar(
         title: Text('$_charName와 대화'),
         centerTitle: true,
         actions: [
+          IconButton(
+            icon: const Icon(Icons.psychology),
+            tooltip: '${_charName}의 기억',
+            onPressed: _showMemories,
+          ),
+          IconButton(
+            icon: const Icon(Icons.data_usage),
+            tooltip: 'API 사용량',
+            onPressed: _showApiUsage,
+          ),
           if (_messages.isNotEmpty)
             IconButton(
               icon: const Icon(Icons.refresh),
@@ -631,6 +656,109 @@ class _CharacterChatScreenState extends State<CharacterChatScreen> {
     }
   }
 
+  void _showApiUsage() {
+    showModalBottomSheet(
+      context: context,
+      builder: (ctx) => _ApiUsageSheet(
+        geminiUsage: _gemini.geminiUsageToday,
+        geminiLimits: GeminiService.geminiLimits,
+        groqRateLimits: _gemini.groqRateLimits,
+        hasGeminiKey: getIt<SettingsService>().apiKey.isNotEmpty,
+        hasGroqKey: _gemini.hasGroq,
+        currentProvider: getIt<SettingsService>().aiProvider,
+        onProviderChanged: (provider) {
+          getIt<SettingsService>().setAiProvider(provider);
+          _gemini.setAiProvider(provider);
+        },
+      ),
+    );
+  }
+
+  void _showMemories() {
+    final memories = getIt<MemoryService>().getAll();
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      builder: (ctx) => DraggableScrollableSheet(
+        initialChildSize: 0.5,
+        minChildSize: 0.3,
+        maxChildSize: 0.85,
+        expand: false,
+        builder: (ctx, scrollController) => Container(
+          padding: const EdgeInsets.all(20),
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Row(
+                children: [
+                  const Icon(Icons.psychology, size: 20),
+                  const SizedBox(width: 8),
+                  Text('$_charName의 기억', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
+                  const Spacer(),
+                  Text('${memories.length}개', style: TextStyle(fontSize: 13, color: AppColors.grey500)),
+                ],
+              ),
+              const SizedBox(height: 16),
+              if (memories.isEmpty)
+                Expanded(
+                  child: Center(
+                    child: Column(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(Icons.memory, size: 48, color: AppColors.grey400),
+                        const SizedBox(height: 12),
+                        Text(
+                          '아직 기억된 내용이 없어요',
+                          style: TextStyle(color: AppColors.grey500),
+                        ),
+                        const SizedBox(height: 8),
+                        Text(
+                          '"내 이름은 OO야", "기억해" 같이\n대화하면 $_charName가 기억해요',
+                          textAlign: TextAlign.center,
+                          style: TextStyle(fontSize: 12, color: AppColors.grey400),
+                        ),
+                      ],
+                    ),
+                  ),
+                )
+              else
+                Expanded(
+                  child: ListView.separated(
+                    controller: scrollController,
+                    itemCount: memories.length,
+                    separatorBuilder: (_, __) => Divider(height: 1, color: AppColors.grey200),
+                    itemBuilder: (ctx, i) {
+                      final key = memories.keys.elementAt(i);
+                      final value = memories[key]!;
+                      return ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        leading: CircleAvatar(
+                          radius: 16,
+                          backgroundColor: AppColors.primary.withValues(alpha: 0.1),
+                          child: Icon(Icons.label_outline, size: 16, color: AppColors.primary),
+                        ),
+                        title: Text(key, style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 14)),
+                        subtitle: Text(value, style: TextStyle(fontSize: 13, color: AppColors.grey600)),
+                        trailing: IconButton(
+                          icon: Icon(Icons.delete_outline, size: 18, color: AppColors.grey400),
+                          onPressed: () async {
+                            await getIt<MemoryService>().remove(key);
+                            _gemini.setMemoryBlock(getIt<MemoryService>().buildPromptBlock());
+                            Navigator.pop(ctx);
+                            _showMemories(); // reopen with updated data
+                          },
+                        ),
+                      );
+                    },
+                  ),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
   void _clearChat() {
     _stopListening();
     setState(() {
@@ -759,6 +887,12 @@ class _CharacterChatScreenState extends State<CharacterChatScreen> {
         return '루틴 확인 간격을 변경했어요';
       case 'open_url':
         return '${action.result['url'] ?? '웹사이트'}를 열었어요';
+      case 'remember':
+        return '기억했어요: ${action.args['key']} = ${action.args['value']}';
+      case 'recall':
+        return '기억을 조회했어요';
+      case 'forget':
+        return '기억을 삭제했어요: ${action.args['key']}';
       default:
         return '${action.name} 실행';
     }
@@ -790,7 +924,7 @@ class _CharacterChatScreenState extends State<CharacterChatScreen> {
     _scrollToBottom();
 
     try {
-      if (!_gemini.isAgentInitialized) _initGemini();
+      if (!_gemini.isAgentReady) _initGemini();
       final prevModel = _gemini.currentAgentModel;
       final result = await _gemini.chatWithTools(text);
 
@@ -819,6 +953,11 @@ class _CharacterChatScreenState extends State<CharacterChatScreen> {
       // Notify home screen if routines changed
       if (result.actions.any((a) => _dataChangingActions.contains(a.name))) {
         widget.onRoutinesChanged?.call();
+      }
+
+      // Refresh memory block if memory was modified
+      if (result.actions.any((a) => a.name == 'remember' || a.name == 'forget')) {
+        _gemini.setMemoryBlock(getIt<MemoryService>().buildPromptBlock());
       }
 
       setState(() {
@@ -886,4 +1025,217 @@ class _ChatMessage {
     this.isVoice = false,
     this.isSystemMessage = false,
   });
+}
+
+class _ApiUsageSheet extends StatefulWidget {
+  final Map<String, int> geminiUsage;
+  final Map<String, int> geminiLimits;
+  final Map<String, GroqRateLimit>? groqRateLimits;
+  final bool hasGeminiKey;
+  final bool hasGroqKey;
+  final String currentProvider;
+  final ValueChanged<String> onProviderChanged;
+
+  const _ApiUsageSheet({
+    required this.geminiUsage,
+    required this.geminiLimits,
+    this.groqRateLimits,
+    required this.hasGeminiKey,
+    required this.hasGroqKey,
+    required this.currentProvider,
+    required this.onProviderChanged,
+  });
+
+  @override
+  State<_ApiUsageSheet> createState() => _ApiUsageSheetState();
+}
+
+class _ApiUsageSheetState extends State<_ApiUsageSheet> {
+  late String _selected;
+
+  @override
+  void initState() {
+    super.initState();
+    _selected = widget.currentProvider;
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              const Icon(Icons.data_usage, size: 20),
+              const SizedBox(width: 8),
+              Text('API 사용량', style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
+            ],
+          ),
+          const SizedBox(height: 16),
+
+          // AI Provider selection
+          Text('AI 모델 선택', style: TextStyle(fontWeight: FontWeight.w600, color: AppColors.grey700)),
+          const SizedBox(height: 8),
+          Wrap(
+            spacing: 8,
+            children: [
+              ChoiceChip(
+                label: const Text('자동'),
+                selected: _selected == 'auto',
+                onSelected: (_) => _setProvider('auto'),
+              ),
+              ChoiceChip(
+                label: const Text('Gemini'),
+                selected: _selected == 'gemini',
+                onSelected: widget.hasGeminiKey ? (_) => _setProvider('gemini') : null,
+              ),
+              ChoiceChip(
+                label: const Text('Groq'),
+                selected: _selected == 'groq',
+                onSelected: widget.hasGroqKey ? (_) => _setProvider('groq') : null,
+              ),
+            ],
+          ),
+          Padding(
+            padding: const EdgeInsets.only(top: 4, bottom: 12),
+            child: Text(
+              _selected == 'auto' ? 'Gemini 우선, 할당량 초과 시 Groq 자동 전환'
+                  : _selected == 'gemini' ? 'Gemini만 사용 (할당량 초과 시 에러)'
+                  : 'Groq만 사용 (Gemini 건너뜀)',
+              style: TextStyle(fontSize: 11, color: AppColors.grey500),
+            ),
+          ),
+
+          // Gemini
+          if (widget.hasGeminiKey) ...[
+            Text('Gemini (일일 한도)', style: TextStyle(fontWeight: FontWeight.w600, color: AppColors.primary)),
+            const SizedBox(height: 8),
+            ...widget.geminiLimits.entries.map((e) {
+              final model = e.key;
+              final limit = e.value;
+              final used = widget.geminiUsage[model] ?? 0;
+              final remaining = limit - used;
+              final pct = used / limit;
+              final shortName = model.replaceAll('gemini-2.5-', '');
+              return Padding(
+                padding: const EdgeInsets.only(bottom: 6),
+                child: Row(
+                  children: [
+                    SizedBox(width: 80, child: Text(shortName, style: const TextStyle(fontSize: 13))),
+                    Expanded(
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(4),
+                        child: LinearProgressIndicator(
+                          value: pct.clamp(0.0, 1.0),
+                          minHeight: 8,
+                          backgroundColor: AppColors.grey200,
+                          color: pct > 0.8 ? AppColors.error : AppColors.primary,
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 8),
+                    SizedBox(
+                      width: 70,
+                      child: Text(
+                        '$remaining/$limit',
+                        style: TextStyle(fontSize: 12, color: remaining <= 0 ? AppColors.error : AppColors.grey600),
+                        textAlign: TextAlign.right,
+                      ),
+                    ),
+                  ],
+                ),
+              );
+            }),
+            const SizedBox(height: 12),
+          ] else
+            Padding(
+              padding: const EdgeInsets.only(bottom: 12),
+              child: Text('Gemini: API 키 미설정', style: TextStyle(color: AppColors.grey500)),
+            ),
+
+          // Groq
+          if (widget.hasGroqKey) ...[
+            Text('Groq (분당 한도)', style: TextStyle(fontWeight: FontWeight.w600, color: AppColors.accent)),
+            const SizedBox(height: 8),
+            if (widget.groqRateLimits == null || widget.groqRateLimits!.isEmpty)
+              Padding(
+                padding: const EdgeInsets.only(bottom: 6),
+                child: Text('아직 사용 기록 없음', style: TextStyle(fontSize: 13, color: AppColors.grey500)),
+              )
+            else
+              ...widget.groqRateLimits!.entries.map((e) {
+                final model = e.key;
+                final rl = e.value;
+                final shortName = model.replaceAll('llama-', '').replaceAll('-versatile', '').replaceAll('-instant', '');
+                final tokenPct = rl.limitTokens > 0 ? (1.0 - rl.remainingTokens / rl.limitTokens) : 0.0;
+                return Padding(
+                  padding: const EdgeInsets.only(bottom: 6),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(shortName, style: const TextStyle(fontSize: 13, fontWeight: FontWeight.w500)),
+                      const SizedBox(height: 2),
+                      Row(
+                        children: [
+                          const SizedBox(width: 16),
+                          const Text('토큰 ', style: TextStyle(fontSize: 11)),
+                          Expanded(
+                            child: ClipRRect(
+                              borderRadius: BorderRadius.circular(4),
+                              child: LinearProgressIndicator(
+                                value: tokenPct.clamp(0.0, 1.0),
+                                minHeight: 6,
+                                backgroundColor: AppColors.grey200,
+                                color: tokenPct > 0.8 ? AppColors.error : AppColors.accent,
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          Text(
+                            '${rl.remainingTokens}/${rl.limitTokens}',
+                            style: const TextStyle(fontSize: 11),
+                          ),
+                        ],
+                      ),
+                      const SizedBox(height: 2),
+                      Row(
+                        children: [
+                          const SizedBox(width: 16),
+                          const Text('요청 ', style: TextStyle(fontSize: 11)),
+                          Text(
+                            '${rl.remainingRequests}/${rl.limitRequests} 남음',
+                            style: const TextStyle(fontSize: 11),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                );
+              }),
+          ] else
+            Text('Groq: API 키 미설정', style: TextStyle(color: AppColors.grey500)),
+
+          const SizedBox(height: 8),
+          Text(
+            'Gemini: 자정에 리셋 | Groq: 1분마다 리셋',
+            style: TextStyle(fontSize: 11, color: AppColors.grey400),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            '* Gemini 사용량은 앱 내 추적 (실제와 다를 수 있음)',
+            style: TextStyle(fontSize: 10, color: AppColors.grey400),
+          ),
+          SizedBox(height: MediaQuery.of(context).viewPadding.bottom + 8),
+        ],
+      ),
+    );
+  }
+
+  void _setProvider(String provider) {
+    setState(() => _selected = provider);
+    widget.onProviderChanged(provider);
+  }
 }

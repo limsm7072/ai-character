@@ -4,6 +4,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 /// Manages app settings persistence.
 class SettingsService {
   static const _apiKeyKey = 'gemini_api_key';
+  static const _groqApiKeyKey = 'groq_api_key';
   static const _nagFrequencyKey = 'nag_frequency';
   static const _nagIntensityKey = 'nag_intensity';
   static const _ttsEnabledKey = 'tts_enabled';
@@ -19,6 +20,9 @@ class SettingsService {
 
   String get apiKey => _prefs.getString(_apiKeyKey) ?? '';
   Future<void> setApiKey(String key) => _prefs.setString(_apiKeyKey, key);
+
+  String get groqApiKey => _prefs.getString(_groqApiKeyKey) ?? '';
+  Future<void> setGroqApiKey(String key) => _prefs.setString(_groqApiKeyKey, key);
 
   /// Nag frequency in seconds (minimum interval between nags)
   int get nagFrequency => _prefs.getInt(_nagFrequencyKey) ?? 30;
@@ -86,7 +90,7 @@ class SettingsService {
 
   // Dashboard order
   static const _dashboardOrderKey = 'dashboard_order';
-  static const defaultDashboardOrder = ['briefing', 'recommend', 'growth', 'weekly', 'fortune', 'psychology', 'screentime', 'activity', 'news', 'weather', 'routine', 'todo', 'goal', 'diary', 'card', 'calendar', 'stats', 'alarm', 'timer', 'memo', 'dday', 'nature', 'bookmark', 'notion'];
+  static const defaultDashboardOrder = ['briefing', 'recommend', 'growth', 'weekly', 'fortune', 'psychology', 'screentime', 'activity', 'news', 'weather', 'routine', 'todo', 'goal', 'diary', 'card', 'calendar', 'stats', 'alarm', 'timer', 'memo', 'dday', 'nature', 'bookmark', 'notion', 'asset', 'myroom'];
 
   List<String> get dashboardOrder {
     final raw = _prefs.getString(_dashboardOrderKey);
@@ -131,7 +135,7 @@ class SettingsService {
   // Dashboard section sizes (true=large, false=small)
   static const _dashboardSizesKey = 'dashboard_sizes';
   // All sections default to large
-  static const _defaultLargeSections = {'briefing', 'recommend', 'growth', 'weekly', 'fortune', 'psychology', 'screentime', 'activity', 'news', 'weather', 'routine', 'todo', 'goal', 'diary', 'card', 'calendar', 'stats', 'alarm', 'timer', 'memo', 'dday', 'nature', 'bookmark', 'notion'};
+  static const _defaultLargeSections = {'briefing', 'recommend', 'growth', 'weekly', 'fortune', 'psychology', 'screentime', 'activity', 'news', 'weather', 'routine', 'todo', 'goal', 'diary', 'card', 'calendar', 'stats', 'alarm', 'timer', 'memo', 'dday', 'nature', 'bookmark', 'notion', 'asset'};
 
   bool isDashboardSectionLarge(String id) {
     final raw = _prefs.getString(_dashboardSizesKey);
@@ -315,6 +319,20 @@ class SettingsService {
   int get shakeCount => _prefs.getInt(_shakeCountKey) ?? 10;
   Future<void> setShakeCount(int v) =>
       _prefs.setInt(_shakeCountKey, v);
+
+  // Growth asset selection
+  static const _selectedGrowthAssetKey = 'selected_growth_asset';
+
+  String get selectedGrowthAsset => _prefs.getString(_selectedGrowthAssetKey) ?? '';
+  Future<void> setSelectedGrowthAsset(String assetId) =>
+      _prefs.setString(_selectedGrowthAssetKey, assetId);
+
+  // AI provider selection (auto / gemini / groq)
+  static const _aiProviderKey = 'ai_provider';
+
+  String get aiProvider => _prefs.getString(_aiProviderKey) ?? 'auto';
+  Future<void> setAiProvider(String provider) =>
+      _prefs.setString(_aiProviderKey, provider);
 
   // ─── Naver Reservation Integration ─────────────────────
   static const _naverReservationEnabledKey = 'naver_reservation_enabled';

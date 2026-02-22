@@ -11,6 +11,7 @@ import 'calendar_service.dart';
 import 'settings_service.dart';
 import 'tts_service.dart';
 import 'auto_page_service.dart';
+import 'memory_service.dart';
 
 class ToolAction {
   final String name;
@@ -30,6 +31,7 @@ class AgentTools {
   final SettingsService? settingsService;
   final TtsService? ttsService;
   final AutoPageService? autoPageService;
+  final MemoryService? memoryService;
   final Future<void> Function(String url)? onOpenUrl;
 
   AgentTools({
@@ -42,6 +44,7 @@ class AgentTools {
     this.settingsService,
     this.ttsService,
     this.autoPageService,
+    this.memoryService,
     this.onOpenUrl,
   });
 
@@ -437,89 +440,215 @@ class AgentTools {
         '이번 주 주간 리뷰 페이지를 워크스페이스에 생성합니다. 사용자가 "이번 주 정리해줘", "주간 리뷰 만들어줘" 같이 요청하면 이 도구를 사용하세요.',
         Schema(SchemaType.object, properties: {}),
       ),
+      // ─── Memory tools ─────────────────────────────────────
+      FunctionDeclaration(
+        'remember',
+        '사용자에 대한 중요한 정보를 기억합니다. 대화 중 사용자의 이름, 나이, 직업, 취미, 좋아하는 것, 싫어하는 것, 생일, 습관, 목표 등 개인 정보를 파악하면 이 도구로 저장하세요. 사용자가 직접 "기억해" 라고 말하지 않아도 중요한 개인정보가 나오면 자동으로 저장하세요.',
+        Schema(SchemaType.object,
+          properties: {
+            'key': Schema(SchemaType.string, description: '기억할 정보의 카테고리 (예: 이름, 나이, 직업, 취미, 좋아하는음식, 생일, 목표, 성격, MBTI 등)'),
+            'value': Schema(SchemaType.string, description: '기억할 내용'),
+          },
+          requiredProperties: ['key', 'value'],
+        ),
+      ),
+      FunctionDeclaration(
+        'recall',
+        '저장된 기억을 조회합니다. 사용자에 대해 기억하고 있는 정보를 확인할 때 사용하세요.',
+        Schema(SchemaType.object,
+          properties: {
+            'key': Schema(SchemaType.string, description: '조회할 정보의 카테고리. 미지정시 전체 조회'),
+          },
+        ),
+      ),
+      FunctionDeclaration(
+        'forget',
+        '저장된 기억을 삭제합니다. 사용자가 "잊어줘", "삭제해줘" 같이 요청하면 이 도구를 사용하세요.',
+        Schema(SchemaType.object,
+          properties: {
+            'key': Schema(SchemaType.string, description: '삭제할 정보의 카테고리'),
+          },
+          requiredProperties: ['key'],
+        ),
+      ),
     ]),
   ];
 
+  // ─── 도구 카테고리 분류 (토큰 최적화) ──────────────────────
+  static const toolCategories = <String, Set<String>>{
+    'routine': {'list_routines', 'create_routine', 'update_routine', 'delete_routine', 'mark_complete', 'mark_skipped', 'get_completion_rate'},
+    'todo': {'list_todos', 'create_todo', 'complete_todo', 'delete_todo'},
+    'memo': {'list_memos', 'create_memo', 'update_memo', 'delete_memo'},
+    'alarm': {'list_alarms', 'create_alarm', 'delete_alarm', 'toggle_alarm'},
+    'calendar': {'list_events', 'create_event', 'delete_event'},
+    'settings': {'get_settings', 'set_voice', 'set_tts_enabled', 'set_nag_frequency', 'set_nag_intensity', 'set_overlay_enabled', 'set_app_lock_enabled', 'set_overlay_character_visible', 'set_character_name', 'set_routine_check_interval', 'set_shake_to_disable', 'set_shake_count'},
+    'url': {'open_url'},
+    'memory': {'remember', 'recall', 'forget'},
+    'workspace': {'generate_daily_summary', 'generate_planning_page', 'generate_weekly_review'},
+  };
+
+  /// OpenAI-compatible tool definitions (for Groq etc.)
+  List<Map<String, dynamic>> get openAiTools => _buildOpenAiTools(null);
+
+  /// 특정 카테고리의 도구만 OpenAI 포맷으로 반환
+  List<Map<String, dynamic>> getOpenAiToolsForCategories(Set<String> categories) {
+    final allowedNames = <String>{};
+    for (final cat in categories) {
+      final names = toolCategories[cat];
+      if (names != null) allowedNames.addAll(names);
+    }
+    return _buildOpenAiTools(allowedNames);
+  }
+
+  List<Map<String, dynamic>> _buildOpenAiTools(Set<String>? allowedNames) {
+    final declarations = <Map<String, dynamic>>[];
+    for (final tool in tools) {
+      if (tool.functionDeclarations == null) continue;
+      for (final fd in tool.functionDeclarations!) {
+        if (allowedNames != null && !allowedNames.contains(fd.name)) continue;
+        declarations.add({
+          'type': 'function',
+          'function': {
+            'name': fd.name,
+            'description': fd.description,
+            'parameters': fd.parameters != null ? _schemaToJson(fd.parameters!) : {'type': 'object', 'properties': {}},
+          },
+        });
+      }
+    }
+    return declarations;
+  }
+
+  static Map<String, dynamic> _schemaToJson(Schema schema) {
+    final result = <String, dynamic>{
+      'type': _schemaTypeStr(schema.type),
+    };
+    if (schema.description != null && schema.description!.isNotEmpty) {
+      result['description'] = schema.description;
+    }
+    if (schema.properties != null && schema.properties!.isNotEmpty) {
+      final props = <String, dynamic>{};
+      for (final entry in schema.properties!.entries) {
+        props[entry.key] = _schemaToJson(entry.value);
+      }
+      result['properties'] = props;
+    }
+    if (schema.requiredProperties != null && schema.requiredProperties!.isNotEmpty) {
+      result['required'] = schema.requiredProperties;
+    }
+    if (schema.items != null) {
+      result['items'] = _schemaToJson(schema.items!);
+    }
+    if (schema.enumValues != null && schema.enumValues!.isNotEmpty) {
+      result['enum'] = schema.enumValues;
+    }
+    return result;
+  }
+
+  static String _schemaTypeStr(SchemaType type) {
+    switch (type) {
+      case SchemaType.string: return 'string';
+      case SchemaType.number: return 'number';
+      case SchemaType.integer: return 'integer';
+      case SchemaType.boolean: return 'boolean';
+      case SchemaType.array: return 'array';
+      case SchemaType.object: return 'object';
+      default: return 'string';
+    }
+  }
+
+  /// Execute a Gemini FunctionCall (delegates to executeRaw)
   Future<Map<String, Object?>> execute(FunctionCall call) async {
-    switch (call.name) {
+    return executeRaw(call.name, call.args);
+  }
+
+  /// Raw execute by name + args (for Groq/OpenAI-compatible APIs)
+  Future<Map<String, Object?>> executeRaw(String name, Map<String, dynamic> args) async {
+    switch (name) {
       case 'list_routines':
         return _listRoutines();
       case 'create_routine':
-        return await _createRoutine(call.args);
+        return await _createRoutine(args.cast<String, Object?>());
       case 'update_routine':
-        return await _updateRoutine(call.args);
+        return await _updateRoutine(args.cast<String, Object?>());
       case 'delete_routine':
-        return await _deleteRoutine(call.args);
+        return await _deleteRoutine(args.cast<String, Object?>());
       case 'mark_complete':
-        return await _markComplete(call.args);
+        return await _markComplete(args.cast<String, Object?>());
       case 'mark_skipped':
-        return await _markSkipped(call.args);
+        return await _markSkipped(args.cast<String, Object?>());
       case 'get_completion_rate':
-        return _getCompletionRate(call.args);
+        return _getCompletionRate(args.cast<String, Object?>());
       case 'list_todos':
         return _listTodos();
       case 'create_todo':
-        return await _createTodo(call.args);
+        return await _createTodo(args.cast<String, Object?>());
       case 'complete_todo':
-        return await _completeTodo(call.args);
+        return await _completeTodo(args.cast<String, Object?>());
       case 'delete_todo':
-        return await _deleteTodo(call.args);
+        return await _deleteTodo(args.cast<String, Object?>());
       case 'list_memos':
         return _listMemos();
       case 'create_memo':
-        return await _createMemo(call.args);
+        return await _createMemo(args.cast<String, Object?>());
       case 'update_memo':
-        return await _updateMemo(call.args);
+        return await _updateMemo(args.cast<String, Object?>());
       case 'delete_memo':
-        return await _deleteMemo(call.args);
+        return await _deleteMemo(args.cast<String, Object?>());
       case 'list_alarms':
         return _listAlarms();
       case 'create_alarm':
-        return await _createAlarm(call.args);
+        return await _createAlarm(args.cast<String, Object?>());
       case 'delete_alarm':
-        return await _deleteAlarm(call.args);
+        return await _deleteAlarm(args.cast<String, Object?>());
       case 'toggle_alarm':
-        return await _toggleAlarm(call.args);
+        return await _toggleAlarm(args.cast<String, Object?>());
       case 'list_events':
-        return _listEvents(call.args);
+        return _listEvents(args.cast<String, Object?>());
       case 'create_event':
-        return await _createEvent(call.args);
+        return await _createEvent(args.cast<String, Object?>());
       case 'delete_event':
-        return await _deleteEvent(call.args);
+        return await _deleteEvent(args.cast<String, Object?>());
       case 'get_settings':
         return _getSettings();
       case 'set_voice':
-        return await _setVoice(call.args);
+        return await _setVoice(args.cast<String, Object?>());
       case 'set_tts_enabled':
-        return await _setTtsEnabled(call.args);
+        return await _setTtsEnabled(args.cast<String, Object?>());
       case 'set_nag_frequency':
-        return await _setNagFrequency(call.args);
+        return await _setNagFrequency(args.cast<String, Object?>());
       case 'set_nag_intensity':
-        return await _setNagIntensity(call.args);
+        return await _setNagIntensity(args.cast<String, Object?>());
       case 'set_overlay_enabled':
-        return await _setOverlayEnabled(call.args);
+        return await _setOverlayEnabled(args.cast<String, Object?>());
       case 'set_app_lock_enabled':
-        return await _setAppLockEnabled(call.args);
+        return await _setAppLockEnabled(args.cast<String, Object?>());
       case 'set_overlay_character_visible':
-        return await _setOverlayCharacterVisible(call.args);
+        return await _setOverlayCharacterVisible(args.cast<String, Object?>());
       case 'set_character_name':
-        return await _setCharacterName(call.args);
+        return await _setCharacterName(args.cast<String, Object?>());
       case 'set_routine_check_interval':
-        return await _setRoutineCheckInterval(call.args);
+        return await _setRoutineCheckInterval(args.cast<String, Object?>());
       case 'set_shake_to_disable':
-        return await _setShakeToDisable(call.args);
+        return await _setShakeToDisable(args.cast<String, Object?>());
       case 'set_shake_count':
-        return await _setShakeCount(call.args);
+        return await _setShakeCount(args.cast<String, Object?>());
       case 'open_url':
-        return await _openUrl(call.args);
+        return await _openUrl(args.cast<String, Object?>());
       case 'generate_daily_summary':
-        return await _generateDailySummary(call.args);
+        return await _generateDailySummary(args.cast<String, Object?>());
       case 'generate_planning_page':
-        return await _generatePlanningPage(call.args);
+        return await _generatePlanningPage(args.cast<String, Object?>());
       case 'generate_weekly_review':
         return await _generateWeeklyReview();
+      case 'remember':
+        return await _remember(args.cast<String, Object?>());
+      case 'recall':
+        return _recall(args.cast<String, Object?>());
+      case 'forget':
+        return await _forget(args.cast<String, Object?>());
       default:
-        return {'error': '알 수 없는 함수: ${call.name}'};
+        return {'error': '알 수 없는 함수: $name'};
     }
   }
 
@@ -1159,6 +1288,44 @@ class AgentTools {
         return {'success': true, 'url': url};
       }
       return {'success': false, 'error': 'URL 열기 기능을 사용할 수 없습니다'};
+    } catch (e) {
+      return {'success': false, 'error': e.toString()};
+    }
+  }
+
+  // ─── Memory handlers ──────────────────────────────────────
+
+  Future<Map<String, Object?>> _remember(Map<String, Object?> args) async {
+    if (memoryService == null) return {'error': 'MemoryService not available'};
+    try {
+      final key = args['key'] as String;
+      final value = args['value'] as String;
+      await memoryService!.set(key.trim(), value.trim());
+      return {'success': true, 'key': key, 'value': value, 'total_memories': memoryService!.count};
+    } catch (e) {
+      return {'success': false, 'error': e.toString()};
+    }
+  }
+
+  Map<String, Object?> _recall(Map<String, Object?> args) {
+    if (memoryService == null) return {'error': 'MemoryService not available'};
+    final key = args['key'] as String?;
+    if (key != null) {
+      final value = memoryService!.get(key);
+      if (value == null) return {'found': false, 'key': key};
+      return {'found': true, 'key': key, 'value': value};
+    }
+    final all = memoryService!.getAll();
+    return {'memories': all, 'count': all.length};
+  }
+
+  Future<Map<String, Object?>> _forget(Map<String, Object?> args) async {
+    if (memoryService == null) return {'error': 'MemoryService not available'};
+    try {
+      final key = args['key'] as String;
+      final existed = memoryService!.get(key) != null;
+      await memoryService!.remove(key);
+      return {'success': true, 'key': key, 'existed': existed};
     } catch (e) {
       return {'success': false, 'error': e.toString()};
     }

@@ -7,6 +7,7 @@ import '../services/overlay_service.dart';
 import '../services/tts_service.dart';
 import '../services/weather_service.dart';
 import '../services/naver_reservation_service.dart';
+import '../services/gemini_service.dart';
 import '../service_locator.dart';
 import '../theme/app_colors.dart';
 import 'package:geolocator/geolocator.dart';
@@ -22,6 +23,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   static const _channel = MethodChannel('com.aicharacter.ai_character/usage_stats');
 
   late TextEditingController _apiKeyController;
+  late TextEditingController _groqApiKeyController;
   late TextEditingController _nameController;
   AppDetectionService get _appDetection => getIt<AppDetectionService>();
   OverlayService get _overlayService => getIt<OverlayService>();
@@ -33,6 +35,8 @@ class _SettingsScreenState extends State<SettingsScreen> {
     super.initState();
     _apiKeyController =
         TextEditingController(text: getIt<SettingsService>().apiKey);
+    _groqApiKeyController =
+        TextEditingController(text: getIt<SettingsService>().groqApiKey);
     _nameController =
         TextEditingController(text: getIt<SettingsService>().characterName);
     _checkPermissions();
@@ -50,6 +54,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
   @override
   void dispose() {
     _apiKeyController.dispose();
+    _groqApiKeyController.dispose();
     _nameController.dispose();
     super.dispose();
   }
@@ -177,6 +182,33 @@ class _SettingsScreenState extends State<SettingsScreen> {
                   obscureText: true,
                 ),
               ),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                child: TextField(
+                  controller: _groqApiKeyController,
+                  decoration: InputDecoration(
+                    labelText: 'Groq API 키 (선택)',
+                    hintText: 'console.groq.com에서 발급 (Gemini 소진 시 사용)',
+                    border: const OutlineInputBorder(),
+                    suffixIcon: IconButton(
+                      icon: const Icon(Icons.save),
+                      onPressed: () async {
+                        final key = _groqApiKeyController.text.trim();
+                        await getIt<SettingsService>().setGroqApiKey(key);
+                        if (key.isNotEmpty) {
+                          getIt<GeminiService>().initializeGroq(key);
+                        }
+                        if (mounted) {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(content: Text(key.isEmpty ? 'Groq API 키가 삭제되었습니다' : 'Groq API 키가 저장되었습니다')),
+                          );
+                        }
+                      },
+                    ),
+                  ),
+                  obscureText: true,
+                ),
+              ),
             ],
           ),
           const Divider(),
@@ -218,6 +250,7 @@ class _SettingsScreenState extends State<SettingsScreen> {
                     final name = _nameController.text.trim();
                     if (name.isNotEmpty) {
                       await getIt<SettingsService>().setCharacterName(name);
+                      getIt<GeminiService>().updateCharacterName(name);
                       if (mounted) {
                         setState(() {});
                         ScaffoldMessenger.of(context).showSnackBar(
